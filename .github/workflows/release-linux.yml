@@ -1,0 +1,98 @@
+name: Release (Linux)
+
+# Builds the Linux amd64 .deb for this fork and publishes it as a GitHub
+# release. Run it from a tag: a pushed tag starts it, and a manual run must
+# pick the tag under "Use workflow from". The tag must equal package.json's
+# version. No EVS/VMP signing, Last.fm secrets or other targets are involved.
+
+on:
+  push:
+    tags: ["*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-linux-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and release the .deb
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the tag matches package.json
+        run: |
+          if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+            echo "::error::Run this workflow from a tag, not the ${GITHUB_REF_NAME} branch." >&2
+            exit 1
+          fi
+          PKG_VERSION=$(jq -r .version package.json)
+          if [[ "$GITHUB_REF_NAME" != "$PKG_VERSION" ]]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${PKG_VERSION}." >&2
+            exit 1
+          fi
+          echo "Tag ${GITHUB_REF_NAME} matches package.json."
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install just
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends just
+          just --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: just test
+
+      # scripts/inject-lastfm-credentials.cjs treats any tag run as an official
+      # upstream build and then requires the Last.fm secrets. This fork ships
+      # without them, so the build runs without the tag marker and Last.fm stays
+      # hidden in the app. Actions ignores GITHUB_* overrides in env:, hence
+      # env -u on the command itself.
+      - name: Build
+        run: env -u GITHUB_REF_TYPE just build
+
+      - name: Package the amd64 .deb
+        run: npx electron-builder --linux deb --x64 --publish never
+
+      - name: Generate SHA256SUMS
+        working-directory: release
+        run: |
+          shopt -s nullglob
+          debs=(*.deb)
+          if (( ${#debs[@]} != 1 )); then
+            echo "::error::Expected one .deb in release/, found ${#debs[@]}." >&2
+            exit 1
+          fi
+          sha256sum "${debs[0]}" > SHA256SUMS
+          cat SHA256SUMS
+
+      # A re-run replaces the assets on the existing release instead of failing.
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release/*.deb release/SHA256SUMS --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" release/*.deb release/SHA256SUMS \
+              --verify-tag \
+              --title "$GITHUB_REF_NAME" \
+              --notes "Linux amd64 .deb built from ${GITHUB_SHA}. Verify the download with: sha256sum -c SHA256SUMS"
+          fi
