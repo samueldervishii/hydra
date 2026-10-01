@@ -493,9 +493,8 @@ export class Player extends TypedEmitter<PlayerEvents> {
   }
 
   /**
-   * Current playback state, for callers that must read it outside an event.
-   * The Last.fm scrobble timer is wall-clock, so it re-reads this at submission
-   * time to confirm the play is still live and the playhead has advanced.
+   * Current playback state, for callers that must read it outside an event,
+   * such as the tray and dock pause timers and the stall detector.
    */
   playbackSnapshot(): PlaybackSnapshot {
     return {

@@ -57,9 +57,8 @@ _sign-evs:
 [private]
 _sign-evs:
 
-# Build TypeScript into dist/ and write credentials because npx tsc runs no npm hook
+# Build TypeScript into dist/
 build: _fix-frameworks _sign-evs
-    node scripts/inject-lastfm-credentials.cjs
     npx tsc
 
 # Run the app (builds first)

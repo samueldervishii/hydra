@@ -19,14 +19,9 @@ import {
 } from "./player";
 import {
   getNotificationsEnabled,
-  getDiscordEnabled,
-  getLastfmEnabled,
-  getLastfmSessionKey,
-  getLastfmUsername,
   getCloseToTrayEnabled,
 } from "./config";
 import { showAboutWindow } from "./aboutWindow";
-import { isConfigured as isLastfmConfigured } from "./integrations/lastfm";
 import { applySettingsAction, getSettingsState } from "./settings";
 import { downloadArtwork } from "./artwork";
 import { sendCommand } from "./commandBridge";
@@ -46,8 +41,6 @@ export type MenuIconKey =
   | "player"
   | "start-page"
   | "notifications"
-  | "discord"
-  | "lastfm"
   | "style"
   | "zoom"
   | "quit"
@@ -72,8 +65,6 @@ const menuIconFileMap: Partial<Record<MenuIconKey, string>> = {
   player: "headphones",
   "start-page": "music",
   notifications: "bell",
-  discord: "discord",
-  lastfm: "lastfm",
   style: "palette",
   zoom: "expand",
   quit: "eject",
@@ -96,8 +87,6 @@ const menuIconSFSymbolMap: Record<MenuIconKey, string> = {
   player: "headphones",
   "start-page": "music.note",
   notifications: "bell",
-  discord: "bubble.left.and.bubble.right",
-  lastfm: "dot.radiowaves.left.and.right",
   style: "paintpalette",
   zoom: "arrow.up.left.and.arrow.down.right",
   quit: "xmark.circle",
@@ -326,7 +315,7 @@ function buildToggleSubmenu(
   label: string,
   iconKey: MenuIconKey,
   enabled: boolean,
-  type: "notifications" | "closeToTray" | "discord" | "lastfmEnabled",
+  type: "notifications" | "closeToTray",
   ctx: SubmenuContext,
   extraItems: Electron.MenuItemConstructorOptions[] = [],
 ): Electron.MenuItemConstructorOptions {
@@ -369,55 +358,6 @@ function buildCloseToTraySubmenu(
     getCloseToTrayEnabled(),
     "closeToTray",
     ctx,
-  );
-}
-
-function buildDiscordSubmenu(
-  ctx: SubmenuContext,
-): Electron.MenuItemConstructorOptions {
-  return buildToggleSubmenu(
-    ctx.strings.discord,
-    "discord",
-    getDiscordEnabled(),
-    "discord",
-    ctx,
-  );
-}
-
-function buildLastfmSubmenu(
-  ctx: SubmenuContext,
-): Electron.MenuItemConstructorOptions {
-  if (!getLastfmSessionKey()) {
-    const icon = getMenuIcon("lastfm");
-    return {
-      label: "Last.fm",
-      ...(icon ? { icon } : {}),
-      submenu: [
-        {
-          label: ctx.strings.lastfmConnect,
-          click: () => {
-            applySettingsAction({ type: "lastfmConnect" });
-          },
-        },
-      ],
-    };
-  }
-  return buildToggleSubmenu(
-    "Last.fm",
-    "lastfm",
-    getLastfmEnabled(),
-    "lastfmEnabled",
-    ctx,
-    [
-      { type: "separator" },
-      { label: `✓ ${getLastfmUsername()}`, enabled: false },
-      {
-        label: ctx.strings.lastfmDisconnect,
-        click: () => {
-          applySettingsAction({ type: "lastfmDisconnect" });
-        },
-      },
-    ],
   );
 }
 
@@ -657,8 +597,6 @@ function buildContextMenu(tray: Tray): Menu {
     buildStartPageSubmenu(ctx),
     buildCloseToTraySubmenu(ctx),
     buildNotificationsSubmenu(ctx),
-    buildDiscordSubmenu(ctx),
-    ...(isLastfmConfigured() ? [buildLastfmSubmenu(ctx)] : []),
     buildStyleSubmenu(ctx),
     buildZoomSubmenu(ctx),
     { type: "separator" },

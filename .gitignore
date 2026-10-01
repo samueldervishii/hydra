@@ -6,7 +6,4 @@ result/
 release/
 *.log
 
-# The build generates this file with scripts/inject-lastfm-credentials.cjs.
-# It contains the shared Last.fm API secret and must never be committed.
-assets/lastfm-credentials.json
 __pycache__/

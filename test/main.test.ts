@@ -64,8 +64,6 @@ const bootstrap = vi.hoisted(() => {
 
   const integrations = {
     notifications: vi.fn(),
-    discord: vi.fn(),
-    lastfm: vi.fn(),
     dock: vi.fn(),
     windowsTaskbar: vi.fn(),
     wedgeDetector: vi.fn(),
@@ -256,12 +254,6 @@ vi.mock("../src/musicService", () => ({
 vi.mock("../src/integrations/notifications", () => ({
   init: bootstrap.integrations.notifications,
 }));
-vi.mock("../src/integrations/discord-presence", () => ({
-  init: bootstrap.integrations.discord,
-}));
-vi.mock("../src/integrations/lastfm", () => ({
-  init: bootstrap.integrations.lastfm,
-}));
 vi.mock("../src/integrations/macos-dock", () => ({
   init: bootstrap.integrations.dock,
 }));
@@ -398,8 +390,6 @@ describe("main bootstrap", () => {
     await didFinishLoad?.();
 
     expect(bootstrap.integrations.notifications).toHaveBeenCalledOnce();
-    expect(bootstrap.integrations.discord).toHaveBeenCalledOnce();
-    expect(bootstrap.integrations.lastfm).toHaveBeenCalledOnce();
     expect(bootstrap.integrations.dock).toHaveBeenCalledOnce();
     expect(bootstrap.integrations.windowsTaskbar).toHaveBeenCalledOnce();
     expect(bootstrap.integrations.wedgeDetector).toHaveBeenCalledOnce();

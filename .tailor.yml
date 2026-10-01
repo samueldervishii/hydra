@@ -37,10 +37,6 @@ repository:
     - apple-music-ui
     - electron
     - electron-music
-    - lastfm
-    - last-fm
-    - discord-rich-presence
-    - discord-richpresence
 
 actions:
   enabled: true

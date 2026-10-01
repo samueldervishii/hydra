@@ -29,8 +29,7 @@ class Element {
 function fixture(): SettingsState {
   return {
     musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1,
-    performanceMode: true, sidebarCollapsed: false, closeToTray: false, notifications: true, discord: false,
-    lastfm: { available: true, connected: false, enabled: false, username: '' },
+    performanceMode: true, sidebarCollapsed: false, closeToTray: false, notifications: true,
     options: {
       musicService: [{ value: 'music', label: 'Apple Music' }, { value: 'classical', label: 'Apple Music Classical' }],
       startPage: [{ value: 'new', label: 'New' }],
@@ -140,13 +139,13 @@ describe('settings page', () => {
     h.apply.mockImplementationOnce(() => pending.promise);
     h.element('zoomFactor').value = '1.25';
     h.element('zoomFactor').fire('change');
-    h.element('discord').checked = true;
-    h.element('discord').fire('change');
+    h.element('closeToTray').checked = true;
+    h.element('closeToTray').fire('change');
     await settle();
     expect(h.apply).toHaveBeenCalledExactlyOnceWith({ type: 'zoomFactor', value: 1.25 });
     pending.resolve(fixture());
     await settle();
-    expect(h.apply).toHaveBeenLastCalledWith({ type: 'discord', value: true });
+    expect(h.apply).toHaveBeenLastCalledWith({ type: 'closeToTray', value: true });
   });
 
   it('does not replace a pushed state with an older apply response', async () => {
@@ -154,7 +153,7 @@ describe('settings page', () => {
     await settle();
     const pending = deferred<SettingsState>();
     h.apply.mockImplementationOnce(() => pending.promise);
-    h.element('discord').fire('change');
+    h.element('closeToTray').fire('change');
     await settle();
     h.push({ ...fixture(), notifications: false });
     pending.resolve(fixture());
@@ -196,7 +195,7 @@ describe('settings page', () => {
     await settle();
     const pending = deferred<SettingsState>();
     h.apply.mockImplementationOnce(() => pending.promise);
-    h.element('discord').fire('change');
+    h.element('closeToTray').fire('change');
     h.element('notifications').fire('change');
     await settle();
     h.close();
@@ -211,14 +210,14 @@ describe('settings page', () => {
     const h = harness();
     await settle();
     h.apply.mockRejectedValueOnce(new Error('private details'));
-    h.element('discord').checked = true;
-    h.element('discord').fire('change');
+    h.element('closeToTray').checked = true;
+    h.element('closeToTray').fire('change');
     await settle();
     expect(h.getState).toHaveBeenCalledTimes(2);
-    expect(h.element('discord').checked).toBe(false);
+    expect(h.element('closeToTray').checked).toBe(false);
     expect(h.element('error').textContent).toBe(fixture().labels.settingsError);
     expect(h.element('error').hidden).toBe(false);
-    h.element('discord').fire('change');
+    h.element('closeToTray').fire('change');
     await settle();
     expect(h.element('error').hidden).toBe(true);
   });
@@ -229,18 +228,6 @@ describe('settings page', () => {
     h.element('startPage').fire('change');
     await settle();
     expect(h.apply).toHaveBeenCalledWith({ type: 'startPage', serviceId: 'music', value: 'new' });
-  });
-
-  it('renders Last.fm account text literally and hides unavailable controls', async () => {
-    const state = fixture();
-    state.lastfm = { available: true, connected: true, enabled: true, username: '<img src=x>' };
-    const h = harness(state);
-    await settle();
-    expect(h.element('lastfm-status').textContent).toContain('<img src=x>');
-    expect(h.element('lastfmConnect').hidden).toBe(true);
-    expect(h.element('lastfmDisconnect').hidden).toBe(false);
-    h.push({ ...state, lastfm: { ...state.lastfm, available: false } });
-    expect(h.element('lastfm').hidden).toBe(true);
   });
 
   it('unsubscribes on close and ignores later state updates', async () => {

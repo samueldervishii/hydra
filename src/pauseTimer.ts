@@ -1,7 +1,7 @@
 /**
  * A restartable one-shot timer for a pause that turns into a stop. The tray and
- * the macOS dock use one to clear their Now Playing state, and Discord uses one
- * to clear its activity, so a pause does not stay visible for ever.
+ * the macOS dock use one to clear their Now Playing state, so a pause does not
+ * stay visible for ever.
  */
 export interface PauseTimer {
  /** Arm the timer, discarding any run already in progress. */

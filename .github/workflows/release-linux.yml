@@ -6,7 +6,7 @@ name: Release (Linux)
 # when a tag or a GitHub release with that exact name already exists.
 # Otherwise "release" builds the Linux amd64 .deb, tags the pushed commit with
 # an annotated <version> tag and publishes the .deb with SHA256SUMS. No
-# EVS/VMP signing, Last.fm secrets or other targets are involved.
+# EVS/VMP signing, secrets or other targets are involved.
 
 on:
   push:
@@ -108,13 +108,8 @@ jobs:
       - name: Test
         run: just test
 
-      # scripts/inject-lastfm-credentials.cjs requires the Last.fm secrets only
-      # when GITHUB_REF_TYPE is "tag". A run from main is a branch run, so it
-      # writes an empty file and Last.fm stays hidden in the app. Unsetting the
-      # variable keeps that true however the run starts; Actions ignores
-      # GITHUB_* overrides in env:, hence env -u on the command itself.
       - name: Build
-        run: env -u GITHUB_REF_TYPE just build
+        run: just build
 
       - name: Package the amd64 .deb
         run: npx electron-builder --linux deb --x64 --publish never

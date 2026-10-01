@@ -16,11 +16,6 @@ import { applyTheme, hasCustomTheme, resolveTheme } from "./theme";
 import { applyPerformanceMode } from "./performanceMode";
 import { applySidebar } from "./sidebar";
 import { liveWebContents } from "./utils";
-import {
-  enable as enableDiscord,
-  disable as disableDiscord,
-} from "./integrations/discord-presence";
-import * as lastfm from "./integrations/lastfm";
 
 /** Zoom levels that Settings accepts. */
 export type ZoomFactor = 1 | 1.25 | 1.5 | 1.75 | 2;
@@ -39,13 +34,10 @@ export type SettingsAction =
       type:
         | "closeToTray"
         | "notifications"
-        | "discord"
-        | "lastfmEnabled"
         | "performanceMode"
         | "sidebarCollapsed";
       value: boolean;
-    }
-  | { type: "lastfmConnect" | "lastfmDisconnect" };
+    };
 
 /** A stored option value paired with its display label. */
 export interface SettingsOption<T> {
@@ -62,13 +54,6 @@ export interface SettingsState {
   sidebarCollapsed: boolean;
   closeToTray: boolean;
   notifications: boolean;
-  discord: boolean;
-  lastfm: {
-    available: boolean;
-    connected: boolean;
-    enabled: boolean;
-    username: string;
-  };
   options: {
     musicService: SettingsOption<MusicServiceId>[];
     startPage: SettingsOption<AnyStartPageId | "last">[];
@@ -99,17 +84,12 @@ interface SettingsRuntime {
 let runtime: SettingsRuntime | null = null;
 const listeners = new Set<(state: SettingsState) => void>();
 
-/** Connect application callbacks and Last.fm updates, returning their teardown function. */
+/** Connect application callbacks, returning their teardown function. */
 export function initSettingsActions(callbacks: SettingsRuntime): () => void {
   runtime = callbacks;
-  lastfm.setStateChangedCallback(() => {
-    callbacks.refreshTray();
-    notifySettingsChanged();
-  });
   return () => {
     if (runtime !== callbacks) return;
     runtime = null;
-    lastfm.setStateChangedCallback(null);
     listeners.clear();
   };
 }
@@ -164,13 +144,6 @@ export function getSettingsState(): SettingsState {
     sidebarCollapsed: config.getSidebarCollapsed(),
     closeToTray: config.getCloseToTrayEnabled(),
     notifications: config.getNotificationsEnabled(),
-    discord: config.getDiscordEnabled(),
-    lastfm: {
-      available: lastfm.isConfigured(),
-      connected: !!config.getLastfmSessionKey(),
-      enabled: config.getLastfmEnabled(),
-      username: config.getLastfmUsername() ?? "",
-    },
     options: {
       musicService: allServices().map((service) => ({
         value: service.id,
@@ -216,11 +189,7 @@ function isSettingsAction(
     return false;
   const data = action as Record<string, unknown>;
   const keys =
-    data.type === "startPage"
-      ? ["type", "value", "serviceId"]
-      : data.type === "lastfmConnect" || data.type === "lastfmDisconnect"
-        ? ["type"]
-        : ["type", "value"];
+    data.type === "startPage" ? ["type", "value", "serviceId"] : ["type", "value"];
   if (
     Object.keys(data).length !== keys.length ||
     !keys.every((key) => Object.hasOwn(data, key))
@@ -244,20 +213,9 @@ function isSettingsAction(
       );
     case "closeToTray":
     case "notifications":
-    case "discord":
     case "performanceMode":
     case "sidebarCollapsed":
       return typeof data.value === "boolean";
-    case "lastfmEnabled":
-      return (
-        state.lastfm.available &&
-        state.lastfm.connected &&
-        typeof data.value === "boolean"
-      );
-    case "lastfmConnect":
-      return state.lastfm.available && !state.lastfm.connected;
-    case "lastfmDisconnect":
-      return state.lastfm.available && state.lastfm.connected;
     default:
       return false;
   }
@@ -316,21 +274,6 @@ export function applySettingsAction(action: unknown): SettingsState {
     }
     case "notifications":
       config.setNotificationsEnabled(action.value);
-      break;
-    case "discord":
-      config.setDiscordEnabled(action.value);
-      (action.value ? enableDiscord : disableDiscord)();
-      break;
-    case "lastfmEnabled":
-      config.setLastfmEnabled(action.value);
-      (action.value ? lastfm.enable : lastfm.disable)();
-      break;
-    case "lastfmConnect":
-      config.setLastfmEnabled(true);
-      lastfm.startAuth();
-      break;
-    case "lastfmDisconnect":
-      lastfm.disconnect();
       break;
   }
   runtime.refreshTray();

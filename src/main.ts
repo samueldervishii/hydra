@@ -67,8 +67,6 @@ import {
   isAllowedNavigationUrl,
 } from "./musicService";
 import { init as initNotifications } from "./integrations/notifications";
-import { init as initDiscordPresence } from "./integrations/discord-presence";
-import { init as initLastfm } from "./integrations/lastfm";
 import { init as initDock } from "./integrations/macos-dock";
 import { init as initWindowsTaskbar } from "./integrations/windows-taskbar";
 import { cleanArtworkCache } from "./artwork";
@@ -830,11 +828,6 @@ function setupContentHandlers(
             "notifications",
             () => initNotifications({ player, getMainWindow: () => win }),
           ],
-          [
-            "discord",
-            () => initDiscordPresence({ player, getMainWindow: () => win }),
-          ],
-          ["lastfm", () => initLastfm({ player, getMainWindow: () => win })],
           ["dock", () => initDock({ player, getMainWindow: () => win })],
           [
             "windowsTaskbar",

@@ -10,17 +10,8 @@ import {
   setLanguage,
   getNotificationsEnabled,
   setNotificationsEnabled,
-  getDiscordEnabled,
-  setDiscordEnabled,
   getCloseToTrayEnabled,
   setCloseToTrayEnabled,
-  getLastfmEnabled,
-  getLastfmSessionKey,
-  getLastfmUsername,
-  setLastfmSession,
-  clearLastfmSession,
-  getPendingScrobbles,
-  setPendingScrobbles,
   getTheme,
   setTheme,
   getPerformanceModeEnabled,
@@ -43,7 +34,6 @@ import {
   getLastPageUrlFor,
   setLastPageUrlFor,
 } from "../src/config";
-import type { PendingScrobble } from "../src/config";
 import { Conf } from "electron-conf/main";
 import { DEFAULT_SERVICE_ID } from "../src/musicService";
 import type {
@@ -80,14 +70,6 @@ describe("Config store type assertions", () => {
 
   it("setNotificationsEnabled accepts boolean", () => {
     expectTypeOf(setNotificationsEnabled).parameter(0).toEqualTypeOf<boolean>();
-  });
-
-  it("getDiscordEnabled returns boolean", () => {
-    expectTypeOf(getDiscordEnabled).returns.toEqualTypeOf<boolean>();
-  });
-
-  it("setDiscordEnabled accepts boolean", () => {
-    expectTypeOf(setDiscordEnabled).parameter(0).toEqualTypeOf<boolean>();
   });
 
   it("getTheme returns ThemeName", () => {
@@ -193,17 +175,6 @@ describe("Config store type assertions", () => {
     expectTypeOf(setLastPageUrlFor).parameter(1).toEqualTypeOf<string>();
   });
 
-  it("getPendingScrobbles returns PendingScrobble[]", () => {
-    expectTypeOf(getPendingScrobbles).returns.toEqualTypeOf<
-      PendingScrobble[]
-    >();
-  });
-
-  it("setPendingScrobbles accepts PendingScrobble[]", () => {
-    expectTypeOf(setPendingScrobbles)
-      .parameter(0)
-      .toEqualTypeOf<PendingScrobble[]>();
-  });
 });
 
 describe("Config store runtime behaviour", () => {
@@ -225,10 +196,6 @@ describe("Config store runtime behaviour", () => {
 
   it("getNotificationsEnabled defaults to true", () => {
     expect(getNotificationsEnabled()).toBe(true);
-  });
-
-  it("getDiscordEnabled defaults to false", () => {
-    expect(getDiscordEnabled()).toBe(false);
   });
 
   it("getTheme defaults to apple-music", () => {
@@ -356,187 +323,18 @@ describe("Config store runtime behaviour", () => {
     expect(getCloseToTrayEnabled()).toBe(false);
   });
 
-  it("close-to-tray and Discord readers each read their own key", () => {
+  it("close-to-tray and sidebar readers each read their own key", () => {
     // Opposite values, so a reader crossed onto the other key inverts its answer.
     store.set("closeToTray.enabled", true);
-    store.set("discord.enabled", false);
+    store.set("sidebar.collapsed", false);
     expect(getCloseToTrayEnabled()).toBe(true);
-    expect(getDiscordEnabled()).toBe(false);
+    expect(getSidebarCollapsed()).toBe(false);
   });
 
   it("setCloseToTrayEnabled persists to the close-to-tray key only", () => {
     setCloseToTrayEnabled(true);
     expect(getCloseToTrayEnabled()).toBe(true);
-    expect(getDiscordEnabled()).toBe(false);
-  });
-
-  it("getLastfmEnabled defaults to false", () => {
-    expect(getLastfmEnabled()).toBe(false);
-  });
-
-  it("Last.fm session key and username readers each read their own key", () => {
-    store.set("lastfm.sessionKey", "sk-0123456789abcdef");
-    store.set("lastfm.username", "wimpysworld");
-    expect(getLastfmSessionKey()).toBe("sk-0123456789abcdef");
-    expect(getLastfmUsername()).toBe("wimpysworld");
-  });
-
-  it("setLastfmSession writes each argument to its own key", () => {
-    // Clearly different values, so swapping the two arguments fails here.
-    setLastfmSession("sk-0123456789abcdef", "wimpysworld");
-    expect(getLastfmSessionKey()).toBe("sk-0123456789abcdef");
-    expect(getLastfmUsername()).toBe("wimpysworld");
-  });
-
-  it("clearLastfmSession sets both keys to null rather than removing them", () => {
-    setLastfmSession("sk-0123456789abcdef", "wimpysworld");
-    clearLastfmSession();
-    // Null, not undefined: the readers use the has-check variant, so a cleared
-    // key and an absent key are different states. Asserting falsiness alone
-    // would pass against a clear that did nothing at all.
-    expect(getLastfmSessionKey()).toBeNull();
-    expect(getLastfmUsername()).toBeNull();
-  });
-
-  it("getPendingScrobbles defaults to an empty queue", () => {
-    expect(getPendingScrobbles()).toEqual([]);
-  });
-
-  it("setPendingScrobbles round-trips a queue", () => {
-    const queue: PendingScrobble[] = [
-      {
-        artist: "Underworld",
-        track: "Born Slippy",
-        timestamp: 1700000000,
-        album: "Second Toughest",
-        durationSec: 566,
-      },
-      { artist: "Orbital", track: "Halcyon", timestamp: 1700000600 },
-    ];
-    setPendingScrobbles(queue);
-    expect(getPendingScrobbles()).toEqual(queue);
-  });
-
-  it("getPendingScrobbles returns an empty queue when the persisted value is not an array", () => {
-    store.set("lastfm.pendingScrobbles", "not-a-queue");
-    expect(getPendingScrobbles()).toEqual([]);
-  });
-
-  it("getPendingScrobbles drops a malformed entry and keeps the valid one", () => {
-    // A hand-edited or corrupted config must not produce a request the API can only refuse.
-    store.set("lastfm.pendingScrobbles", [
-      { artist: "Orbital", track: "Halcyon", timestamp: 1700000600 },
-      { artist: "Orbital", track: "Chime", timestamp: "yesterday" },
-    ]);
-    expect(getPendingScrobbles()).toEqual([
-      { artist: "Orbital", track: "Halcyon", timestamp: 1700000600 },
-    ]);
-  });
-
-  it("getPendingScrobbles keeps a valid entry with optional fields absent", () => {
-    // The guard must not be so strict that it discards the user's real history:
-    // album and duration are optional and a play without either is normal.
-    const entry = {
-      artist: "Orbital",
-      track: "Halcyon",
-      timestamp: 1700000600,
-    };
-    store.set("lastfm.pendingScrobbles", [entry]);
-    expect(getPendingScrobbles()).toEqual([entry]);
-  });
-
-  it("getPendingScrobbles keeps a valid radio entry with optional fields present", () => {
-    const entry = {
-      artist: "Underworld",
-      track: "Born Slippy",
-      timestamp: 1700000000,
-      album: "Second Toughest",
-      durationSec: 566,
-      chosenByUser: 0 as const,
-    };
-    store.set("lastfm.pendingScrobbles", [entry]);
-    expect(getPendingScrobbles()).toEqual([entry]);
-  });
-
-  it("getPendingScrobbles drops an entry whose album is not a string", () => {
-    // A malformed optional field is stringified into the batch parameters and
-    // Last.fm refuses the whole batch, so one bad entry costs every queued play.
-    store.set("lastfm.pendingScrobbles", [
-      { artist: "Orbital", track: "Chime", timestamp: 1700000600, album: 42 },
-    ]);
-    expect(getPendingScrobbles()).toEqual([]);
-  });
-
-  it("getPendingScrobbles drops an entry whose durationSec is not an integer", () => {
-    store.set("lastfm.pendingScrobbles", [
-      {
-        artist: "Orbital",
-        track: "Chime",
-        timestamp: 1700000600,
-        durationSec: 312.5,
-      },
-    ]);
-    expect(getPendingScrobbles()).toEqual([]);
-  });
-
-  it("getPendingScrobbles drops an entry whose durationSec is zero or negative", () => {
-    store.set("lastfm.pendingScrobbles", [
-      {
-        artist: "Orbital",
-        track: "Chime",
-        timestamp: 1700000600,
-        durationSec: 0,
-      },
-      {
-        artist: "Orbital",
-        track: "Chime",
-        timestamp: 1700000601,
-        durationSec: -312,
-      },
-    ]);
-    expect(getPendingScrobbles()).toEqual([]);
-  });
-
-  it("getPendingScrobbles drops an invalid chosenByUser value", () => {
-    store.set("lastfm.pendingScrobbles", [
-      {
-        artist: "Orbital",
-        track: "Chime",
-        timestamp: 1700000600,
-        chosenByUser: 1,
-      },
-    ]);
-    expect(getPendingScrobbles()).toEqual([]);
-  });
-
-  it("getPendingScrobbles drops an entry with an empty artist or track", () => {
-    store.set("lastfm.pendingScrobbles", [
-      { artist: "", track: "Chime", timestamp: 1700000600 },
-      { artist: "Orbital", track: "", timestamp: 1700000601 },
-    ]);
-    expect(getPendingScrobbles()).toEqual([]);
-  });
-
-  it("getPendingScrobbles drops an entry whose timestamp is not a positive integer", () => {
-    store.set("lastfm.pendingScrobbles", [
-      { artist: "Orbital", track: "Chime", timestamp: 1700000600.5 },
-      { artist: "Orbital", track: "Chime", timestamp: -1700000600 },
-      { artist: "Orbital", track: "Chime", timestamp: 0 },
-    ]);
-    expect(getPendingScrobbles()).toEqual([]);
-  });
-
-  it("getPendingScrobbles drops an entry timestamped in the future and keeps the valid one", () => {
-    // Last.fm can ignore a future timestamp without an API error, so reject it before submission.
-    // A millisecond timestamp must not be mistaken for seconds.
-    store.set("lastfm.pendingScrobbles", [
-      { artist: "Orbital", track: "Halcyon", timestamp: 1700000600 },
-      { artist: "Orbital", track: "Chime", timestamp: 4102444800 },
-      { artist: "Underworld", track: "Born Slippy", timestamp: 1700000000000 },
-    ]);
-    expect(getPendingScrobbles()).toEqual([
-      { artist: "Orbital", track: "Halcyon", timestamp: 1700000600 },
-    ]);
+    expect(getSidebarCollapsed()).toBe(false);
   });
 
   it("setStartPage persists to the music start page key, not the Classical one", () => {

@@ -6,8 +6,6 @@ import { getSettingsState } from '../src/settings';
 import { customThemePath, getThemeCss, invalidateCustomThemeCache, resolveTheme } from '../src/theme';
 import { customThemeFixture } from './mocks/customTheme';
 
-vi.mock('../src/integrations/discord-presence', () => ({ enable: vi.fn(), disable: vi.fn() }));
-vi.mock('../src/integrations/lastfm', () => ({ isConfigured: () => false }));
 
 beforeEach(() => {
   (Conf as unknown as { _data: Map<string, unknown> })._data.clear();

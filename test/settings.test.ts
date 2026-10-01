@@ -4,17 +4,10 @@ import type { BrowserWindow } from 'electron';
 import * as config from '../src/config';
 import { applySettingsAction, getSettingsState, initSettingsActions, notifySettingsChanged, subscribeSettingsChanges, toggleSidebarCollapsed } from '../src/settings';
 import { applyTheme, hasCustomTheme } from '../src/theme';
-import * as lastfm from '../src/integrations/lastfm';
-import { enable as enableDiscord } from '../src/integrations/discord-presence';
 
 vi.mock('../src/theme', () => ({
   applyTheme: vi.fn(), hasCustomTheme: vi.fn(() => false),
   resolveTheme: () => config.getTheme(),
-}));
-vi.mock('../src/integrations/discord-presence', () => ({ enable: vi.fn(), disable: vi.fn() }));
-vi.mock('../src/integrations/lastfm', () => ({
-  isConfigured: vi.fn(() => true), enable: vi.fn(), disable: vi.fn(), startAuth: vi.fn(), disconnect: vi.fn(),
-  setStateChangedCallback: vi.fn(),
 }));
 
 const applyZoom = vi.fn();
@@ -28,31 +21,42 @@ beforeEach(() => {
   (Conf as unknown as { _data: Map<string, unknown> })._data.clear();
   vi.clearAllMocks();
   vi.mocked(hasCustomTheme).mockReturnValue(false);
-  vi.mocked(lastfm.isConfigured).mockReturnValue(true);
   dispose = initSettingsActions({ getMainWindow: () => window as unknown as BrowserWindow, applyZoom, switchService, refreshTray });
 });
 afterEach(() => dispose());
 
 describe('settings actions', () => {
-  it('reads defaults and excludes account credentials from state', () => {
-    config.setLastfmSession('private-session', 'listener');
+  it('reads defaults', () => {
     const state = getSettingsState();
     expect(state).toMatchObject({ musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1, performanceMode: true, sidebarCollapsed: false });
-    expect(state.lastfm).toEqual({ available: true, connected: true, enabled: false, username: 'listener' });
+  });
+
+  // Discord and Last.fm were removed; an existing config.json can still hold
+  // their keys, which must load without error and never reach the state.
+  it('ignores Discord and Last.fm keys left in an existing config', () => {
+    const store = (Conf as unknown as { _data: Map<string, unknown> })._data;
+    store.set('discord.enabled', true);
+    store.set('lastfm.enabled', true);
+    store.set('lastfm.sessionKey', 'private-session');
+    store.set('lastfm.username', 'listener');
+    store.set('lastfm.pendingScrobbles', [{ artist: 'a', track: 't', timestamp: 1 }]);
+    const state = getSettingsState();
+    expect(state).toMatchObject({ musicService: 'music', theme: 'apple-music' });
+    expect(Object.keys(state)).not.toContain('discord');
+    expect(Object.keys(state)).not.toContain('lastfm');
     expect(JSON.stringify(state)).not.toContain('private-session');
   });
 
   it('persists before runtime effects and publishes the new state', () => {
-    vi.mocked(enableDiscord).mockImplementationOnce(() => expect(config.getDiscordEnabled()).toBe(true));
     applyZoom.mockImplementationOnce(() => expect(config.getZoomFactor()).toBe(1.5));
     vi.mocked(applyTheme).mockImplementationOnce(() => expect(config.getTheme()).toBe('nord'));
     const listener = vi.fn();
     const unsubscribe = subscribeSettingsChanges(listener);
-    applySettingsAction({ type: 'discord', value: true });
+    applySettingsAction({ type: 'closeToTray', value: true });
     applySettingsAction({ type: 'zoomFactor', value: 1.5 });
     applySettingsAction({ type: 'theme', value: 'nord' });
     applySettingsAction({ type: 'notifications', value: false });
-    expect(listener).toHaveBeenLastCalledWith(expect.objectContaining({ discord: true, zoomFactor: 1.5, theme: 'nord', notifications: false }));
+    expect(listener).toHaveBeenLastCalledWith(expect.objectContaining({ closeToTray: true, zoomFactor: 1.5, theme: 'nord', notifications: false }));
     unsubscribe();
     notifySettingsChanged();
     expect(listener).toHaveBeenCalledTimes(4);
@@ -122,7 +126,8 @@ describe('settings actions', () => {
     { type: 'musicService', value: 'other' }, { type: 'theme', value: 'custom' },
     { type: 'theme', value: 'other' }, { type: 'startPage', serviceId: 'music', value: 'search' },
     { type: 'notifications', value: true, extra: true }, { type: 'lastfmDisconnect' },
-    { type: 'lastfmEnabled', value: true }, { type: 'performanceMode', value: 'false' }, { type: 'sidebarCollapsed', value: 1 },
+    { type: 'lastfmEnabled', value: true }, { type: 'lastfmConnect' }, { type: 'discord', value: true },
+    { type: 'performanceMode', value: 'false' }, { type: 'sidebarCollapsed', value: 1 },
   ])('rejects unavailable or malformed actions: %j', action => {
     expect(() => applySettingsAction(action)).toThrow('Invalid settings action');
     expect(refreshTray).not.toHaveBeenCalled();
@@ -152,30 +157,4 @@ describe('settings actions', () => {
     expect(() => applySettingsAction({ type: 'theme', value: 'custom' })).toThrow();
   });
 
-  it('gates Last.fm and keeps its setter before authentication', () => {
-    vi.mocked(lastfm.isConfigured).mockReturnValue(false);
-    expect(() => applySettingsAction({ type: 'lastfmConnect' })).toThrow();
-    vi.mocked(lastfm.isConfigured).mockReturnValue(true);
-    vi.mocked(lastfm.startAuth).mockImplementationOnce(() => expect(config.getLastfmEnabled()).toBe(true));
-    applySettingsAction({ type: 'lastfmConnect' });
-    expect(lastfm.startAuth).toHaveBeenCalledOnce();
-    config.setLastfmSession('key', 'listener');
-    applySettingsAction({ type: 'lastfmEnabled', value: false });
-    expect(lastfm.disable).toHaveBeenCalledOnce();
-    applySettingsAction({ type: 'lastfmDisconnect' });
-    expect(lastfm.disconnect).toHaveBeenCalledOnce();
-  });
-
-  it('publishes asynchronous Last.fm changes without a tray and stops on teardown', () => {
-    const listener = vi.fn();
-    subscribeSettingsChanges(listener);
-    const callback = vi.mocked(lastfm.setStateChangedCallback).mock.calls.at(-1)?.[0];
-    config.setLastfmSession('key', 'listener');
-    callback?.();
-    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ lastfm: expect.objectContaining({ connected: true }) }));
-    dispose();
-    expect(lastfm.setStateChangedCallback).toHaveBeenLastCalledWith(null);
-    notifySettingsChanged();
-    expect(listener).toHaveBeenCalledOnce();
-  });
 });

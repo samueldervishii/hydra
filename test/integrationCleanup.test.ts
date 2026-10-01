@@ -210,7 +210,7 @@ function findCleanupFaults(rawSource: string): string[] {
 
 describe("player listener cleanup", () => {
   // Discover integration directories automatically so new modules receive the same structural cleanup check.
-  // This check needs no D-Bus, Discord or platform mocks, but does not prove that teardown runs.
+  // This check needs no D-Bus or platform mocks, but does not prove that teardown runs.
   describe("every registration has a matching removal", () => {
     for (const file of playerConsumerFiles()) {
       const relative = path.relative(path.join(__dirname, ".."), file);

@@ -22,8 +22,6 @@ The codebase is tightly focused and as lean as possible. Five runtime dependenci
 - [Apple Music Classical](#apple-music-classical)
 - [Authentication](#authentication)
 - [Theming](#theming)
-- [Discord Rich Presence](#discord-rich-presence)
-- [Last.fm Scrobbling](#lastfm-scrobbling)
 - [Track Change Notifications](#track-change-notifications)
 - [Settings Window](#settings-window)
 - [Tray](#tray)
@@ -74,7 +72,7 @@ The codebase is tightly focused and as lean as possible. Five runtime dependenci
 │  │  ┌───────▼────────┐  │      │  ┌──────▼───────┐           │   │
 │  │  │ Integrations   │  │      │  │ Hook script  │           │   │
 │  │  │ ├─ MPRIS       │◄─┼──────┼──┤(injected JS) │           │   │
-│  │  │ ├─ Discord RPC │  │      │  └──────────────┘           │   │
+│  │  │                │  │      │  └──────────────┘           │   │
 │  │  │ ├─ Notifier    │  │      │                             │   │
 │  │  │ └─ Taskbar/Dock│  │      │  ┌──────────────┐           │   │
 │  │  └───────┬────────┘  │      │  │  preload.ts  │           │   │
@@ -123,7 +121,7 @@ sidra/
 │   ├── themeTemplate.ts           - pure palette→CSS renderer (buildThemeCss())
 │   ├── artwork.ts                 - downloadArtwork(), cleanArtworkCache(); UUID-based multi-file cache
 │   ├── wedgeDetector.ts           - detects playback stalls and auto-skips forward
-│   ├── pauseTimer.ts              - createPauseTimer() factory; shared by tray, dock, Discord integrations
+│   ├── pauseTimer.ts              - createPauseTimer() factory; shared by the tray and dock
 │   ├── utils.ts                   - errorMessage() utility
 │   ├── notify.ts                  - notification gate: createNotification(), notificationsAvailable(), initNotificationProbe()
 │   ├── notificationDaemon.ts      - D-Bus probe for org.freedesktop.Notifications (Linux only)
@@ -135,10 +133,6 @@ sidra/
 │   └── integrations/
 │       ├── mpris/
 │       │   └── index.ts           - D-Bus MPRIS service (Linux only)
-│       ├── discord-presence/
-│       │   └── index.ts           - Discord RPC with retry/debounce
-│       ├── lastfm/
-│       │   └── index.ts           - Last.fm auth, now-playing and scrobble submission
 │       ├── notifications/
 │       │   └── index.ts           - Track change desktop notifications
 │       ├── macos-dock/
@@ -208,7 +202,6 @@ Current dependency roles:
 - electron-log - application logging
 - electron-conf - persistent user configuration
 - dbus-next - Linux MPRIS integration
-- Discord RPC - optional Discord Rich Presence
 
 ### Logging
 
@@ -245,9 +238,9 @@ When a full-document navigation commits, `main.ts` calls `Player.resetForDocumen
 
 | Event | Payload | Consumers |
 |---|---|---|
-| `playbackStateDidChange` | `{ status: bool, state }` | MPRIS, Discord, Last.fm, Notifications, Dock, Taskbar |
-| `nowPlayingItemDidChange` | `NowPlayingPayload` (see `src/player.ts`) or `null` | MPRIS, Discord, Last.fm, Notifications, Dock, Taskbar |
-| `timedMetadataDidChange` | Bounded song candidate, or an incomplete-transition marker | Last.fm, MPRIS, Notifications |
+| `playbackStateDidChange` | `{ status: bool, state }` | MPRIS, Notifications, Dock, Taskbar |
+| `nowPlayingItemDidChange` | `NowPlayingPayload` (see `src/player.ts`) or `null` | MPRIS, Notifications, Dock, Taskbar |
+| `timedMetadataDidChange` | Bounded song candidate, or an incomplete-transition marker | MPRIS, Notifications |
 | `playbackCapabilitiesDidChange` | `PlaybackCapabilities` | MPRIS |
 | `playbackStopped` | `{ requestId, success }` | MPRIS |
 | `hookReady` | Injected document generation, validated against the current document | MPRIS |
@@ -840,107 +833,6 @@ Each queued operation captures `documentGeneration`. A main-frame `did-navigate`
 
 ---
 
-## Discord Rich Presence
-
-Uses `@xhayper/discord-rpc`. Discord Application Client ID: `1485248818688688318`. Sidra branding assets (`sidra_logo`) are uploaded to the Discord Developer Portal.
-
-Reference implementation: [ytmdesktop Discord presence](https://github.com/ytmdesktop/ytmdesktop/blob/development/src/main/integrations/discord-presence/index.ts)
-
-### Behaviour
-
-- **Activity type**: `ActivityType.Listening`, which supplies the "Listening to" verb and nothing else
-- **Status display type**: `StatusDisplayType.DETAILS` (2), which picks `details` as the field Discord renders after that verb in the member-list line. Discord defaults the field to 0 (Name), which renders the registered application name instead of the track title.
-- **Details**: Track name (truncated to 128 chars, padded to 2 chars minimum - Discord rejects shorter strings)
-- **State**: `by ArtistName` (truncated to 128 chars, padded to 2 chars minimum)
-- **Artwork**: Apple Music CDN URLs work directly as `largeImageKey` if under 256 chars (typical range: 80-130 chars). Fall back to a Discord-hosted `sidra_logo` asset if over the limit.
-- **Timestamps**: When playing, calculate `startTimestamp` and `endTimestamp` from current position at send time. Omit when paused.
-- **Buttons**: Two buttons - "Sidra" (links to GitHub repo) and "Play on Apple Music" (links to track URL when available).
-- **Debounce**: 1s debounce on updates to coalesce rapid events (track change + playback state landing together). `scheduleUpdate()` resets the debounce timer; `sendActivity()` reads the position fresh from the player when it fires.
-- **Pause timeout**: Clear activity after 30s paused (ytmdesktop pattern) - courtesy to users who do not want to broadcast a paused state.
-- **Retry**: Reconnect with exponential backoff (2s base, 60s cap) on Discord IPC disconnection.
-- **Client recreation**: Every reconnect attempt discards the `Client` and builds a fresh one; the backoff itself is unchanged. `Client.connect()` registers a `connected` listener on every call and removes it only when `connected` fires, so both failure paths leave one attached, and a client kept for the life of the process trips the emitter's default limit of 10. Transport rejection also leaves `connectionPromise` set to a rejected promise, so every later `connect()` returns that same rejection without retrying, and one fast transport failure would kill presence for the rest of the session. `destroy()` removes no listeners and does not clear `connectionPromise`, so destroying alone is not enough. The old client's listeners come off before the destroy, because `destroy()` closes the transport and the transport `close` handler emits `disconnected` on the old client, which would otherwise re-enter the reconnect schedule and arm a second backoff chain.
-- **Toggle**: `discord.enabled` in `electron-conf` (default: false). Tray menu toggle; when disabled, clears activity immediately.
-
-### `playbackTimeDidChange` pitfall
-
-`playbackTimeDidChange` fires every ~250ms (MusicKit polling). Integrations must NOT call `scheduleUpdate()` (or any debounced function) from this event - doing so resets the debounce timer on every tick, preventing the debounced callback from ever executing. The Discord integration therefore subscribes to no `playbackTimeDidChange` event at all: `sendActivity()` calls `playerRef.playbackSnapshot()` and reads the playing flag and the position from that snapshot.
-
-### Event subscriptions
-
-| Event | Action |
-|---|---|
-| `nowPlayingItemDidChange` | Cache metadata, or clear it for a null payload. Cancel the pause timer and call `scheduleUpdate()`. The debounced no-track path clears Discord activity. |
-| `playbackStateDidChange` | Update `isPlaying`, manage pause timer, `scheduleUpdate()` |
-
----
-
-## Last.fm Scrobbling
-
-`src/integrations/lastfm` talks to the [Last.fm API 2.0](https://www.last.fm/api) through `net.fetch`. No library. Every request is signed with an MD5 `api_sig` over the sorted parameters plus the shared secret.
-
-### Credentials
-
-Two levels, and they are easy to confuse:
-
-| Credential | Scope | Where it lives |
-|---|---|---|
-| API key + shared secret | The Sidra application, shared by every user | `SIDRA_LASTFM_API_KEY` / `SIDRA_LASTFM_API_SECRET` env vars, else `assets/lastfm-credentials.json` (gitignored, written at build time, `asarUnpack`ed) |
-| Session key | One Last.fm account | `lastfm.sessionKey` in `electron-conf` |
-
-`isConfigured()` is false when the app-level pair is missing, and the tray then omits the Last.fm submenu entirely rather than showing a dead toggle.
-
-### Authentication
-
-The desktop token flow, because Last.fm offers no callback for a desktop app:
-
-1. `auth.getToken` returns a token.
-2. Sidra opens `https://www.last.fm/api/auth/` with the API key and token, assembled through `URL.searchParams` so both values are percent-encoded.
-3. `auth.getSession` is polled every 4s until the user approves, or 120s elapses.
-4. On success the session key and username are persisted, and a notification confirms it when notifications are enabled.
-
-`authGeneration` invalidates in-flight promises, so a late response cannot reconnect an account the user has since disconnected. `cancelAuth()` runs on `will-quit`.
-
-### Scrobbling rules
-
-- Now-playing (`track.updateNowPlaying`) is sent when a track starts or resumes.
-- `scrobbleThresholdMs()` returns `null` for a track of 30 seconds or less; those never scrobble.
-- Anything longer scrobbles at half its duration or 4 minutes, whichever comes first, measured against accumulated play time rather than wall time since the track began.
-- `trackStartUnix` is captured at the first real play transition, so a track queued while paused carries an honest timestamp.
-- Each track makes one live scrobble request. A final API refusal is dropped. A transport failure or temporary Last.fm error persists the play in `lastfm.pendingScrobbles` instead.
-- The queue keeps the newest 50 plays and survives restarts. A successful now-playing or live scrobble request drains up to 50 queued plays as one indexed batch. No timer retries the queue.
-- Disconnecting clears the queue, so a later account cannot receive another account's plays.
-
-### Radio songs
-
-The hook accepts `timedMetadataDidChange` only while the current queue item has `playParams.kind === 'radioStation'`. This covers live stations and archived radio episodes. The hook forwards a fresh payload with a trimmed title and artist, plus bounded album and catalogue fields. It never forwards artwork links, `blob`, the links array or the complete storefront ID record.
-
-The main process confirms that the last validated queue item is a radio station before it accepts timed metadata. It rejects control characters, unknown fields, mismatched catalogue IDs and unexpected nested fields. A 1,500 ms trailing coalescer selects the last candidate in a burst before classifying the boundary against the last delivered identity. This prevents an `A → B → A` transition burst from producing a false boundary. Replays have no effect. The hook forwards every complete candidate because only the main process owns identity and catalogue enrichment.
-
-The first timed song is partial because Sidra did not observe its start. An incomplete transition followed by the same identity is also partial. Sidra sends Now Playing for every valid radio song. A partial song can scrobble through the four-minute fallback, but only a song observed from a clean boundary can use the next-boundary shortcut. Radio scrobbles set `chosenByUser=0`, omit `streamId`, and retain that flag if a failed request enters `lastfm.pendingScrobbles`.
-
-Timed metadata has no song duration. Sidra adds only accepted positive position deltas to the current song. It scrobbles after 240,000 ms of active playback, or at the next clean boundary after more than 30,000 ms when it observed the song start. Pause and stalled wall time do not count. The station or episode playhead detects continuity, but its absolute value never supplies the threshold.
-
-A clean boundary remains pending until the next advancing position report confirms continuous playback. A seek or discontinuous position discards the pending outgoing scrobble, resets the current song's fallback accounting and marks the next timed song as partial. This also covers metadata that arrives before the `Seeking` state. Enabling Last.fm during a radio song removes its boundary eligibility and starts accounting at opt-in. Document replacement and `will-quit` clear all radio timing and pending-boundary state.
-
-### Error handling
-
-`apiCall()` reads the response body and checks the API error code before the HTTP status, because Last.fm returns several of its own codes with a non-2xx status. Error 9 (invalid session key) means the user revoked Sidra at Last.fm: the session is cleared, the tray returns to **Connect to Last.fm…**, and a notification says so even when notifications are switched off.
-
-### Playback verification
-
-A committed full-document navigation resets the shared `Player`, which cancels the scrobble timer and clears the current track through the two reset events. `doScrobble()` still re-reads `player.playbackSnapshot()` at submission time as a defence against missing or malformed renderer events. For normal tracks, it refuses unless playback is live and the playhead has reached the threshold. The comparison is absolute, never a delta against a position sampled when the timer was armed, and `positionReported` prevents a new track from using the previous track's cached playhead. Radio songs use the track-relative rules above.
-
-### Event subscriptions
-
-| Event | Action |
-|---|---|
-| `nowPlayingItemDidChange` | Reset track state, send now-playing and arm the timer if already playing |
-| `timedMetadataDidChange` | Adopt a radio song and hold a clean boundary until playback confirms continuity |
-| `playbackStateDidChange` | Arm the timer on a play transition; bank the play time and clear the timer on a pause |
-| `playbackTimeDidChange` | Confirm radio continuity and position growth without using the absolute playhead as elapsed song time |
-
----
-
 ## Track Change Notifications
 
 Track notifications show the current track with localised **Play/Pause**, **Previous** and **Next** controls.
@@ -1036,7 +928,7 @@ Three channels are private to the Settings preload and appear on no other allowl
 
 ### Now Playing
 
-When a track is active, the top of the context menu shows metadata and playback controls. This section is absent when nothing is playing or after 30 seconds of pause (mirrors the Discord integration timeout).
+When a track is active, the top of the context menu shows metadata and playback controls. This section is absent when nothing is playing or after 30 seconds of pause.
 
 **Metadata items** (disabled, display-only):
 
@@ -1200,7 +1092,6 @@ The top-level `productName: "Sidra"` in `package.json` is the single source for 
 | MPRIS metadata | title/artist/album/artwork/duration/trackId | Queue-item metadata, effective duration and timed radio songs |
 | MPRIS volume | Two-way with pending-echo queue | musicKitHook.js + main MPRIS plugin |
 | MPRIS repeat/shuffle | Two-way | `repeatModeDidChange` + `shuffleModeDidChange` |
-| Discord Rich Presence | `@xhayper/discord-rpc` | With debounce + pause timeout + retry |
 | Track change notifications | D-Bus on Linux, Electron `Notification` elsewhere | Tracks and radio songs, artwork, replacement, and Play/Pause/Previous/Next controls where supported |
 | Regional storefront detection | `app.getLocaleCountryCode()` → `/gb/new`, `/ch/new` etc. | Fallback chain: persisted → detected → `us` |
 | Storefront preference persistence | `electron-conf` + `did-navigate` listener | Survives restarts; language parameter preserved |
@@ -1234,9 +1125,8 @@ The top-level `productName: "Sidra"` in `package.json` is the single source for 
 | Zoom factor preference | `zoomFactor` in `electron-conf` | 1.0x to 2.0x via tray submenu |
 | Wedge detector | `src/wedgeDetector.ts` | Auto-skip on playback stall. Each attempt logs at `warn` with `source=wedge channel=player:next reason=playback-stalled attempt=<current>/3 result=sent|dropped` |
 | Artwork cache | `src/artwork.ts` | UUID-based filenames, 7-day expiry, atomic writes |
-| Pause timer utility | `src/pauseTimer.ts` | `createPauseTimer()` shared by tray, dock, Discord |
+| Pause timer utility | `src/pauseTimer.ts` | `createPauseTimer()` shared by tray and dock |
 | Service worker cache clearing | `clearData()` on the `persist:sidra` partition in `initSession()` | Clears service workers and cache for the service origins on startup |
-| Last.fm scrobbling | `src/integrations/lastfm` + Last.fm API 2.0 | Opt-in; browser auth from the tray, per-user session key in `electron-conf` |
 | Controller navigation | Gamepad API in `preload.ts` + `controllerIPC.ts` | Standard mapping; D-pad, Select, and guarded Back in both services |
 
 #### Tray Menu Implementation Notes

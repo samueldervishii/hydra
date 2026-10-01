@@ -67,10 +67,6 @@ vi.mock('../../src/integrations/notifications', () => ({
   init: vi.fn(),
 }));
 
-vi.mock('../../src/integrations/discord-presence', () => ({
-  init: vi.fn(),
-}));
-
 vi.mock('../../src/wedgeDetector', () => ({
   init: vi.fn(),
   reset: vi.fn(),

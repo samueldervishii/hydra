@@ -1,18 +1,15 @@
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { app } from "electron";
 import {
-  DISCORD_PLAY_ON_TEXT,
   getLocalizedString,
   getNavigationStrings,
   getTrayStrings,
   LOADING_TEXT,
 } from "../src/i18n";
-import { allServices } from "../src/musicService";
 
 describe("settings labels", () => {
   it("shares the settings label between navigation and the tray", () => {
     expect(getNavigationStrings().settings).toBe(getTrayStrings().settings);
-    expect(getTrayStrings().lastfmConnected).toContain("{name}");
   });
 });
 
@@ -62,22 +59,13 @@ describe("getLocalizedString", () => {
 });
 
 describe("translated UI labels", () => {
-  it("keeps every Discord button within the service limit without shortening brand names", () => {
-    for (const [lang, template] of Object.entries(DISCORD_PLAY_ON_TEXT)) {
-      for (const service of allServices()) {
-        const label = template.replace("{service}", service.displayName);
-        expect(label, `${lang}: ${service.id}`).toContain(service.displayName);
-        expect(label.length, `${lang}: ${service.id}`).toBeLessThanOrEqual(32);
-      }
-    }
-  });
 
   afterEach(() => {
     vi.restoreAllMocks();
     vi.resetModules();
   });
 
-  it("uses French labels and preserves literal metadata placeholders", async () => {
+  it("uses French labels", async () => {
     vi.resetModules();
     const { app: freshApp } = await import("electron");
     vi.spyOn(freshApp, "getPreferredSystemLanguages").mockReturnValue([
@@ -85,11 +73,6 @@ describe("translated UI labels", () => {
     ]);
     const i18n = await import("../src/i18n");
     expect(i18n.getTrayStrings().styleCustom).toBe("Thème personnalisé");
-    expect(i18n.getDiscordPlayOnText("Apple Music Classical")).toBe(
-      "Lire sur Apple Music Classical",
-    );
-    expect(i18n.getDiscordArtistText(null)).toBe("par Artiste inconnu");
-    expect(i18n.getDiscordArtistText("$&")).toBe("par $&");
     expect(i18n.getAboutStrings().description).toBe(
       "Un client de bureau minimaliste pour Apple Music.",
     );
