@@ -1,5 +1,5 @@
 {
-  description = "An elegant Apple Music desktop client. No frippery, just quality. A better class of Cider 🍎";
+  description = "Apple Music desktop client for Linux";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
