@@ -1,3 +1,5 @@
+// Must load before anything that reads userData. See src/userDataPath.ts.
+import "./userDataPath";
 import {
   app,
   BrowserWindow,
@@ -983,8 +985,8 @@ if (gotLock) {
       mainLog.error("startup failed:", err);
       const detail = errorMessage(err);
       dialog.showErrorBox(
-        "Sidra failed to start",
-        `Sidra could not finish starting.\n\n${detail}\n\nSee the Sidra log for details, then start Sidra again.`,
+        `${app.getName()} failed to start`,
+        `${app.getName()} could not finish starting.\n\n${detail}\n\nSee the ${app.getName()} log for details, then start ${app.getName()} again.`,
       );
       app.quit();
     });

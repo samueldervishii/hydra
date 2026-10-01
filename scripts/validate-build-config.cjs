@@ -118,10 +118,10 @@ function main() {
   }
 
   // Pin the D-Bus commands for launcher controls, not their labels.
-  // Match the MPRIS integration's lowercased app.getName(), which prefers
-  // productName over name, so a product rename requires matching commands.
+  // Match the MPRIS integration, which names its bus after INTERNAL_NAME in
+  // src/identity.ts, the package name, so a display rename leaves it alone.
   const desktop = config.linux?.desktop;
-  const busName = `org.mpris.MediaPlayer2.${String(pkg.productName ?? pkg.name).toLowerCase()}`;
+  const busName = `org.mpris.MediaPlayer2.${String(pkg.name).toLowerCase()}`;
   const actionMethods = ["PlayPause", "Next", "Previous", "Stop"];
   if (desktop?.entry?.Actions !== "PlayPause;Next;Previous;Stop;") {
     throw new Error(

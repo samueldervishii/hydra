@@ -244,6 +244,27 @@ afterEach(() => {
   expect(positionBreaches).toEqual([]);
 });
 
+// Media clients show Identity; the bus name, the desktop entry and the track
+// object paths are addressed by name elsewhere, so a display rename must not
+// reach them.
+describe("MPRIS identity", () => {
+  it("shows the display name and keeps the bus, desktop entry and track paths on sidra", () => {
+    const name = vi.spyOn(app, "getName").mockReturnValue("Hydra");
+    try {
+      const { root } = initInterfaces();
+      const identity = root as unknown as { Identity: string; DesktopEntry: string };
+      expect(identity.Identity).toBe("Hydra");
+      expect(identity.DesktopEntry).toBe("sidra");
+      expect(busStub.requestName).toHaveBeenCalledWith(
+        "org.mpris.MediaPlayer2.sidra",
+        0,
+      );
+    } finally {
+      name.mockRestore();
+    }
+  });
+});
+
 describe("MPRIS fullscreen", () => {
   it("exports boolean fullscreen properties with the required access", () => {
     const { root } = initInterfaces();

@@ -17,6 +17,7 @@ import { getServiceByHost } from "../../musicService";
 import { getMusicService } from "../../config";
 import { switchService } from "../../serviceSwitch";
 import { closeBus } from "../../utils/closeBus";
+import { INTERNAL_NAME } from "../../identity";
 
 // `main.ts` loads this module only on Linux, keeping `dbus-next` off other platforms.
 const dbus = require("@holusion/dbus-next");
@@ -101,7 +102,7 @@ class MediaPlayer2 extends Interface {
 
   /** Returns the desktop entry name without its .desktop suffix. */
   get DesktopEntry(): string {
-    return app.getName().toLowerCase();
+    return INTERNAL_NAME;
   }
 
   /** Reports that clients can quit Sidra. */
@@ -230,8 +231,7 @@ function sanitiseTrackId(trackId: string): string {
 }
 
 function buildTrackId(rawId: string): string {
-  const appName = app.getName().toLowerCase();
-  return `/org/${appName}/track/${sanitiseTrackId(rawId)}`;
+  return `/org/${INTERNAL_NAME}/track/${sanitiseTrackId(rawId)}`;
 }
 
 function buildMetadata(
@@ -1225,7 +1225,9 @@ export function init(ctx: IntegrationContext): void {
     fullscreenWindow.on("leave-full-screen", onFullscreenChanged);
   }
 
-  const busName = `org.mpris.MediaPlayer2.${app.getName().toLowerCase()}`;
+  // Fixed, not app.getName(): the .desktop actions and the snap slot address
+  // this bus by name, and a display rename must not break them.
+  const busName = `org.mpris.MediaPlayer2.${INTERNAL_NAME}`;
   bus
     .requestName(busName, 0)
     .then(() => {

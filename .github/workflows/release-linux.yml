@@ -141,7 +141,7 @@ jobs:
         run: |
           tag_object=$(gh api "repos/${GH_REPO}/git/tags" \
             -f tag="$VERSION" \
-            -f message="Sidra ${VERSION}" \
+            -f message="Hydra ${VERSION}" \
             -f object="$GITHUB_SHA" \
             -f type=commit \
             --jq .sha)
