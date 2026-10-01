@@ -114,7 +114,7 @@ describe("Linux track notifications", () => {
     expect(message.body.slice(0, 6)).toEqual([
       "Sidra",
       0,
-      getAssetPath("assets", "sidra-logo.png"),
+      getAssetPath("assets", "hydra-logo.png"),
       "Song",
       "Artist &amp; &lt;Album&gt;",
       [
@@ -150,7 +150,7 @@ describe("Linux track notifications", () => {
   it("keeps the application icon without an artwork hint when artwork is absent", async () => {
     await adapter.show({ ...track(), icon: undefined }, current);
     const [message] = notifyCalls();
-    expect(message.body[2]).toBe(getAssetPath("assets", "sidra-logo.png"));
+    expect(message.body[2]).toBe(getAssetPath("assets", "hydra-logo.png"));
     expect(message.body[6]).not.toHaveProperty("image-path");
     expect(message.body[6]["desktop-entry"].value).toBe("sidra");
     signal("ActionInvoked", [1, "next"]);

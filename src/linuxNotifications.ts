@@ -293,7 +293,7 @@ export function createLinuxNotifications(
       const result = await call(owner, "Notify", "susssasa{sv}i", [
         app.getName(),
         notificationId,
-        getAssetPath("assets", "sidra-logo.png"),
+        getAssetPath("assets", "hydra-logo.png"),
         notification.title,
         Array.isArray(capabilities?.body[0]) &&
         capabilities.body[0].includes("body-markup")

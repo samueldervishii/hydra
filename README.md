@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/branding/hydra-icon.png" alt="Hydra" width="96" height="96"></p>
+
 # Hydra
 
 An Apple Music desktop client for Linux, a fork of [Sidra](https://github.com/wimpysworld/sidra).

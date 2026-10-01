@@ -198,21 +198,21 @@ function isGnomeSession(): boolean {
 
 function getLinuxTrayIconPath(): string {
   if (isGnomeSession()) {
-    return path.join(iconsDir, "sidra-tray-outline.png");
+    return path.join(iconsDir, "hydra-tray-outline.png");
   }
 
   return nativeTheme.shouldUseDarkColors
-    ? path.join(iconsDir, "sidra-tray-dark.png")
-    : path.join(iconsDir, "sidra-tray-light.png");
+    ? path.join(iconsDir, "hydra-tray-dark.png")
+    : path.join(iconsDir, "hydra-tray-light.png");
 }
 
 function getTrayIconPath(): string {
   if (process.platform === "darwin") {
-    return path.join(iconsDir, "sidraTemplate.png");
+    return path.join(iconsDir, "hydraTemplate.png");
   }
 
   if (process.platform === "win32") {
-    return path.join(iconsDir, "sidra-tray.png");
+    return path.join(iconsDir, "hydra-tray.png");
   }
 
   return getLinuxTrayIconPath();

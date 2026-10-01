@@ -115,17 +115,17 @@ validate:
     npm audit --omit=dev
 
 # Generate all app, logo, DMG, tray, menu and README assets
-generate-assets: _generate-app-icons _generate-dmg-background _generate-tray-icon _generate-menu-icons _generate-readme-image
+generate-assets: _generate-branding _generate-dmg-background _generate-menu-icons _generate-readme-image
 
 # Compose the README image from the original screenshots
 [private]
 _generate-readme-image:
     python3 scripts/generate-readme-image.py
 
-# Generate app icons and the shared logo from the squircle SVG source
+# Generate the app icon, logo, splash image and tray icons from assets/branding
 [private]
-_generate-app-icons:
-    python3 scripts/generate-app-icons.py
+_generate-branding:
+    python3 scripts/generate-branding.py
 
 # Generate DMG background PNGs from SVG source
 [private]
@@ -133,44 +133,6 @@ _generate-dmg-background:
     rsvg-convert -w 540 -h 380 -o build/background.png assets/source/sidra-background.svg
     rsvg-convert -w 1080 -h 760 -o build/background@2x.png assets/source/sidra-background.svg
     optipng -strip all -o7 -quiet build/background.png build/background@2x.png
-
-# Generate tray icon PNGs from SVG source
-[private]
-_generate-tray-icon: _generate-tray-outline
-    #!/usr/bin/env bash
-    set -euo pipefail
-    src="assets/source/sidra-tray-symbol.svg"
-    out="assets/icons"
-    # macOS Template icons (black on transparent, macOS handles theme adaptation)
-    rsvg-convert -w 16 -h 16 -o "$out/sidraTemplate.png" "$src"
-    rsvg-convert -w 32 -h 32 -o "$out/sidraTemplate@2x.png" "$src"
-    # Black monochrome icons
-    rsvg-convert -w 24 -h 24 -o "$out/sidra-tray-light.png" "$src"
-    rsvg-convert -w 48 -h 48 -o "$out/sidra-tray-light@2x.png" "$src"
-    rsvg-convert -w 24 -h 24 -o "$out/sidra-tray.png" "$src"
-    rsvg-convert -w 48 -h 48 -o "$out/sidra-tray@2x.png" "$src"
-    # White monochrome icons
-    sed 's/<svg /<svg fill="#FFFFFF" /' "$src" \
-        | rsvg-convert -w 24 -h 24 -o "$out/sidra-tray-dark.png"
-    sed 's/<svg /<svg fill="#FFFFFF" /' "$src" \
-        | rsvg-convert -w 48 -h 48 -o "$out/sidra-tray-dark@2x.png"
-    optipng -strip all -o7 -quiet \
-        "$out/sidraTemplate.png" \
-        "$out/sidraTemplate@2x.png" \
-        "$out/sidra-tray-light.png" \
-        "$out/sidra-tray-light@2x.png" \
-        "$out/sidra-tray-dark.png" \
-        "$out/sidra-tray-dark@2x.png" \
-        "$out/sidra-tray.png" \
-        "$out/sidra-tray@2x.png"
-
-# Derive the outline SVG and generate GNOME tray icons
-[private]
-_generate-tray-outline:
-    python3 scripts/generate-tray-outline.py
-    rsvg-convert -w 24 -h 24 -o assets/icons/sidra-tray-outline.png assets/source/sidra-tray-outline.svg
-    rsvg-convert -w 48 -h 48 -o assets/icons/sidra-tray-outline@2x.png assets/source/sidra-tray-outline.svg
-    optipng -strip all -o7 -quiet assets/icons/sidra-tray-outline.png assets/icons/sidra-tray-outline@2x.png
 
 # Generate tray menu icon PNGs from SVG sources
 [private]

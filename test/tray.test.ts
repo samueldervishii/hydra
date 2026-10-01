@@ -340,8 +340,8 @@ describe("createTray - menu template inspection", () => {
   });
 
   it.each([
-    ["win32", "sidra-tray.png"],
-    ["darwin", "sidraTemplate.png"],
+    ["win32", "hydra-tray.png"],
+    ["darwin", "hydraTemplate.png"],
   ] as const)(
     "keeps the %s tray icon when the environment names GNOME",
     (platform, icon) => {
@@ -396,7 +396,7 @@ describe("createTray - menu template inspection", () => {
         });
         const tray = createTray() as Tray & { icon: string };
 
-        expect(tray.icon).toBe("assets/icons/sidra-tray-outline.png");
+        expect(tray.icon).toBe("assets/icons/hydra-tray-outline.png");
       },
     );
 
@@ -418,7 +418,7 @@ describe("createTray - menu template inspection", () => {
         const tray = createTray() as Tray & { icon: string };
 
         expect(tray.icon).toBe(
-          `assets/icons/sidra-tray-${dark ? "dark" : "light"}.png`,
+          `assets/icons/hydra-tray-${dark ? "dark" : "light"}.png`,
         );
       },
     );
@@ -1735,7 +1735,7 @@ describe("theme change menu refresh", () => {
 
       expect(tray.setImage).toHaveBeenCalledTimes(1);
       expect(tray.setImage).toHaveBeenCalledWith(
-        `assets/icons/sidra-tray-${dark ? "dark" : "light"}.png`,
+        `assets/icons/hydra-tray-${dark ? "dark" : "light"}.png`,
       );
       expect(tray.setContextMenu).toHaveBeenCalledTimes(1);
     },

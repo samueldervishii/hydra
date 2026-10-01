@@ -266,7 +266,8 @@ function createSplash(): {
     fullscreen: false,
     center: true,
     skipTaskbar: true,
-    backgroundColor: "#1a0a10",
+    // The splash page's own background, so no other colour shows before it paints.
+    backgroundColor: "#0A121F",
     show: false,
     webPreferences: {
       contextIsolation: true,

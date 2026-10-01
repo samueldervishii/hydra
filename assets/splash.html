@@ -7,14 +7,18 @@
 <title>Loading</title>
 <link rel="stylesheet" href="windowChrome.css">
 <style>
+/* Hydra's splash colours. windowChrome.css keeps the About window's own. */
+html, body {
+  background: #0A121F;
+}
 .icon {
   margin-bottom: 24px;
 }
 .spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid rgba(218, 165, 32, 0.2);
-  border-top-color: #daa520;
+  border: 3px solid rgba(18, 201, 165, 0.2);
+  border-top-color: #12C9A5;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin-bottom: 16px;
@@ -23,14 +27,14 @@
   to { transform: rotate(360deg); }
 }
 .loading-text {
-  color: rgba(218, 165, 32, 0.7);
+  color: #12C9A5;
   font-size: 13px;
   letter-spacing: 0.5px;
 }
 </style>
 </head>
 <body>
-<img class="icon" src="sidra-logo.png" alt="" width="128" height="128">
+<img class="icon" src="hydra-splash.png" alt="" width="128" height="128">
 <div class="spinner"></div>
 <span class="loading-text">Loading...</span>
 <script>
