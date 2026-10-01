@@ -2,13 +2,13 @@
 
 ## Supported Versions
 
-Only the latest release is supported. Security fixes are released as patch versions.
+Only the latest release is supported.
 
 ## Reporting a Vulnerability
 
 **Do not open a public issue for security vulnerabilities.**
 
-[Report vulnerabilities privately](https://github.com/wimpysworld/sidra/security/advisories/new). Include:
+[Report vulnerabilities privately](https://github.com/samueldervishii/sidra/security/advisories/new). Include:
 
 - Steps to reproduce
 - Affected versions

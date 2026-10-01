@@ -20,4 +20,4 @@ Using Discord alongside Sidra is subject to [Discord's Terms of Service](https:/
 
 ## Contact
 
-Report concerns or questions at [github.com/wimpysworld/sidra/issues](https://github.com/wimpysworld/sidra/issues).
+Report concerns or questions at [github.com/samueldervishii/sidra/issues](https://github.com/samueldervishii/sidra/issues).

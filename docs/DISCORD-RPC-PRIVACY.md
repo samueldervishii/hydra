@@ -30,8 +30,8 @@ Once Discord receives presence data, Discord's own practices apply. See [Discord
 
 ## Changes to this policy
 
-This policy may be updated. All changes will appear in the [Sidra repository](https://github.com/wimpysworld/sidra).
+This policy may be updated. All changes will appear in the [repository](https://github.com/samueldervishii/sidra).
 
 ## Contact
 
-Report concerns or questions at [github.com/wimpysworld/sidra/issues](https://github.com/wimpysworld/sidra/issues).
+Report concerns or questions at [github.com/samueldervishii/sidra/issues](https://github.com/samueldervishii/sidra/issues).

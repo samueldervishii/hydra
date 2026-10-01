@@ -89,27 +89,33 @@ function main() {
     "  \u2713 NSIS installer: assisted, per-user by default, install scope and directory selectable",
   );
 
-  // FPM requires the author's email for the deb/rpm maintainer field.
+  // FPM needs a maintainer for the .deb. An explicit build.deb.maintainer
+  // supplies it, which lets package.json's author carry no email address;
+  // without one, electron-builder derives it from author and needs the email.
   const author = pkg.author;
   const emailRegex = /<[^>]+@[^>]+>/;
-  if (typeof author === "string") {
+  const debMaintainer = config.deb?.maintainer;
+  if (typeof debMaintainer === "string" && debMaintainer.trim() !== "") {
+    console.log(`  \u2713 .deb maintainer: ${debMaintainer}`);
+  } else if (typeof author === "string") {
     if (!emailRegex.test(author)) {
       throw new Error(
-        "package.json 'author' must include an email (e.g. \"Name <email>\").\n" +
-          "Required for Linux .deb/.rpm maintainer field.",
+        "package.json 'author' must include an email (e.g. \"Name <email>\"), or set build.deb.maintainer.\n" +
+          "Required for the Linux .deb maintainer field.",
       );
     }
+    console.log("  \u2713 package.json author email: present");
   } else if (typeof author === "object" && author !== null) {
     if (!author.email) {
       throw new Error(
-        "package.json 'author.email' must be set.\n" +
-          "Required for Linux .deb/.rpm maintainer field.",
+        "package.json 'author.email' must be set, or set build.deb.maintainer.\n" +
+          "Required for the Linux .deb maintainer field.",
       );
     }
+    console.log("  \u2713 package.json author email: present");
   } else {
     throw new Error("package.json 'author' field is missing.");
   }
-  console.log("  \u2713 package.json author email: present");
 
   // Pin the D-Bus commands for launcher controls, not their labels.
   // Match the MPRIS integration's lowercased app.getName(), which prefers
