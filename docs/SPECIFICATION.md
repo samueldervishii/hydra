@@ -32,7 +32,6 @@ The codebase is tightly focused and as lean as possible. Five runtime dependenci
 - [Progress Bar](#progress-bar)
 - [Share Sheet](#share-sheet)
 - [Application Menu](#application-menu)
-- [Auto-update](#auto-update)
 - [Feature Inventory](#feature-inventory)
 - [Risk Assessment](#risk-assessment)
 
@@ -123,8 +122,6 @@ sidra/
 │   ├── customTheme.ts             - validates the custom JSON colour palette
 │   ├── themeTemplate.ts           - pure palette→CSS renderer (buildThemeCss())
 │   ├── artwork.ts                 - downloadArtwork(), cleanArtworkCache(); UUID-based multi-file cache
-│   ├── autoUpdate.ts              - isAutoUpdateSupported(), initAutoUpdate(), quitAndInstall(); electron-updater
-│   ├── update.ts                  - checkForUpdates() via GitHub API; UpdateInfo state
 │   ├── wedgeDetector.ts           - detects playback stalls and auto-skips forward
 │   ├── pauseTimer.ts              - createPauseTimer() factory; shared by tray, dock, Discord integrations
 │   ├── utils.ts                   - errorMessage() utility
@@ -173,8 +170,7 @@ sidra/
 │   │   ├── loading.json           - 1 translation record: LOADING_TEXT
 │   │   ├── tray.json              - 37 translation records: tray menu, dock, Windows taskbar
 │   │   │                             and navigation bar labels
-│   │   ├── about.json             - 4 translation records: about window labels
-│   │   └── update.json            - 5 translation records: auto-update labels
+│   │   └── about.json             - 4 translation records: about window labels
 │   ├── styleFix.css               - CSS overrides injected via webContents.insertCSS()
 │   │                                 Hides "Get the app" and "Open in Music" banners
 │   │                                 that Apple shows to push users toward native apps
@@ -211,7 +207,6 @@ Current dependency roles:
 - TypeScript and Vitest - type checking and unit tests
 - electron-log - application logging
 - electron-conf - persistent user configuration
-- electron-updater - AppImage and NSIS update checks and installs
 - dbus-next - Linux MPRIS integration
 - Discord RPC - optional Discord Rich Presence
 
@@ -958,7 +953,7 @@ A body click shows and focuses the main window, subject to action support on Lin
 | macOS | Electron `Notification` | A signed app and alert-style notifications |
 
 The macOS package sets `NSUserNotificationAlertStyle` to `alert` through `build.mac.extendInfo` in `package.json`. Current unsigned releases do not meet the signing requirement.
-All controls use the typed `sendCommand()` bridge. Last.fm and update notifications keep the Electron delivery path and do not gain track controls.
+All controls use the typed `sendCommand()` bridge. Last.fm notifications keep the Electron delivery path and do not gain track controls.
 
 The playback button uses the shared playback snapshot. Playing shows Pause, while paused and terminal states show Play.
 Transient states retain the previous label. The action sends explicit Play or Pause, and does nothing if playback already matches the requested state.
@@ -1192,46 +1187,6 @@ The top-level `productName: "Sidra"` in `package.json` is the single source for 
 
 ---
 
-## Auto-update
-
-`src/autoUpdate.ts` provides automatic update delivery for AppImage (Linux) and NSIS (Windows) builds via `electron-updater`. All other packaging formats (deb, rpm, Nix, DMG) receive a tray notification pointing to the GitHub releases page instead.
-
-### Platform detection
-
-`isAutoUpdateSupported()` determines at runtime whether the updater should initialise:
-
-| Condition | Result |
-|---|---|
-| `process.env.APPIMAGE` is set | AppImage - enable updater |
-| `process.platform === 'win32' && app.isPackaged` | NSIS - enable updater |
-| `SIDRA_DISABLE_AUTO_UPDATE=1` env var set | Force-disable regardless of packaging |
-| All other cases | Notification-only mode |
-
-`app-update.yml` is present in all packaged builds including deb/rpm/Nix. Runtime detection in `isAutoUpdateSupported()` prevents updater initialisation even when the file is present; log noise is not a concern in practice.
-
-### Lazy require constraint
-
-`electron-updater` must be `require()`d inside `initAutoUpdate()` only - never at module top level. On unsupported platforms the module must never load. Verify correct behaviour by checking log output: `autoUpdate` scope messages must not appear on deb, rpm, or Nix builds.
-
-### CastLabs ECS compatibility
-
-`electron-updater` implements its own download/install pipeline and does not use Electron's built-in `autoUpdater`. All APIs it uses are unmodified in CastLabs ECS. The known `app.relaunch()` bug (CastLabs issue #164) does not affect `AppImageUpdater` - it spawns the new binary via `child_process.spawn()` directly.
-
-### Manifest filenames
-
-electron-updater manifest filenames are hardcoded and cannot be changed:
-
-- `latest.yml` - Windows (NSIS) update manifest
-- `latest-linux.yml` - Linux (AppImage) update manifest
-
-### Configuration
-
-- Windows builds are unsigned. `configureAutoUpdate()` detects `NsisUpdater` and replaces `verifyUpdateCodeSignature` with a verifier that resolves to `null`. Assigning `false` would not work because the electron-updater setter ignores falsy values. Remove this override when Windows builds are signed.
-- AppImage `artifactName` must omit the version component - use `${productName}-${os}-${arch}.${ext}`. Including the version causes filename changes that break desktop shortcuts after update.
-- Future package managers (Scoop, Chocolatey) must set `SIDRA_DISABLE_AUTO_UPDATE=1` in their install manifests to suppress the updater.
-
----
-
 ## Feature Inventory
 
 ### v0.1 - Linux MLP
@@ -1280,7 +1235,6 @@ electron-updater manifest filenames are hardcoded and cannot be changed:
 | Wedge detector | `src/wedgeDetector.ts` | Auto-skip on playback stall. Each attempt logs at `warn` with `source=wedge channel=player:next reason=playback-stalled attempt=<current>/3 result=sent|dropped` |
 | Artwork cache | `src/artwork.ts` | UUID-based filenames, 7-day expiry, atomic writes |
 | Pause timer utility | `src/pauseTimer.ts` | `createPauseTimer()` shared by tray, dock, Discord |
-| Update checking (non-auto-update) | `src/update.ts` | GitHub API check for deb/rpm/Nix/DMG platforms |
 | Service worker cache clearing | `clearData()` on the `persist:sidra` partition in `initSession()` | Clears service workers and cache for the service origins on startup |
 | Last.fm scrobbling | `src/integrations/lastfm` + Last.fm API 2.0 | Opt-in; browser auth from the tray, per-user session key in `electron-conf` |
 | Controller navigation | Gamepad API in `preload.ts` + `controllerIPC.ts` | Standard mapping; D-pad, Select, and guarded Back in both services |

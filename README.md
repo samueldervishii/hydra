@@ -47,10 +47,7 @@ Sidra takes the opposite approach: wrap `music.apple.com` directly, stay out of 
   - Playback controls, volume, and mute
   - Start page and last session restore, style switcher, zoom control
   - Close to tray, opt-in: closing the window keeps Sidra running, with Hide and Show entries
-  - Share current track (macOS), auto-update status
-- 🔄 **Auto-update** via GitHub Releases:
-  - AppImage and NSIS: silent OTA download with restart prompt; disable with `SIDRA_DISABLE_AUTO_UPDATE=1`
-  - deb, rpm, Nix, macOS DMG: update notification linking to the release page
+  - Share current track (macOS)
 
 Open **Settings** with the gear button beside Back, Forward and Reload.
 With the player focused, press <kbd>Ctrl</kbd>+<kbd>,</kbd> on Linux or Windows, or <kbd>Cmd</kbd>+<kbd>,</kbd> on macOS.

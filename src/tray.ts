@@ -9,12 +9,7 @@ import {
 } from "electron";
 import path from "path";
 import log from "electron-log/main";
-import {
-  getTrayStrings,
-  getUpdateStrings,
-  getAutoUpdateStrings,
-  type TrayStrings,
-} from "./i18n";
+import { getTrayStrings, type TrayStrings } from "./i18n";
 import { getAssetPath, getProductInfo } from "./paths";
 import {
   Player,
@@ -31,14 +26,11 @@ import {
   getCloseToTrayEnabled,
 } from "./config";
 import { showAboutWindow } from "./aboutWindow";
-import { getUpdateInfo } from "./update";
-import { quitAndInstall } from "./autoUpdate";
 import { isConfigured as isLastfmConfigured } from "./integrations/lastfm";
 import { applySettingsAction, getSettingsState } from "./settings";
 import { downloadArtwork } from "./artwork";
 import { sendCommand } from "./commandBridge";
 import { createPauseEdgeTimer } from "./pauseTimer";
-import { openExternalUrl } from "./utils/openExternal";
 
 const trayLog = log.scope("tray");
 
@@ -58,8 +50,6 @@ export type MenuIconKey =
   | "lastfm"
   | "style"
   | "zoom"
-  | "update-ready"
-  | "update-available"
   | "quit"
   | "share"
   | "artist"
@@ -86,8 +76,6 @@ const menuIconFileMap: Partial<Record<MenuIconKey, string>> = {
   lastfm: "lastfm",
   style: "palette",
   zoom: "expand",
-  "update-ready": "rotate",
-  "update-available": "parachute-box",
   quit: "eject",
   artist: "star",
   album: "compact-disc",
@@ -112,8 +100,6 @@ const menuIconSFSymbolMap: Record<MenuIconKey, string> = {
   lastfm: "dot.radiowaves.left.and.right",
   style: "paintpalette",
   zoom: "arrow.up.left.and.arrow.down.right",
-  "update-ready": "arrow.clockwise",
-  "update-available": "arrow.down.circle",
   quit: "xmark.circle",
   share: "square.and.arrow.up",
   artist: "star",
@@ -461,45 +447,6 @@ function buildZoomSubmenu(
   );
 }
 
-function buildUpdateMenuItems(): Electron.MenuItemConstructorOptions[] {
-  const update = getUpdateInfo();
-  const updateStrings = getUpdateStrings();
-  if (update && update.ready) {
-    const autoUpdateStrings = getAutoUpdateStrings();
-    const icon = getMenuIcon("update-ready");
-    return [
-      { type: "separator" },
-      {
-        label: autoUpdateStrings.ready,
-        ...(icon ? { icon } : {}),
-        click: () => {
-          quitAndInstall();
-        },
-      },
-    ];
-  } else if (update) {
-    const updateLabel = updateStrings.updateAvailable.replace(
-      "{version}",
-      update.version,
-    );
-    const icon = getMenuIcon("update-available");
-    return [
-      { type: "separator" },
-      {
-        label: updateLabel,
-        ...(icon ? { icon } : {}),
-        click: () => {
-          openExternalUrl(update.url, trayLog);
-        },
-      },
-    ];
-  }
-  return [
-    { type: "separator" },
-    { label: updateStrings.upToDate, enabled: false },
-  ];
-}
-
 /** Artwork icon for the track row, multi-representation for HiDPI. */
 function buildArtworkIcon(
   artworkPath: string | null,
@@ -714,7 +661,6 @@ function buildContextMenu(tray: Tray): Menu {
     ...(isLastfmConfigured() ? [buildLastfmSubmenu(ctx)] : []),
     buildStyleSubmenu(ctx),
     buildZoomSubmenu(ctx),
-    ...buildUpdateMenuItems(),
     { type: "separator" },
     {
       label: strings.quit,

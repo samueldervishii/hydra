@@ -37,7 +37,6 @@ interface StoreSchema {
   'lastfm.username': string | null;
   'lastfm.pendingScrobbles': PendingScrobble[];
   theme: ThemeName;
-  'autoUpdate.enabled': boolean;
   startPage: MusicStartPageId | 'last';
   lastPageUrl: string;
   'classical.startPage': ClassicalStartPageId | 'last';
@@ -207,16 +206,6 @@ export function getTheme(): ThemeName {
 /** Persist `theme` without applying the setting to running components. */
 export function setTheme(name: ThemeName): void {
   setConfigValue('theme', name);
-}
-
-/** Read `autoUpdate.enabled`, defaulting to `true` when absent. */
-export function getAutoUpdateEnabled(): boolean {
-  return getConfigValue('autoUpdate.enabled', true);
-}
-
-/** Persist `autoUpdate.enabled` without applying the setting to running components. */
-export function setAutoUpdateEnabled(enabled: boolean): void {
-  setConfigValue('autoUpdate.enabled', enabled);
 }
 
 /** Read `lastPageUrl`, returning undefined when the key is absent. */

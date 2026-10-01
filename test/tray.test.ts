@@ -105,11 +105,6 @@ vi.mock("../src/i18n", () => ({
     copyrightSuffix: "All rights reserved",
     licensePrefix: "License",
   }),
-  getUpdateStrings: () => ({
-    updateAvailable: "Update available: {version}",
-    upToDate: "Up to date",
-  }),
-  getAutoUpdateStrings: () => ({ ready: "Restart to update" }),
 }));
 
 vi.mock("../src/integrations/lastfm", () => ({
@@ -119,14 +114,6 @@ vi.mock("../src/integrations/lastfm", () => ({
   setStateChangedCallback: vi.fn(),
   disconnect: vi.fn(),
   isConfigured: vi.fn(() => false),
-}));
-
-vi.mock("../src/update", () => ({
-  getUpdateInfo: vi.fn(() => null),
-}));
-
-vi.mock("../src/autoUpdate", () => ({
-  quitAndInstall: vi.fn(),
 }));
 
 vi.mock("../src/theme", () => ({
@@ -150,7 +137,6 @@ vi.mock("../src/paths", () => ({
 }));
 
 import { BrowserWindow, Menu, Tray, nativeImage, nativeTheme } from "electron";
-import { getUpdateInfo } from "../src/update";
 import {
   truncateMenuLabel,
   sanitiseLinuxLabel,
@@ -229,7 +215,6 @@ function resetTrayMocks(): void {
   vi.mocked(isLastfmConfigured).mockReturnValue(false);
   vi.mocked(resolveTheme).mockReturnValue("apple-music");
   vi.mocked(hasCustomTheme).mockReturnValue(false);
-  vi.mocked(getUpdateInfo).mockReturnValue(null);
   vi.mocked(process.getSystemVersion).mockReturnValue("15.0.0");
   vi.mocked(nativeImage.createFromPath).mockClear();
   vi.mocked(nativeImage.createFromNamedImage).mockClear();
@@ -666,13 +651,13 @@ describe("createTray - menu template inspection", () => {
       expect(secondLast.type).toBe("separator");
     });
 
-    it("includes Up to date item when no update available", () => {
+    it("offers no update item between Zoom and Quit", () => {
       setPlatform("linux");
       createTray();
       const template = getLastTemplate();
-      const upToDateItem = findItem(template, "Up to date");
-      expect(upToDateItem).toBeDefined();
-      expect(upToDateItem!.enabled).toBe(false);
+      const zoomIndex = template.indexOf(findItem(template, "Zoom")!);
+      expect(template.slice(zoomIndex + 1).map((item) => item.type ?? item.label))
+        .toEqual(["separator", "Quit"]);
     });
 
     it("includes all submenu sections", () => {
@@ -1347,108 +1332,6 @@ describe("createTray - menu template inspection", () => {
       (clickCall![1] as () => void)();
       expect(mockWin.show).not.toHaveBeenCalled();
       expect(mockWin.focus).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("update menu item icons", () => {
-    it("attaches update-ready icon on Linux when update is ready", () => {
-      setPlatform("linux");
-      Object.defineProperty(nativeTheme, "shouldUseDarkColors", {
-        value: true,
-        configurable: true,
-      });
-      vi.mocked(getUpdateInfo).mockReturnValue({
-        version: "1.0.0",
-        url: "https://example.com",
-        ready: true,
-      });
-      createTray();
-      const template = getLastTemplate();
-      const readyItem = findItem(template, "Restart to update");
-      expect(readyItem).toBeDefined();
-      expect(readyItem!.label).toBe("Restart to update");
-      expect(readyItem!.icon).toBeDefined();
-    });
-
-    it("attaches update-available icon on Linux when update is available", () => {
-      setPlatform("linux");
-      Object.defineProperty(nativeTheme, "shouldUseDarkColors", {
-        value: true,
-        configurable: true,
-      });
-      vi.mocked(getUpdateInfo).mockReturnValue({
-        version: "1.1.0",
-        url: "https://example.com",
-        ready: false,
-      });
-      createTray();
-      const template = getLastTemplate();
-      const availableItem = findItem(template, "Update available");
-      expect(availableItem).toBeDefined();
-      expect(availableItem!.label).toBe("Update available: 1.1.0");
-      expect(availableItem!.icon).toBeDefined();
-    });
-
-    it("does not attach icon to up-to-date item", () => {
-      setPlatform("linux");
-      Object.defineProperty(nativeTheme, "shouldUseDarkColors", {
-        value: true,
-        configurable: true,
-      });
-      vi.mocked(getUpdateInfo).mockReturnValue(null);
-      createTray();
-      const template = getLastTemplate();
-      const upToDateItem = findItem(template, "Up to date");
-      expect(upToDateItem).toBeDefined();
-      expect(upToDateItem!.icon).toBeUndefined();
-    });
-
-    it("attaches SF Symbol icon to update-ready on macOS Tahoe+", () => {
-      setPlatform("darwin");
-      vi.spyOn(process, "getSystemVersion").mockReturnValue("26.1.0");
-      vi.mocked(getUpdateInfo).mockReturnValue({
-        version: "1.0.0",
-        url: "https://example.com",
-        ready: true,
-      });
-      createTray();
-      const template = getLastTemplate();
-      const readyItem = findItem(template, "Restart to update");
-      expect(readyItem).toBeDefined();
-      expect(readyItem!.icon).toBeDefined();
-    });
-
-    it("does not attach icon to update-ready on pre-Tahoe macOS", () => {
-      setPlatform("darwin");
-      vi.spyOn(process, "getSystemVersion").mockReturnValue("15.2.0");
-      vi.mocked(getUpdateInfo).mockReturnValue({
-        version: "1.0.0",
-        url: "https://example.com",
-        ready: true,
-      });
-      createTray();
-      const template = getLastTemplate();
-      const readyItem = findItem(template, "Restart to update");
-      expect(readyItem).toBeDefined();
-      expect(readyItem!.icon).toBeUndefined();
-    });
-
-    it("attaches icon to update-available on Windows", () => {
-      setPlatform("win32");
-      Object.defineProperty(nativeTheme, "shouldUseDarkColors", {
-        value: true,
-        configurable: true,
-      });
-      vi.mocked(getUpdateInfo).mockReturnValue({
-        version: "1.1.0",
-        url: "https://example.com",
-        ready: false,
-      });
-      createTray();
-      const template = getLastTemplate();
-      const availableItem = findItem(template, "Update available");
-      expect(availableItem).toBeDefined();
-      expect(availableItem!.icon).toBeDefined();
     });
   });
 

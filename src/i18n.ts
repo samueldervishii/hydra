@@ -30,7 +30,6 @@ function loadLocaleFile(filename: string): TranslationFile {
 const loadingData = loadLocaleFile('loading.json');
 const trayData = loadLocaleFile('tray.json');
 const aboutData = loadLocaleFile('about.json');
-const updateData = loadLocaleFile('update.json');
 
 // --- Translation records, re-exported so importers name a record, not a file ---
 
@@ -125,17 +124,6 @@ export const SETTINGS_TEXT: Record<string, string> = trayData.SETTINGS_TEXT;
 export const INTEGRATIONS_TEXT: Record<string, string> = trayData.INTEGRATIONS_TEXT;
 /** Translations for settings error, keyed by BCP 47 language tag. */
 export const SETTINGS_ERROR_TEXT: Record<string, string> = trayData.SETTINGS_ERROR_TEXT;
-
-/** Translations for update available, keyed by BCP 47 language tag. */
-export const UPDATE_AVAILABLE_TEXT: Record<string, string> = updateData.UPDATE_AVAILABLE_TEXT;
-/** Translations for up to date, keyed by BCP 47 language tag. */
-export const UP_TO_DATE_TEXT: Record<string, string> = updateData.UP_TO_DATE_TEXT;
-/** Translations for update ready, keyed by BCP 47 language tag. */
-export const UPDATE_READY_TEXT: Record<string, string> = updateData.UPDATE_READY_TEXT;
-/** Translations for restart now, keyed by BCP 47 language tag. */
-export const RESTART_NOW_TEXT: Record<string, string> = updateData.RESTART_NOW_TEXT;
-/** Translations for later, keyed by BCP 47 language tag. */
-export const LATER_TEXT: Record<string, string> = updateData.LATER_TEXT;
 
 /** Translations for close, keyed by BCP 47 language tag. */
 export const CLOSE_TEXT: Record<string, string> = aboutData.CLOSE_TEXT;
@@ -409,31 +397,5 @@ export function getAboutStrings(): {
     versionPrefix: getLocalizedString(VERSION_PREFIX, langs),
     copyrightSuffix: getLocalizedString(COPYRIGHT_SUFFIX, langs),
     licensePrefix: getLocalizedString(LICENSE_PREFIX, langs),
-  };
-}
-
-/** Resolve update availability messages. */
-export function getUpdateStrings(): {
-  updateAvailable: string;
-  upToDate: string;
-} {
-  const langs = getSystemLanguages();
-  return {
-    updateAvailable: getLocalizedString(UPDATE_AVAILABLE_TEXT, langs),
-    upToDate: getLocalizedString(UP_TO_DATE_TEXT, langs),
-  };
-}
-
-/** Resolve the downloaded-update prompt and its action labels. */
-export function getAutoUpdateStrings(): {
-  ready: string;
-  restartNow: string;
-  later: string;
-} {
-  const langs = getSystemLanguages();
-  return {
-    ready: getLocalizedString(UPDATE_READY_TEXT, langs),
-    restartNow: getLocalizedString(RESTART_NOW_TEXT, langs),
-    later: getLocalizedString(LATER_TEXT, langs),
   };
 }

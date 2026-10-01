@@ -225,11 +225,6 @@ vi.mock("../src/controllerIPC", () => ({
   goBackIfPossible: vi.fn(),
 }));
 vi.mock("../src/aboutWindow", () => ({ showAboutWindow: vi.fn() }));
-vi.mock("../src/update", () => ({ checkForUpdates: vi.fn() }));
-vi.mock("../src/autoUpdate", () => ({
-  isAutoUpdateSupported: vi.fn(() => false),
-  initAutoUpdate: vi.fn(),
-}));
 
 vi.mock("../src/musicService", () => ({
   getService: vi.fn(() => ({ contentReadySelector: "#content" })),

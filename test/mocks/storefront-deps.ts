@@ -63,15 +63,6 @@ vi.mock('../../src/tray', () => ({
   setApplyZoomCallback: vi.fn(),
 }));
 
-vi.mock('../../src/update', () => ({
-  checkForUpdates: vi.fn(),
-}));
-
-vi.mock('../../src/autoUpdate', () => ({
-  isAutoUpdateSupported: vi.fn(() => false),
-  initAutoUpdate: vi.fn(),
-}));
-
 vi.mock('../../src/integrations/notifications', () => ({
   init: vi.fn(),
 }));

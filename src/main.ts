@@ -52,8 +52,6 @@ import { initCommandBridge } from "./commandBridge";
 import { initControllerIPC, goBackIfPossible } from "./controllerIPC";
 import { CONTROLLER_RESET_CHANNEL } from "./controller";
 import { showAboutWindow } from "./aboutWindow";
-import { checkForUpdates } from "./update";
-import { isAutoUpdateSupported, initAutoUpdate } from "./autoUpdate";
 import {
   getService,
   allServices,
@@ -78,7 +76,6 @@ const SPLASH_MIN_DISPLAY_MS = 500;
 const CONTENT_READY_POLL_MS = 100;
 const CONTENT_READY_TIMEOUT_MS = 3500;
 const CSS_READY_TIMEOUT_MS = 10000;
-const UPDATE_CHECK_DELAY_MS = 5000;
 const SPLASH_WIDTH_PX = 300;
 const SPLASH_HEIGHT_PX = 350;
 const MAIN_WINDOW_WIDTH_PX = 1280;
@@ -825,18 +822,7 @@ function setupContentHandlers(
       mainLog.warn("failed to inject content on load:", e);
     }
 
-    if (firstLoad) {
-      markCssReady();
-      setTimeout(() => {
-        if (appTray) {
-          if (isAutoUpdateSupported()) {
-            initAutoUpdate(appTray, rebuildTrayMenu);
-          } else {
-            checkForUpdates(appTray, rebuildTrayMenu);
-          }
-        }
-      }, UPDATE_CHECK_DELAY_MS);
-    }
+    if (firstLoad) markCssReady();
   });
 }
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 "use strict";
 
-// Keep package.json on stable CastLabs Electron, electron-builder and
-// electron-updater releases without installing or building dependencies.
+// Keep package.json on stable CastLabs Electron and electron-builder
+// releases without installing or building dependencies.
 //
 // Read git tags because the Widevine-enabled Electron dependency comes from
 // castlabs/electron-releases, not the npm registry.
@@ -122,7 +122,6 @@ const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
 const targets = {
   electron: `github:castlabs/electron-releases#${latestCastLabsElectronTag()}`,
   "electron-builder": `^${latestElectronBuilderTag("electron-builder")}`,
-  "electron-updater": `^${latestElectronBuilderTag("electron-updater")}`,
 };
 
 const changed = [
@@ -132,12 +131,6 @@ const changed = [
     "devDependencies",
     "electron-builder",
     targets["electron-builder"],
-  ),
-  setDependency(
-    packageJson,
-    "dependencies",
-    "electron-updater",
-    targets["electron-updater"],
   ),
 ].some(Boolean);
 

@@ -1,4 +1,4 @@
-// The tray update link, update notification and main.ts window-open handler share openExternalUrl().
+// The main.ts window-open handler uses openExternalUrl().
 // Check its protocol allowlist and the URL that it passes to Chromium.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { shell } from 'electron';
