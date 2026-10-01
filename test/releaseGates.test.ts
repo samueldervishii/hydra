@@ -1,4 +1,12 @@
-import { readFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const childProcess =
@@ -29,6 +37,10 @@ const afterSign = require("../build/afterSign.cjs").default as BuildHook;
 const builderWorkflow = readFileSync(".github/workflows/builder.yml", "utf8");
 const manualSnapWorkflow = readFileSync(
   ".github/workflows/publish-snap-manual.yml",
+  "utf8",
+);
+const releaseWorkflow = readFileSync(
+  ".github/workflows/release-linux.yml",
   "utf8",
 );
 const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
@@ -229,6 +241,52 @@ describe("release build scripts", () => {
       "SIDRA_LASTFM_API_KEY and SIDRA_LASTFM_API_SECRET are required for tag builds",
     );
   });
+
+  // The fork's release runs from main, a branch run with no Last.fm secrets.
+  // The scripts run from a copy so the write lands outside assets/.
+  it("writes empty Last.fm credentials for a branch build without secrets", () => {
+    const dir = mkdtempSync(join(tmpdir(), "sidra-lastfm-"));
+    try {
+      mkdirSync(join(dir, "scripts"));
+      mkdirSync(join(dir, "assets"));
+      for (const name of [
+        "inject-lastfm-credentials.cjs",
+        "release-credentials.cjs",
+      ]) {
+        copyFileSync(join("scripts", name), join(dir, "scripts", name));
+      }
+      const result = childProcess.spawnSync(
+        process.execPath,
+        [join(dir, "scripts", "inject-lastfm-credentials.cjs")],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            GITHUB_REF_TYPE: "branch",
+            SIDRA_LASTFM_API_KEY: "",
+            SIDRA_LASTFM_API_SECRET: "",
+          },
+        },
+      );
+
+      expect(result.status).toBe(0);
+      expect(
+        JSON.parse(
+          readFileSync(join(dir, "assets", "lastfm-credentials.json"), "utf8"),
+        ),
+      ).toEqual({ apiKey: "", apiSecret: "" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+it("releases the fork from main without secrets or the tag marker", () => {
+  expect(releaseWorkflow).toMatch(
+    /on:\n  push:\n    branches: \[main\]\n    paths: \["package.json"\]\n  workflow_dispatch:\n\n/,
+  );
+  expect(releaseWorkflow).toContain("run: env -u GITHUB_REF_TYPE just build");
+  expect(releaseWorkflow).not.toMatch(/secrets\.|SIDRA_LASTFM|EVS_/);
 });
 
 it("pins castlabs-evs to an exact release", () => {

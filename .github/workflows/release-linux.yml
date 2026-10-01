@@ -1,45 +1,94 @@
 name: Release (Linux)
 
-# Builds the Linux amd64 .deb for this fork and publishes it as a GitHub
-# release. Run it from a tag: a pushed tag starts it, and a manual run must
-# pick the tag under "Use workflow from". The tag must equal package.json's
-# version. No EVS/VMP signing, Last.fm secrets or other targets are involved.
+# Releases this fork whenever main carries a version that has not been
+# released. A push to main that changes package.json starts it, and so can a
+# manual run from main. "check" reads package.json's version and stops there
+# when a tag or a GitHub release with that exact name already exists.
+# Otherwise "release" builds the Linux amd64 .deb, tags the pushed commit with
+# an annotated <version> tag and publishes the .deb with SHA256SUMS. No
+# EVS/VMP signing, Last.fm secrets or other targets are involved.
 
 on:
   push:
-    tags: ["*.*.*"]
+    branches: [main]
+    paths: ["package.json"]
   workflow_dispatch:
 
 permissions:
   contents: write
 
+# One release run at a time, never cancelled midway. A queued run starts after
+# the one ahead of it has tagged, so its check sees the tag and stops.
 concurrency:
-  group: release-linux-${{ github.ref }}
+  group: release-linux
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build and release the .deb
+  check:
+    name: Check for a new version
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Check the tag matches package.json
+      - name: Compare package.json with existing tags and releases
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
-            echo "::error::Run this workflow from a tag, not the ${GITHUB_REF_NAME} branch." >&2
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error::Run this workflow from main, not ${GITHUB_REF}." >&2
             exit 1
           fi
-          PKG_VERSION=$(jq -r .version package.json)
-          if [[ "$GITHUB_REF_NAME" != "$PKG_VERSION" ]]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${PKG_VERSION}." >&2
+          VERSION=$(jq -r .version package.json)
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::package.json version '${VERSION}' is not a usable tag name." >&2
             exit 1
           fi
-          echo "Tag ${GITHUB_REF_NAME} matches package.json."
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+          # 200 means it exists and 404 means it does not. Anything else is an
+          # API failure, which stops the run rather than guessing.
+          http_status() {
+            gh api -i "$1" 2>/dev/null | awk 'NR == 1 { print $2; exit }' || true
+          }
+          release=true
+          for kind in tag release; do
+            if [[ "$kind" == tag ]]; then
+              status=$(http_status "repos/${GH_REPO}/git/ref/tags/${VERSION}")
+            else
+              status=$(http_status "repos/${GH_REPO}/releases/tags/${VERSION}")
+            fi
+            case "$status" in
+              200) echo "A ${kind} named ${VERSION} already exists, so there is nothing to release."; release=false ;;
+              404) ;;
+              *) echo "::error::Could not check for an existing ${kind} (HTTP status '${status}')." >&2; exit 1 ;;
+            esac
+          done
+          echo "release=${release}" >> "$GITHUB_OUTPUT"
+          [[ "$release" == true ]] && echo "Releasing ${VERSION} from ${GITHUB_SHA}."
+          exit 0
+
+  release:
+    name: Build and release the .deb
+    needs: check
+    if: needs.check.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -59,11 +108,11 @@ jobs:
       - name: Test
         run: just test
 
-      # scripts/inject-lastfm-credentials.cjs treats any tag run as an official
-      # upstream build and then requires the Last.fm secrets. This fork ships
-      # without them, so the build runs without the tag marker and Last.fm stays
-      # hidden in the app. Actions ignores GITHUB_* overrides in env:, hence
-      # env -u on the command itself.
+      # scripts/inject-lastfm-credentials.cjs requires the Last.fm secrets only
+      # when GITHUB_REF_TYPE is "tag". A run from main is a branch run, so it
+      # writes an empty file and Last.fm stays hidden in the app. Unsetting the
+      # variable keeps that true however the run starts; Actions ignores
+      # GITHUB_* overrides in env:, hence env -u on the command itself.
       - name: Build
         run: env -u GITHUB_REF_TYPE just build
 
@@ -82,17 +131,29 @@ jobs:
           sha256sum "${debs[0]}" > SHA256SUMS
           cat SHA256SUMS
 
-      # A re-run replaces the assets on the existing release instead of failing.
-      - name: Publish the GitHub release
+      # The tag is created only after the build succeeded, and removed again if
+      # the release cannot be published, so a failed run leaves nothing behind
+      # and a re-run starts from a clean check.
+      - name: Tag the commit and publish the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" release/*.deb release/SHA256SUMS --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" release/*.deb release/SHA256SUMS \
-              --verify-tag \
-              --title "$GITHUB_REF_NAME" \
-              --notes "Linux amd64 .deb built from ${GITHUB_SHA}. Verify the download with: sha256sum -c SHA256SUMS"
+          tag_object=$(gh api "repos/${GH_REPO}/git/tags" \
+            -f tag="$VERSION" \
+            -f message="Sidra ${VERSION}" \
+            -f object="$GITHUB_SHA" \
+            -f type=commit \
+            --jq .sha)
+          gh api "repos/${GH_REPO}/git/refs" \
+            -f ref="refs/tags/${VERSION}" \
+            -f sha="$tag_object" > /dev/null
+          echo "Tagged ${GITHUB_SHA} as ${VERSION}."
+          if ! gh release create "$VERSION" release/*.deb release/SHA256SUMS \
+            --verify-tag \
+            --title "$VERSION" \
+            --notes "Linux amd64 .deb built from ${GITHUB_SHA}. Verify the download with: sha256sum -c SHA256SUMS"; then
+            echo "::error::Publishing the release failed, so the ${VERSION} tag is being removed." >&2
+            gh api -X DELETE "repos/${GH_REPO}/git/refs/tags/${VERSION}" || true
+            exit 1
           fi
