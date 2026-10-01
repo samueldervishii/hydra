@@ -69,6 +69,23 @@ class StubElement {
     return child;
   }
 
+  get firstChild(): StubElement | null {
+    return this.children[0] ?? null;
+  }
+
+  insertBefore<T extends StubElement>(child: T, before: StubElement | null): T {
+    const index = before ? this.children.indexOf(before) : -1;
+    if (index < 0) this.children.push(child);
+    else this.children.splice(index, 0, child);
+    return child;
+  }
+
+  // Apple's icon reports its glyph once its sidebar renders; zero until then.
+  bbox = { x: 0, y: 0, width: 0, height: 0 };
+  getBBox() {
+    return this.bbox;
+  }
+
   replaceChild(next: StubElement, previous: StubElement): StubElement {
     this.children = this.children.map((child) => (child === previous ? next : child));
     return previous;
@@ -218,13 +235,49 @@ describe('navigationBar', () => {
     expect(navBarSource).toContain(NAV_LABELS_TOKEN);
   });
 
-  it('adds its own row after the logo, so nothing shares the logo row', () => {
+  it('adds its own row above the logo, so nothing shares the logo row', () => {
     const { anchor, bar, logo, run } = createHarness();
 
     run();
 
-    expect(anchor?.children).toEqual([logo, bar()]);
+    expect(anchor?.children).toEqual([bar(), logo]);
     expect(logo?.children).toEqual([]);
+  });
+
+  // The row is spread across the sidebar; the strip overrides all of these.
+  it('spreads the row with overridable distribution and inset', () => {
+    const { bar, run } = createHarness();
+
+    run();
+
+    const style = bar()?.getAttribute('style') ?? '';
+    expect(style).toContain('justify-content: space-between;');
+    expect(style).toContain('padding: 4px 14px 0');
+    expect(style).not.toMatch(/(justify-content|padding|gap)[^;]*!important/);
+  });
+
+  // Every icon fills the same 20px slot with the longer side of its glyph at
+  // 16px, so the viewBox side is 1.25 times that side.
+  it('frames every icon so the glyphs read at one size', () => {
+    const { buttons, run } = createHarness();
+
+    run();
+
+    for (const button of buttons()) {
+      const svg = button.querySelector('svg');
+      expect(svg?.getAttribute('width')).toBe('20');
+      expect(svg?.getAttribute('height')).toBe('20');
+      const [, , w, h] = (svg?.getAttribute('viewBox') ?? '').split(' ').map(Number);
+      expect(w).toBe(h);
+      // Sidra's own glyphs are 14 to 20 units on their longer side.
+      expect(w).toBeGreaterThanOrEqual(14 * 1.25);
+      expect(w).toBeLessThanOrEqual(20 * 1.25);
+      for (const shape of svg?.children ?? []) {
+        expect(shape.getAttribute('vector-effect')).toBe('non-scaling-stroke');
+      }
+    }
+    // The back chevron is 6 by 16 units, so its box is 20 units square.
+    expect(buttons()[1].querySelector('svg')?.getAttribute('viewBox')).toBe('2 2 20 20');
   });
 
   it('orders the expanded set, then the collapsed set, with tooltips', () => {
@@ -243,7 +296,7 @@ describe('navigationBar', () => {
       LABELS.allPlaylists,
     ]);
     expect(buttons().map((b) => b.getAttribute('data-sidra-show'))).toEqual([
-      'both', 'expanded', 'expanded', 'expanded', 'expanded', 'collapsed', 'collapsed', 'collapsed',
+      'both', 'both', 'expanded', 'expanded', 'expanded', 'collapsed', 'collapsed', 'collapsed',
     ]);
     for (const button of buttons()) {
       expect(button.getAttribute('title')).toBe(button.getAttribute('aria-label'));
@@ -375,22 +428,32 @@ describe('navigationBar', () => {
     expect(h.button(LABELS.search).styles.get('color')).toBe(ACTIVE_COLOR);
   });
 
-  it("adopts Apple's icon for a page button once the sidebar renders it", () => {
+  it("adopts Apple's icon once the sidebar renders it and refits it once measurable", () => {
     const h = createHarness();
 
     h.run();
     expect(h.button(LABELS.home).getAttribute('data-sidra-icon')).toBeNull();
 
     const link = Object.assign(new StubElement('a'), { href: 'https://music.apple.com/gb/home' });
-    link.appendChild(new StubElement('svg')).setAttribute('data-apple-icon', 'home');
+    const source = link.appendChild(new StubElement('svg'));
+    source.setAttribute('data-apple-icon', 'home');
     h.links.set('home', link);
     h.run();
 
+    // Hidden sidebar: Apple's standard 16-unit box stands in.
     const icon = h.button(LABELS.home).querySelector('svg');
     expect(icon?.getAttribute('data-apple-icon')).toBe('home');
-    expect(icon?.getAttribute('width')).toBe('24');
-    expect(icon?.styles.get('margin')).toBe('-2px');
+    expect(icon?.getAttribute('width')).toBe('20');
+    expect(icon?.getAttribute('viewBox')).toBe('2 2 20 20');
     expect(icon?.styles.get('fill')).toBe('currentColor');
     expect(h.button(LABELS.home).getAttribute('data-sidra-icon')).toBe('apple');
+
+    // Rendered sidebar: the real glyph is measured and the same icon refitted.
+    source.bbox = { x: 5, y: 4.6, width: 13.8, height: 13.9 };
+    h.run();
+    expect(h.button(LABELS.home).querySelector('svg')).toBe(icon);
+    const [, , side] = (icon?.getAttribute('viewBox') ?? '').split(' ').map(Number);
+    expect(side).toBeCloseTo(13.9 * 1.25);
+    expect(h.button(LABELS.home).getAttribute('data-sidra-icon')).toBe('apple-measured');
   });
 });

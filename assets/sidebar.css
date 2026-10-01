@@ -20,7 +20,7 @@
   }
 
   /* Keep only Sidra's row: the logo, search, links and account menu return
-     when the sidebar is expanded. The row is its own grid row below the logo. */
+     when the sidebar is expanded. The row is its own grid row above the logo. */
   html[data-sidra-sidebar-collapsed] .navigation__header .logo,
   html[data-sidra-sidebar-collapsed] .navigation__content {
     display: none !important;
@@ -30,12 +30,14 @@
   }
   html[data-sidra-sidebar-collapsed] #sidra-nav-buttons {
     flex-direction: column !important;
+    justify-content: flex-start !important;
     gap: 4px !important;
     padding: 8px 0 !important;
   }
 
-  /* The strip swaps Back, Forward, Reload and Settings, which keep their
-     keyboard shortcuts, for Home, Search and All Playlists. assets/navigationBar.js
+  /* The strip keeps the toggle and Back, and swaps Forward, Reload and
+     Settings, which keep their keyboard shortcuts, for Home, Search and All
+     Playlists. assets/navigationBar.js
      gives each button its default display without !important, so these win. */
   html[data-sidra-sidebar-collapsed] #sidra-nav-buttons > [data-sidra-show="expanded"] {
     display: none !important;

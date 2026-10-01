@@ -1,9 +1,10 @@
 // Add navigation and Settings buttons to the sidebar because Sidra has no browser toolbar.
 //
-// The buttons sit in their own row below the Apple Music logo. The expanded
-// sidebar shows the sidebar toggle, Back, Forward, Reload and Settings. The
-// collapsed strip (assets/sidebar.css, gated on html[data-sidra-sidebar-collapsed])
-// shows the toggle with Home, Search and All Playlists instead. src/main.ts runs
+// The buttons sit in their own row at the top of the sidebar, above the Apple
+// Music logo. The expanded sidebar shows the sidebar toggle, Back, Forward,
+// Reload and Settings. The collapsed strip (assets/sidebar.css, gated on
+// html[data-sidra-sidebar-collapsed]) shows the toggle, Back, Home, Search and
+// All Playlists instead. src/main.ts runs
 // this script on every load and every in-page navigation; a repeat run only
 // refreshes the current-page highlight, so no observer is needed.
 (function () {
@@ -21,12 +22,24 @@
   /** @type {boolean} */
   var IS_CLASSICAL = window.location.hostname === "classical.music.apple.com";
 
+  // Every icon draws in a 20px slot with the longer side of its glyph at
+  // 16px, so Sidra's icons and the ones adopted from Apple read at one size.
+  // Each button is the same 32px target: the slot plus 6px of padding.
+  /** @type {number} */
+  var ICON_PX = 20;
+  /** @type {number} */
+  var GLYPH_PX = 16;
+  // Apple draws its sidebar icons about 16 units wide in a 24-unit box; used
+  // until the real glyph can be measured.
+  /** @type {[number, number, number, number]} */
+  var APPLE_DEFAULT_BOX = [4, 4, 16, 16];
+
   // Each icon defines geometry only. Its parent SVG carries sharedAttrs and
-  // strokes in currentColor, so painting the button colours the icon.
+  // strokes in currentColor, so painting the button colours the icon. Strokes
+  // do not scale, so every line stays 1.8px whatever the icon's box.
   var sharedAttrs = {
-    width: "20",
-    height: "20",
-    viewBox: "0 0 24 24",
+    width: String(ICON_PX),
+    height: String(ICON_PX),
     fill: "none",
     stroke: "currentColor",
     "stroke-width": "1.8",
@@ -62,12 +75,14 @@
   };
 
   // show: "expanded" and "collapsed" buttons swap when the sidebar collapses.
-  /** @type {Array<{ label: string, show: string, channel?: string, page?: string, icon: Array<[string, Record<string, string>]> }>} */
+  // box is the glyph's extent in the icon's own units: [x, y, width, height].
+  /** @type {Array<{ label: string, show: string, channel?: string, page?: string, box: [number, number, number, number], icon: Array<[string, Record<string, string>]> }>} */
   var BUTTONS = [
     {
       label: LABELS.sidebar,
       show: "both",
       channel: "nav:sidebar",
+      box: [3, 4, 18, 16],
       icon: [
         ["rect", { x: "3", y: "4", width: "18", height: "16", rx: "2" }],
         ["line", { x1: "9", y1: "4", x2: "9", y2: "20" }],
@@ -75,20 +90,23 @@
     },
     {
       label: LABELS.back,
-      show: "expanded",
+      show: "both",
       channel: "nav:back",
+      box: [9, 4, 6, 16],
       icon: [["polyline", { points: "15 20 9 12 15 4" }]],
     },
     {
       label: LABELS.forward,
       show: "expanded",
       channel: "nav:forward",
+      box: [9, 4, 6, 16],
       icon: [["polyline", { points: "9 4 15 12 9 20" }]],
     },
     {
       label: LABELS.reload,
       show: "expanded",
       channel: "nav:reload",
+      box: [3, 3, 20, 18],
       icon: [
         ["polyline", { points: "23 4 23 10 17 10" }],
         ["path", { d: "M20.49 15a9 9 0 1 1-2.12-9.36L23 10" }],
@@ -98,6 +116,7 @@
       label: LABELS.settings,
       show: "expanded",
       channel: "nav:settings",
+      box: [2, 2, 20, 20],
       icon: [
         ["circle", { cx: "12", cy: "12", r: "3.7" }],
         [
@@ -112,6 +131,7 @@
       label: LABELS.home,
       show: "collapsed",
       page: "home",
+      box: [3, 4, 18, 16],
       icon: [
         ["polyline", { points: "3 11 12 4 21 11" }],
         ["path", { d: "M5.5 9.5V20h5v-6h3v6h5V9.5" }],
@@ -121,6 +141,7 @@
       label: LABELS.search,
       show: "collapsed",
       page: "search",
+      box: [4.5, 4.5, 15.5, 15.5],
       icon: [
         ["circle", { cx: "10.5", cy: "10.5", r: "6" }],
         ["line", { x1: "15", y1: "15", x2: "20", y2: "20" }],
@@ -130,6 +151,7 @@
       label: LABELS.allPlaylists,
       show: "collapsed",
       page: "all-playlists",
+      box: [4, 6, 17, 14],
       icon: [
         ["line", { x1: "4", y1: "6", x2: "16", y2: "6" }],
         ["line", { x1: "4", y1: "11", x2: "16", y2: "11" }],
@@ -167,6 +189,22 @@
       el.setAttribute(key, attrs[key]);
     }
     return el;
+  }
+
+  /**
+   * Frame an icon so the longer side of its glyph fills GLYPH_PX of the
+   * ICON_PX slot, centred.
+   * @param {SVGElement} svg - Icon to size
+   * @param {[number, number, number, number]} box - Glyph extent: x, y, width, height
+   * @returns {void}
+   */
+  function fitIcon(svg, box) {
+    var side = (Math.max(box[2], box[3]) * ICON_PX) / GLYPH_PX;
+    var x = box[0] + box[2] / 2 - side / 2;
+    var y = box[1] + box[3] / 2 - side / 2;
+    svg.setAttribute("viewBox", [x, y, side, side].join(" "));
+    svg.setAttribute("width", String(ICON_PX));
+    svg.setAttribute("height", String(ICON_PX));
   }
 
   /**
@@ -242,28 +280,42 @@
   }
 
   /**
+   * The extent of Apple's glyph, or null while its sidebar is not rendered,
+   * which reports an empty box.
+   * @param {SVGElement} svg - Apple's icon in its sidebar link
+   * @returns {[number, number, number, number] | null}
+   */
+  function measuredBox(svg) {
+    if (typeof svg.getBBox !== "function") return null;
+    var b = svg.getBBox();
+    return b.width > 0 && b.height > 0 ? [b.x, b.y, b.width, b.height] : null;
+  }
+
+  /**
    * Swap a page button's own icon for Apple's when the sidebar link renders
-   * one, so the strip shows the icons the expanded sidebar uses.
+   * one, so the strip shows the icons the expanded sidebar uses. The glyph is
+   * measured from Apple's copy, which is rendered when the sidebar is
+   * expanded; until then a standard box stands in, and a later run refits it.
    * @param {HTMLButtonElement} button - Page button
    * @returns {void}
    */
   function adoptAppleIcon(button) {
-    if (button.getAttribute("data-sidra-icon") === "apple") return;
+    if (button.getAttribute("data-sidra-icon") === "apple-measured") return;
     var link = appleLink(button.getAttribute("data-sidra-page"));
     var source = link && link.querySelector("svg");
     var current = button.querySelector("svg");
     if (!source || !current) return;
-    var icon = source.cloneNode(true);
-    // Apple draws these inside a 24px box with wide margins, so keep that
-    // size and pull it into the 20px slot the other icons use.
-    icon.setAttribute("width", "24");
-    icon.setAttribute("height", "24");
-    icon.style.setProperty("margin", "-2px", "important");
-    icon.setAttribute("aria-hidden", "true");
-    icon.style.setProperty("fill", "currentColor", "important");
-    icon.style.setProperty("stroke", "none", "important");
-    button.replaceChild(icon, current);
-    button.setAttribute("data-sidra-icon", "apple");
+    var box = measuredBox(source);
+    var icon = current;
+    if (button.getAttribute("data-sidra-icon") !== "apple") {
+      icon = source.cloneNode(true);
+      icon.setAttribute("aria-hidden", "true");
+      icon.style.setProperty("fill", "currentColor", "important");
+      icon.style.setProperty("stroke", "none", "important");
+      button.replaceChild(icon, current);
+    }
+    fitIcon(icon, box || APPLE_DEFAULT_BOX);
+    button.setAttribute("data-sidra-icon", box ? "apple-measured" : "apple");
   }
 
   /**
@@ -348,10 +400,11 @@
 
   const container = document.createElement("div");
   container.id = "sidra-nav-buttons";
-  // Its own grid row below the logo, aligned with the logo's 20px inset (the
-  // buttons carry 6px of padding). Apple's sidebar content overlaps the
+  // Its own grid row above the logo, spread across the sidebar. The 14px
+  // inset plus each button's 6px padding puts the first and last icons on the
+  // logo's 20px inset at both edges. Apple's sidebar content overlaps the
   // header with a negative top margin, hence the stacking context. Padding,
-  // gap and direction stay overridable for the collapsed strip.
+  // gap, direction and distribution stay overridable for the collapsed strip.
   container.setAttribute(
     "style",
     [
@@ -360,21 +413,25 @@
       "display: flex !important",
       "align-items: center !important",
       "pointer-events: auto !important",
+      "justify-content: space-between",
       "gap: 0",
-      "padding: 0 14px",
+      "padding: 4px 14px 0",
     ].join("; "),
   );
 
   BUTTONS.forEach(function (spec) {
     if (spec.page === "all-playlists" && IS_CLASSICAL) return;
     var svg = createSvgElement("svg", sharedAttrs);
+    fitIcon(svg, spec.box);
     spec.icon.forEach(function (child) {
-      svg.appendChild(createSvgElement(child[0], child[1]));
+      var shape = createSvgElement(child[0], child[1]);
+      shape.setAttribute("vector-effect", "non-scaling-stroke");
+      svg.appendChild(shape);
     });
     container.appendChild(createButton(spec, svg));
   });
 
-  header.appendChild(container);
+  header.insertBefore(container, header.firstChild);
   refresh(container);
 
   console.log("[Sidra] Navigation bar injected");

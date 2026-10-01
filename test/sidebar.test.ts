@@ -63,7 +63,7 @@ describe("sidebar.css", () => {
       /html\[data-sidra-sidebar-collapsed\] \.navigation__header \.logo,\s*html\[data-sidra-sidebar-collapsed\] \.navigation__content \{\s*display:\s*none !important/,
     );
     expect(stripped).toMatch(
-      /#sidra-nav-buttons \{\s*flex-direction:\s*column !important/,
+      /#sidra-nav-buttons \{\s*flex-direction:\s*column !important;\s*justify-content:\s*flex-start !important/,
     );
   });
 
