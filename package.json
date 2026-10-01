@@ -14,13 +14,13 @@
     "name": "samueldervishii",
     "url": "https://github.com/samueldervishii"
   },
-  "homepage": "https://github.com/samueldervishii/sidra",
+  "homepage": "https://github.com/samueldervishii/hydra",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/samueldervishii/sidra.git"
+    "url": "git+https://github.com/samueldervishii/hydra.git"
   },
   "bugs": {
-    "url": "https://github.com/samueldervishii/sidra/issues"
+    "url": "https://github.com/samueldervishii/hydra/issues"
   },
   "license": "BlueOak-1.0.0",
   "type": "commonjs",

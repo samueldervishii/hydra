@@ -8,7 +8,7 @@ Only the latest release is supported.
 
 **Do not open a public issue for security vulnerabilities.**
 
-[Report vulnerabilities privately](https://github.com/samueldervishii/sidra/security/advisories/new). Include:
+[Report vulnerabilities privately](https://github.com/samueldervishii/hydra/security/advisories/new). Include:
 
 - Steps to reproduce
 - Affected versions

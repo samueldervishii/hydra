@@ -3,7 +3,7 @@ license: BlueOak-1.0.0
 
 repository:
   description: An Apple Music desktop client for Linux, a fork of Sidra.
-  homepage: https://github.com/samueldervishii/sidra
+  homepage: https://github.com/samueldervishii/hydra
   has_wiki: false
   has_discussions: false
   has_projects: false

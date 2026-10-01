@@ -41,8 +41,8 @@ Once Last.fm receives your scrobbles, Last.fm's own practices apply, including h
 
 ## Changes to this policy
 
-This policy may be updated. All changes will appear in the [repository](https://github.com/samueldervishii/sidra).
+This policy may be updated. All changes will appear in the [repository](https://github.com/samueldervishii/hydra).
 
 ## Contact
 
-Report concerns or questions at [github.com/samueldervishii/sidra/issues](https://github.com/samueldervishii/sidra/issues).
+Report concerns or questions at [github.com/samueldervishii/hydra/issues](https://github.com/samueldervishii/hydra/issues).

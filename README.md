@@ -6,7 +6,7 @@ An Apple Music desktop client for Linux, a fork of [Sidra](https://github.com/wi
 
 ## Install
 
-Download the `.deb` and `SHA256SUMS` from the [releases page](https://github.com/samueldervishii/sidra/releases), then check and install it from the folder you saved them in:
+Download the `.deb` and `SHA256SUMS` from the [releases page](https://github.com/samueldervishii/hydra/releases), then check and install it from the folder you saved them in:
 
 ```bash
 sha256sum -c SHA256SUMS

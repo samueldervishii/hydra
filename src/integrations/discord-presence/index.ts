@@ -240,7 +240,7 @@ function sendActivity(player: Player): void {
     : undefined;
 
   const buttons: Array<{ label: string; url: string }> = [
-    { label: app.getName(), url: "https://github.com/samueldervishii/sidra" },
+    { label: app.getName(), url: "https://github.com/samueldervishii/hydra" },
   ];
   if (trackUrl) {
     const displayName = getService(getMusicService()).displayName;
