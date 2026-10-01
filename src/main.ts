@@ -39,6 +39,7 @@ import {
   switchService,
 } from "./serviceSwitch";
 import { initThemeCSS, injectThemeCss, setThemeChangedCallback } from "./theme";
+import { applyPerformanceMode } from "./performanceMode";
 import {
   createTray,
   getMenuIcon,
@@ -234,6 +235,7 @@ function routeItmsTarget(target: ItmsTarget | null): void {
 /** Local styles and scripts prepared for injection into service pages and authentication frames. */
 export interface Assets {
   STYLE_FIX_CSS: string;
+  PERFORMANCE_CSS: string;
   authFrameScript: string;
   navBarScript: string;
   hookScript: string;
@@ -435,6 +437,10 @@ async function initSession(): Promise<Electron.Session> {
 function loadAssets(): Assets {
   const styleFixCssPath = getAssetPath("assets", "styleFix.css");
   const STYLE_FIX_CSS = fs.readFileSync(styleFixCssPath, "utf-8");
+  const PERFORMANCE_CSS = fs.readFileSync(
+    getAssetPath("assets", "performanceMode.css"),
+    "utf-8",
+  );
   const authStyleFixCssPath = getAssetPath("assets", "authStyleFix.css");
   const authCss = fs.readFileSync(authStyleFixCssPath, "utf-8");
   const authFramePath = getAssetPath("assets", "authFrameFix.js");
@@ -457,7 +463,13 @@ function loadAssets(): Assets {
     .replace("__SIDRA_SERVICE_HOSTS__", () =>
       JSON.stringify(allServices().map((service) => service.host)),
     );
-  return { STYLE_FIX_CSS, authFrameScript, navBarScript, hookScript };
+  return {
+    STYLE_FIX_CSS,
+    PERFORMANCE_CSS,
+    authFrameScript,
+    navBarScript,
+    hookScript,
+  };
 }
 
 function createMainWindow(ses: Electron.Session): {
@@ -747,6 +759,10 @@ function setupContentHandlers(
     win.webContents.setZoomFactor(getZoomFactor());
     await win.webContents.insertCSS(assets.STYLE_FIX_CSS);
     mainLog.debug("CSS fixes injected");
+    // Inserted on every load and gated on an <html> attribute, so the Settings
+    // toggle reaches the open page without inserting or removing CSS.
+    await win.webContents.insertCSS(assets.PERFORMANCE_CSS);
+    await applyPerformanceMode(win.webContents);
     await injectThemeCss(win.webContents);
     await injectRendererScripts(win, assets, "on load");
   }

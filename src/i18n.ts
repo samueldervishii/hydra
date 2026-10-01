@@ -260,11 +260,13 @@ export interface TrayStrings {
   hideWindow: string;
   showWindow: string;
   closeToTray: string;
+  performanceMode: string;
 }
 
 // Map each TrayStrings field to its translation record. The keyed Record makes
-// a missing field a compile error. Brand names and zoom steps use English-only
-// records because getLocalizedString() uses English as its final fallback.
+// a missing field a compile error. Brand names, zoom steps and this fork's own
+// labels use English-only records because getLocalizedString() uses English as
+// its final fallback.
 const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   settings: SETTINGS_TEXT,
   integrations: INTEGRATIONS_TEXT,
@@ -310,6 +312,7 @@ const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   hideWindow: HIDE_WINDOW_TEXT,
   showWindow: SHOW_WINDOW_TEXT,
   closeToTray: CLOSE_TO_TRAY_TEXT,
+  performanceMode: { en: 'Performance mode' },
 };
 
 // TRAY_TEXT is a Record literal, so excess property checking already rules out

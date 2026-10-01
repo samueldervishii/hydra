@@ -20,7 +20,8 @@ vi.mock('../src/integrations/lastfm', () => ({
 const applyZoom = vi.fn();
 const refreshTray = vi.fn();
 const switchService = vi.fn((id: 'music' | 'classical') => config.setMusicService(id));
-const window = { isVisible: () => false, show: vi.fn(), focus: vi.fn() };
+const contents = { isDestroyed: () => false, executeJavaScript: vi.fn(() => Promise.resolve()) };
+const window = { isVisible: () => false, show: vi.fn(), focus: vi.fn(), isDestroyed: () => false, webContents: contents };
 let dispose: () => void;
 
 beforeEach(() => {
@@ -36,7 +37,7 @@ describe('settings actions', () => {
   it('reads defaults and excludes account credentials from state', () => {
     config.setLastfmSession('private-session', 'listener');
     const state = getSettingsState();
-    expect(state).toMatchObject({ musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1 });
+    expect(state).toMatchObject({ musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1, performanceMode: true });
     expect(state.lastfm).toEqual({ available: true, connected: true, enabled: false, username: 'listener' });
     expect(JSON.stringify(state)).not.toContain('private-session');
   });
@@ -55,6 +56,21 @@ describe('settings actions', () => {
     unsubscribe();
     notifySettingsChanged();
     expect(listener).toHaveBeenCalledTimes(4);
+  });
+
+  it('persists Performance mode before applying it to the open page', () => {
+    contents.executeJavaScript.mockImplementationOnce(() => {
+      expect(config.getPerformanceModeEnabled()).toBe(false);
+      return Promise.resolve();
+    });
+    const state = applySettingsAction({ type: 'performanceMode', value: false });
+    expect(state.performanceMode).toBe(false);
+    expect(contents.executeJavaScript).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('toggleAttribute("data-sidra-performance", false)'));
+    applySettingsAction({ type: 'performanceMode', value: true });
+    expect(contents.executeJavaScript).toHaveBeenLastCalledWith(
+      expect.stringContaining('toggleAttribute("data-sidra-performance", true)'));
+    expect(refreshTray).toHaveBeenCalledTimes(2);
   });
 
   it('shows a hidden player when close to tray is disabled', () => {
@@ -83,7 +99,7 @@ describe('settings actions', () => {
     { type: 'musicService', value: 'other' }, { type: 'theme', value: 'custom' },
     { type: 'theme', value: 'other' }, { type: 'startPage', serviceId: 'music', value: 'search' },
     { type: 'notifications', value: true, extra: true }, { type: 'lastfmDisconnect' },
-    { type: 'lastfmEnabled', value: true },
+    { type: 'lastfmEnabled', value: true }, { type: 'performanceMode', value: 'false' },
   ])('rejects unavailable or malformed actions: %j', action => {
     expect(() => applySettingsAction(action)).toThrow('Invalid settings action');
     expect(refreshTray).not.toHaveBeenCalled();

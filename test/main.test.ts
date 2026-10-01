@@ -83,6 +83,7 @@ const bootstrap = vi.hoisted(() => {
     integrations,
     resetForDocumentReplacement,
     handleHookReady: vi.fn(),
+    applyPerformanceMode: vi.fn(() => Promise.resolve()),
     handlePlaybackCapabilitiesDidChange: vi.fn(),
     browserWindow: vi.fn(),
     ipcOn: vi.fn(),
@@ -225,6 +226,9 @@ vi.mock("../src/controllerIPC", () => ({
   goBackIfPossible: vi.fn(),
 }));
 vi.mock("../src/aboutWindow", () => ({ showAboutWindow: vi.fn() }));
+vi.mock("../src/performanceMode", () => ({
+  applyPerformanceMode: bootstrap.applyPerformanceMode,
+}));
 
 vi.mock("../src/musicService", () => ({
   getService: vi.fn(() => ({ contentReadySelector: "#content" })),
@@ -398,6 +402,22 @@ describe("main bootstrap", () => {
       "will-quit",
       expect.any(Function),
     );
+  });
+
+  it("inserts the Performance mode stylesheet and applies the setting on every load", async () => {
+    await startMain();
+    const finish = bootstrap.mainWebListeners.get("did-finish-load");
+    await finish?.();
+    await finish?.();
+    // fs is mocked to return "asset" for every file, so each insert carries it.
+    expect(bootstrap.webContents.insertCSS).toHaveBeenCalledTimes(4);
+    expect(bootstrap.applyPerformanceMode).toHaveBeenCalledTimes(2);
+    expect(bootstrap.applyPerformanceMode).toHaveBeenCalledWith(
+      bootstrap.webContents,
+    );
+    expect(
+      bootstrap.webContents.insertCSS.mock.invocationCallOrder[1],
+    ).toBeLessThan(bootstrap.applyPerformanceMode.mock.invocationCallOrder[0]);
   });
 
   it("initialises controller IPC once and reuses guarded back navigation", async () => {

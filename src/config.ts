@@ -37,6 +37,7 @@ interface StoreSchema {
   'lastfm.username': string | null;
   'lastfm.pendingScrobbles': PendingScrobble[];
   theme: ThemeName;
+  'performanceMode.enabled': boolean;
   startPage: MusicStartPageId | 'last';
   lastPageUrl: string;
   'classical.startPage': ClassicalStartPageId | 'last';
@@ -206,6 +207,16 @@ export function getTheme(): ThemeName {
 /** Persist `theme` without applying the setting to running components. */
 export function setTheme(name: ThemeName): void {
   setConfigValue('theme', name);
+}
+
+/** Read `performanceMode.enabled`, defaulting to `true` when absent. */
+export function getPerformanceModeEnabled(): boolean {
+  return getConfigValue('performanceMode.enabled', true);
+}
+
+/** Persist `performanceMode.enabled` without applying the setting to running components. */
+export function setPerformanceModeEnabled(enabled: boolean): void {
+  setConfigValue('performanceMode.enabled', enabled);
 }
 
 /** Read `lastPageUrl`, returning undefined when the key is absent. */

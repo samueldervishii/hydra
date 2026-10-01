@@ -23,6 +23,8 @@ import {
   setPendingScrobbles,
   getTheme,
   setTheme,
+  getPerformanceModeEnabled,
+  setPerformanceModeEnabled,
   getLastPageUrl,
   setLastPageUrl,
   getStartPage,
@@ -92,6 +94,14 @@ describe("Config store type assertions", () => {
 
   it("setTheme accepts ThemeName", () => {
     expectTypeOf(setTheme).parameter(0).toEqualTypeOf<ThemeName>();
+  });
+
+  it("getPerformanceModeEnabled returns boolean", () => {
+    expectTypeOf(getPerformanceModeEnabled).returns.toEqualTypeOf<boolean>();
+  });
+
+  it("setPerformanceModeEnabled accepts boolean", () => {
+    expectTypeOf(setPerformanceModeEnabled).parameter(0).toEqualTypeOf<boolean>();
   });
 
   it("getLastPageUrl returns string | undefined", () => {
@@ -213,6 +223,15 @@ describe("Config store runtime behaviour", () => {
 
   it("getTheme defaults to apple-music", () => {
     expect(getTheme()).toBe("apple-music");
+  });
+
+  it("getPerformanceModeEnabled defaults to true", () => {
+    expect(getPerformanceModeEnabled()).toBe(true);
+  });
+
+  it("setPerformanceModeEnabled persists value", () => {
+    setPerformanceModeEnabled(false);
+    expect(getPerformanceModeEnabled()).toBe(false);
   });
 
   it("getStartPage defaults to new", () => {

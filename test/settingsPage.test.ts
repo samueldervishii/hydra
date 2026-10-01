@@ -29,7 +29,7 @@ class Element {
 function fixture(): SettingsState {
   return {
     musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1,
-    closeToTray: false, notifications: true, discord: false,
+    performanceMode: true, closeToTray: false, notifications: true, discord: false,
     lastfm: { available: true, connected: false, enabled: false, username: '' },
     options: {
       musicService: [{ value: 'music', label: 'Apple Music' }, { value: 'classical', label: 'Apple Music Classical' }],
@@ -160,6 +160,16 @@ describe('settings page', () => {
     pending.resolve(fixture());
     await settle();
     expect(h.element('notifications').checked).toBe(false);
+  });
+
+  it('renders the Performance mode toggle and sends its new value', async () => {
+    const h = harness({ ...fixture(), performanceMode: false });
+    await settle();
+    expect(h.element('performanceMode').checked).toBe(false);
+    h.element('performanceMode').checked = true;
+    h.element('performanceMode').fire('change');
+    await settle();
+    expect(h.apply).toHaveBeenCalledExactlyOnceWith({ type: 'performanceMode', value: true });
   });
 
   it('keeps a pushed state when the initial read resolves later', async () => {

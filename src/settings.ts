@@ -13,6 +13,8 @@ import {
 } from "./musicService";
 import { BUNDLED_THEMES, type ThemeName } from "./palettes";
 import { applyTheme, hasCustomTheme, resolveTheme } from "./theme";
+import { applyPerformanceMode } from "./performanceMode";
+import { liveWebContents } from "./utils";
 import {
   enable as enableDiscord,
   disable as disableDiscord,
@@ -33,7 +35,12 @@ export type SettingsAction =
   | { type: "theme"; value: ThemeName }
   | { type: "zoomFactor"; value: ZoomFactor }
   | {
-      type: "closeToTray" | "notifications" | "discord" | "lastfmEnabled";
+      type:
+        | "closeToTray"
+        | "notifications"
+        | "discord"
+        | "lastfmEnabled"
+        | "performanceMode";
       value: boolean;
     }
   | { type: "lastfmConnect" | "lastfmDisconnect" };
@@ -49,6 +56,7 @@ export interface SettingsState {
   startPage: AnyStartPageId | "last";
   theme: ThemeName;
   zoomFactor: number;
+  performanceMode: boolean;
   closeToTray: boolean;
   notifications: boolean;
   discord: boolean;
@@ -149,6 +157,7 @@ export function getSettingsState(): SettingsState {
       : service.defaultStartPage,
     theme: resolveTheme(),
     zoomFactor: config.getZoomFactor(),
+    performanceMode: config.getPerformanceModeEnabled(),
     closeToTray: config.getCloseToTrayEnabled(),
     notifications: config.getNotificationsEnabled(),
     discord: config.getDiscordEnabled(),
@@ -232,6 +241,7 @@ function isSettingsAction(
     case "closeToTray":
     case "notifications":
     case "discord":
+    case "performanceMode":
       return typeof data.value === "boolean";
     case "lastfmEnabled":
       return (
@@ -270,6 +280,10 @@ export function applySettingsAction(action: unknown): SettingsState {
     case "zoomFactor":
       config.setZoomFactor(action.value);
       runtime.applyZoom(action.value);
+      break;
+    case "performanceMode":
+      config.setPerformanceModeEnabled(action.value);
+      void applyPerformanceMode(liveWebContents(runtime.getMainWindow()));
       break;
     case "closeToTray": {
       config.setCloseToTrayEnabled(action.value);
