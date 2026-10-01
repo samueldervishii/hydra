@@ -62,15 +62,37 @@ describe("performanceMode.css", () => {
     expect(PERFORMANCE_ATTRIBUTE).toBe("data-sidra-performance");
   });
 
-  it("removes backdrop blur everywhere except the floating player bar", () => {
+  it("removes every backdrop blur, the player bar's included", () => {
     const blur = rules(css).find((rule) =>
       /backdrop-filter:\s*none !important/.test(rule.body),
     );
     expect(blur?.selectors).toEqual([
       "html[data-sidra-performance] *",
-      "html[data-sidra-performance] :not(.chrome-player)::before",
+      "html[data-sidra-performance] *::before",
       "html[data-sidra-performance] *::after",
     ]);
+  });
+
+  // Without the blur, content scrolling under these surfaces showed through
+  // their 60% glass. Each gets an opaque base in the page's own colour, which
+  // artist pages override with --joe-color.
+  it("puts an opaque page-coloured base under every surface that floats over content", () => {
+    const all = rules(css);
+    const base = (selector: string) =>
+      all.find((rule) => rule.selectors.includes(selector))?.body ?? "";
+    const surfaces =
+      ':is([data-testid="header"], .chrome-player, .cloud-buttons--with-platter)';
+    expect(base(`html[data-sidra-performance] ${surfaces}`)).toMatch(
+      /background-color:\s*var\(--pageBG\) !important/,
+    );
+    expect(
+      base(`html[data-sidra-performance] .app-container.has-theme-override ${surfaces}`),
+    ).toMatch(/background-color:\s*var\(--joe-color, var\(--pageBG\)\) !important/);
+    expect(base("html[data-sidra-performance] .chrome-volume__slider")).toMatch(
+      /var\(--systemStandardMediumMaterialSover\)\),\s*var\(--pageBG\) !important/,
+    );
+    // An opaque base, never a blur: nothing in the file sets one.
+    expect(css).not.toMatch(/backdrop-filter:(?!\s*none)/);
   });
 
   it("gives the platters a solid background and drops their will-change", () => {

@@ -4,13 +4,11 @@
 /* Apple paints ~400 elements with backdrop-filter blur(60px), most of them the
    .more-button, .play-svg and .contextual-menu__trigger platters on every shelf
    item, and compositing them all is what makes dragging the window lag. The
-   universal selector also covers .navigation, the volume slider and the
-   .side-panel blur Sidra's themes add, and wins over the theme rule on
-   specificity. The floating player bar keeps its single blur: it sits over
-   scrolling content and is only 60% opaque, so without it the page shows
-   through the controls. */
+   universal selectors remove every blur, including .navigation, the player
+   bar, the volume slider and the .side-panel blur Sidra's themes add, and win
+   over the theme rule on specificity. */
 html[data-sidra-performance] *,
-html[data-sidra-performance] :not(.chrome-player)::before,
+html[data-sidra-performance] *::before,
 html[data-sidra-performance] *::after {
   backdrop-filter: none !important;
 }
@@ -21,4 +19,35 @@ html[data-sidra-performance] *::after {
 html[data-sidra-performance] :is(.more-button, .shelf-grid-nav__arrow, .play-svg) {
   background-color: rgba(70, 70, 70, 0.9) !important;
   will-change: auto !important;
+}
+
+/* The sidebar, the floating player bar and the artist header's button platter
+   float over scrolling content in a 60% glass (--glassMaterialBackground, or a
+   theme's player colour) and relied on the blur to hide what passed beneath.
+   Each gets an opaque --pageBG base under its own paint: the sidebar on its
+   container, which also fills the gutters around .navigation, and the other
+   two on the element whose ::before draws the glass with the same 1000px
+   radius. The glass or theme colour on top is untouched, and the base is the
+   page's own colour, so the result is the glass as it looks over an empty
+   page in either scheme and any theme. That colour is --pageBG, except where
+   Apple overrides the page (artist pages, has-theme-override), which paints
+   it in the artist's --joe-color instead. */
+html[data-sidra-performance] :is([data-testid="header"], .chrome-player, .cloud-buttons--with-platter) {
+  background-color: var(--pageBG) !important;
+}
+html[data-sidra-performance] .app-container.has-theme-override :is([data-testid="header"], .chrome-player, .cloud-buttons--with-platter) {
+  background-color: var(--joe-color, var(--pageBG)) !important;
+}
+
+/* The volume pop-up draws its own glass with no parent of its shape, so its
+   glass is layered over the page colour on the element itself. */
+html[data-sidra-performance] .chrome-volume__slider {
+  background:
+    linear-gradient(var(--systemStandardMediumMaterialSover), var(--systemStandardMediumMaterialSover)),
+    var(--pageBG) !important;
+}
+html[data-sidra-performance] .app-container.has-theme-override .chrome-volume__slider {
+  background:
+    linear-gradient(var(--systemStandardMediumMaterialSover), var(--systemStandardMediumMaterialSover)),
+    var(--joe-color, var(--pageBG)) !important;
 }
