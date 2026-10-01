@@ -19,11 +19,21 @@ export const COPYRIGHT_YEAR = "2026";
 /** This fork's author. */
 export const COPYRIGHT_HOLDER = "Samuel Dervishi";
 
+/** This fork's author on GitHub, linked from the About window. */
+export const COPYRIGHT_HOLDER_URL = "https://github.com/samueldervishii";
+
 /** The project this fork is based on. */
 export const ORIGINAL_NAME = "Sidra";
 
 /** Sidra's author, who keeps the copyright in the code this fork started from. */
 export const ORIGINAL_AUTHOR = "Martin Wimpress";
+
+/**
+ * Sidra's author on GitHub. github.com/wimpysworld is the organisation Sidra
+ * lives under; this is his personal profile, the account upstream's
+ * FUNDING.yml names.
+ */
+export const ORIGINAL_AUTHOR_URL = "https://github.com/flexiondotorg";
 
 /**
  * The folder under the platform's app data directory that holds settings,

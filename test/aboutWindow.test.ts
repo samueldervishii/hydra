@@ -23,13 +23,15 @@ vi.mock("../src/paths", () => ({
   }),
 }));
 
-import { BrowserWindow, app } from "electron";
-import { showAboutWindow } from "../src/aboutWindow";
+import { BrowserWindow, app, shell } from "electron";
+import { isAboutLinkAllowed, showAboutWindow } from "../src/aboutWindow";
 import { getZoomFactor } from "../src/config";
 
 // Stored event handlers let tests drive the window lifecycle.
 interface MockWebContents {
   setZoomFactor: ReturnType<typeof vi.fn>;
+  setWindowOpenHandler: ReturnType<typeof vi.fn>;
+  on: ReturnType<typeof vi.fn>;
 }
 
 interface MockBrowserWindowInstance {
@@ -59,6 +61,8 @@ function createMockBrowserWindow(): MockBrowserWindowInstance {
     loadFile: vi.fn(),
     webContents: {
       setZoomFactor: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn(),
     },
   };
 }
@@ -95,7 +99,7 @@ describe("showAboutWindow", () => {
         fullscreen: false,
         center: true,
         skipTaskbar: true,
-        backgroundColor: "#1a0a10",
+        backgroundColor: "#0A121F",
         show: false,
         webPreferences: expect.objectContaining({
           contextIsolation: true,
@@ -129,14 +133,71 @@ describe("showAboutWindow", () => {
           version: app.getVersion(),
           description: "Un client Apple Music minimaliste.",
           lang: "fr",
-          copyright: "Test Player \u00A9 2026 Samuel Dervishi",
-          credit: "Based on Sidra \u00A9 Martin Wimpress \u00B7 MIT",
+          copyright: "Test Player \u00A9 2026",
+          author: "Samuel Dervishi",
+          authorUrl: "https://github.com/samueldervishii",
+          credit: "Based on Sidra \u00A9",
+          originalAuthor: "Martin Wimpress",
+          originalAuthorUrl: "https://github.com/flexiondotorg",
+          license: "MIT",
           about: "About Sidra",
           close: "Close",
           versionPrefix: "Version",
         },
       },
     );
+  });
+
+  it("paints the window in the Hydra background before the page loads", () => {
+    showAboutWindow();
+    expect(vi.mocked(BrowserWindow).mock.calls[0][0]).toMatchObject({
+      backgroundColor: "#0A121F",
+    });
+  });
+
+  // The author names are links; they must open in the system browser and
+  // never load inside the About window.
+  it("opens allowed GitHub links in the browser and denies the new window", () => {
+    vi.mocked(shell.openExternal).mockClear();
+    showAboutWindow();
+    const handler = latestMockInstance.webContents.setWindowOpenHandler.mock
+      .calls[0][0] as (details: { url: string }) => { action: string };
+
+    expect(handler({ url: "https://github.com/flexiondotorg" })).toEqual({ action: "deny" });
+    expect(shell.openExternal).toHaveBeenCalledExactlyOnceWith("https://github.com/flexiondotorg");
+
+    expect(handler({ url: "https://example.com/" })).toEqual({ action: "deny" });
+    expect(shell.openExternal).toHaveBeenCalledOnce();
+  });
+
+  it("keeps a link click from navigating the window and sends it to the browser", () => {
+    vi.mocked(shell.openExternal).mockClear();
+    showAboutWindow();
+    const call = latestMockInstance.webContents.on.mock.calls.find(([event]) => event === "will-navigate");
+    const onNavigate = call?.[1] as (event: { preventDefault: () => void }, url: string) => void;
+    const event = { preventDefault: vi.fn() };
+
+    onNavigate(event, "https://github.com/samueldervishii");
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(shell.openExternal).toHaveBeenCalledExactlyOnceWith("https://github.com/samueldervishii");
+
+    const blocked = { preventDefault: vi.fn() };
+    onNavigate(blocked, "file:///etc/passwd");
+    expect(blocked.preventDefault).toHaveBeenCalledOnce();
+    expect(shell.openExternal).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["https://github.com/samueldervishii", true],
+    ["https://github.com/", true],
+    ["http://github.com/samueldervishii", false],
+    ["https://github.com.evil.example/", false],
+    ["https://gist.github.com/x", false],
+    ["https://user@github.com/", true],
+    ["javascript:alert(1)", false],
+    ["not a url", false],
+  ])("allows only https://github.com/ links: %s", (url, allowed) => {
+    expect(isAboutLinkAllowed(url)).toBe(allowed);
   });
 
   it("focuses existing window instead of creating a new one", () => {

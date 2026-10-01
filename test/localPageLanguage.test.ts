@@ -14,12 +14,15 @@ describe.each(['about', 'splash'])('%s page language', page => {
     ['he-IL', 'rtl'],
     ['', 'ltr'],
   ])('sets the document language and direction for %s', (lang, dir) => {
-    const element = { textContent: '', alt: '', addEventListener: vi.fn() };
+    // The About page builds its credit lines from nodes, so the stub accepts them.
+    const element = { textContent: '', alt: '', addEventListener: vi.fn(), appendChild: vi.fn() };
     const document = {
       title: '',
       documentElement: { lang: '', dir: '' },
       getElementById: () => element,
       querySelector: () => element,
+      createTextNode: (text: string) => ({ text }),
+      createElement: () => ({}),
     };
     const search = new URLSearchParams({ lang, text: 'Chargement...' }).toString();
     vm.runInNewContext(script, { document, window: { location: { search } }, URLSearchParams });
