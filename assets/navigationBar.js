@@ -1,44 +1,144 @@
 // Add navigation and Settings buttons to the sidebar because Sidra has no browser toolbar.
+//
+// The buttons sit in their own row below the Apple Music logo. The expanded
+// sidebar shows the sidebar toggle, Back, Forward, Reload and Settings. The
+// collapsed strip (assets/sidebar.css, gated on html[data-sidra-sidebar-collapsed])
+// shows the toggle with Home, Search and All Playlists instead. src/main.ts runs
+// this script on every load and every in-page navigation; a repeat run only
+// refreshes the current-page highlight, so no observer is needed.
 (function () {
-  // SPA navigation can retain the header, so repeated injection must not duplicate buttons.
-  if (document.getElementById("sidra-nav-buttons")) return;
-
   // loadAssets() in src/main.ts replaces NAV_LABELS_TOKEN from src/i18n.ts with JSON.
   // executeJavaScript() cannot supply loadFile() query parameters, so the raw asset requires substitution.
-  /** @type {{ sidebar: string, back: string, forward: string, reload: string, settings: string }} */
+  /** @type {{ sidebar: string, back: string, forward: string, reload: string, settings: string, home: string, search: string, allPlaylists: string }} */
   var LABELS = __SIDRA_NAV_LABELS__;
 
-  const logoEl = document.querySelector(".navigation__header .logo");
-  if (!logoEl) {
-    console.warn("Sidra: .navigation__header .logo not found");
-    return;
-  }
+  /** @type {string} */
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  /** @type {string} */
+  var IDLE_COLOR = "var(--systemPrimary, #ffffff)";
+  /** @type {string} */
+  var ACTIVE_COLOR = "var(--keyColor, #fa586a)";
+  /** @type {boolean} */
+  var IS_CLASSICAL = window.location.hostname === "classical.music.apple.com";
 
-  // logoEl needs flex layout so #sidra-nav-buttons can use margin-left: auto to align right.
-  logoEl.setAttribute(
-    "style",
-    [
-      "display: flex !important",
-      "align-items: center !important",
-      "justify-content: space-between !important",
-    ].join("; "),
-  );
+  // Each icon defines geometry only. Its parent SVG carries sharedAttrs and
+  // strokes in currentColor, so painting the button colours the icon.
+  var sharedAttrs = {
+    width: "20",
+    height: "20",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "1.8",
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+  };
 
-  const container = document.createElement("div");
-  container.id = "sidra-nav-buttons";
-  // Apple's sidebar content overlaps the header with a negative top margin.
-  container.setAttribute(
-    "style",
-    [
-      "position: relative !important",
-      "z-index: 1 !important",
-      "display: flex !important",
-      "align-items: center !important",
-      "gap: 0 !important",
-      "margin-left: auto !important",
-      "pointer-events: auto !important",
-    ].join("; "),
-  );
+  /**
+   * In-app pages for the collapsed strip. Apple's own sidebar link is used when
+   * it exists, which also supplies the icon; the path is the fallback.
+   * @type {Record<string, { testid: string, path: (storefront: string) => string }>}
+   */
+  var PAGES = {
+    home: {
+      testid: "home",
+      path: function (sf) {
+        return IS_CLASSICAL ? "/" + sf : "/" + sf + "/home";
+      },
+    },
+    search: {
+      testid: "search",
+      path: function (sf) {
+        return "/" + sf + "/search";
+      },
+    },
+    // Apple's library routes carry no storefront segment.
+    "all-playlists": {
+      testid: "all-playlists",
+      path: function () {
+        return "/library/all-playlists/";
+      },
+    },
+  };
+
+  // show: "expanded" and "collapsed" buttons swap when the sidebar collapses.
+  /** @type {Array<{ label: string, show: string, channel?: string, page?: string, icon: Array<[string, Record<string, string>]> }>} */
+  var BUTTONS = [
+    {
+      label: LABELS.sidebar,
+      show: "both",
+      channel: "nav:sidebar",
+      icon: [
+        ["rect", { x: "3", y: "4", width: "18", height: "16", rx: "2" }],
+        ["line", { x1: "9", y1: "4", x2: "9", y2: "20" }],
+      ],
+    },
+    {
+      label: LABELS.back,
+      show: "expanded",
+      channel: "nav:back",
+      icon: [["polyline", { points: "15 20 9 12 15 4" }]],
+    },
+    {
+      label: LABELS.forward,
+      show: "expanded",
+      channel: "nav:forward",
+      icon: [["polyline", { points: "9 4 15 12 9 20" }]],
+    },
+    {
+      label: LABELS.reload,
+      show: "expanded",
+      channel: "nav:reload",
+      icon: [
+        ["polyline", { points: "23 4 23 10 17 10" }],
+        ["path", { d: "M20.49 15a9 9 0 1 1-2.12-9.36L23 10" }],
+      ],
+    },
+    {
+      label: LABELS.settings,
+      show: "expanded",
+      channel: "nav:settings",
+      icon: [
+        ["circle", { cx: "12", cy: "12", r: "3.7" }],
+        [
+          "path",
+          {
+            d: "M10 2h4l.5 2.5 1.5.6 2.1-1.4 2.2 2.2-1.4 2.1.6 1.5L22 10v4l-2.5.5-.6 1.5 1.4 2.1-2.2 2.2-2.1-1.4-1.5.6L14 22h-4l-.5-2.5-1.5-.6-2.1 1.4-2.2-2.2L5.1 16l-.6-1.5L2 14v-4l2.5-.5.6-1.5-1.4-2.1 2.2-2.2L8 5.1l1.5-.6z",
+          },
+        ],
+      ],
+    },
+    {
+      label: LABELS.home,
+      show: "collapsed",
+      page: "home",
+      icon: [
+        ["polyline", { points: "3 11 12 4 21 11" }],
+        ["path", { d: "M5.5 9.5V20h5v-6h3v6h5V9.5" }],
+      ],
+    },
+    {
+      label: LABELS.search,
+      show: "collapsed",
+      page: "search",
+      icon: [
+        ["circle", { cx: "10.5", cy: "10.5", r: "6" }],
+        ["line", { x1: "15", y1: "15", x2: "20", y2: "20" }],
+      ],
+    },
+    {
+      label: LABELS.allPlaylists,
+      show: "collapsed",
+      page: "all-playlists",
+      icon: [
+        ["line", { x1: "4", y1: "6", x2: "16", y2: "6" }],
+        ["line", { x1: "4", y1: "11", x2: "16", y2: "11" }],
+        ["line", { x1: "4", y1: "16", x2: "11", y2: "16" }],
+        ["circle", { cx: "16.5", cy: "17.5", r: "2.5" }],
+        ["polyline", { points: "19 17.5 19 9 21 9.5" }],
+      ],
+    },
+  ];
 
   /**
    * Send to the main process, tolerating an absent bridge.
@@ -55,9 +155,6 @@
     bridge.ipcRenderer.send(channel);
   }
 
-  /** @type {string} */
-  var SVG_NS = "http://www.w3.org/2000/svg";
-
   /**
    * Create an SVG element with the given tag and attributes.
    * @param {string} tag - SVG element tag name
@@ -72,101 +169,145 @@
     return el;
   }
 
-  /** @type {string} */
-  var IDLE_COLOR = "var(--systemPrimary, #ffffff)";
-  /** @type {string} */
-  var HOVER_COLOR = "var(--keyColor, #fa586a)";
-
-  var sharedAttrs = {
-    width: "20",
-    height: "20",
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: IDLE_COLOR,
-    "stroke-width": "1.8",
-    "stroke-linecap": "round",
-    "stroke-linejoin": "round",
-  };
-
-  // Each icon defines geometry only. Its parent SVG carries sharedAttrs.
-  /** @type {Array<{ label: string, channel: string, icon: Array<[string, Record<string, string>]> }>} */
-  var BUTTONS = [
-    {
-      label: LABELS.sidebar,
-      channel: "nav:sidebar",
-      icon: [
-        ["rect", { x: "3", y: "4", width: "18", height: "16", rx: "2" }],
-        ["line", { x1: "9", y1: "4", x2: "9", y2: "20" }],
-      ],
-    },
-    {
-      label: LABELS.back,
-      channel: "nav:back",
-      icon: [["polyline", { points: "15 20 9 12 15 4" }]],
-    },
-    {
-      label: LABELS.forward,
-      channel: "nav:forward",
-      icon: [["polyline", { points: "9 4 15 12 9 20" }]],
-    },
-    {
-      label: LABELS.reload,
-      channel: "nav:reload",
-      icon: [
-        ["polyline", { points: "23 4 23 10 17 10" }],
-        ["path", { d: "M20.49 15a9 9 0 1 1-2.12-9.36L23 10" }],
-      ],
-    },
-    {
-      label: LABELS.settings,
-      channel: "nav:settings",
-      icon: [
-        ["circle", { cx: "12", cy: "12", r: "3.7" }],
-        [
-          "path",
-          {
-            d: "M10 2h4l.5 2.5 1.5.6 2.1-1.4 2.2 2.2-1.4 2.1.6 1.5L22 10v4l-2.5.5-.6 1.5 1.4 2.1-2.2 2.2-2.1-1.4-1.5.6L14 22h-4l-.5-2.5-1.5-.6-2.1 1.4-2.2-2.2L5.1 16l-.6-1.5L2 14v-4l2.5-.5.6-1.5-1.4-2.1 2.2-2.2L8 5.1l1.5-.6z",
-          },
-        ],
-      ],
-    },
-  ];
-
   /**
-   * Paint a button and its icon. Inline !important styles override stylesheet
-   * :hover rules, so JavaScript must update the hover styles.
-   *
-   * @param {HTMLButtonElement} button - Button to paint
-   * @param {string} color - Colour for the button and the icon stroke
-   * @param {string} opacity - Button opacity
-   * @returns {void}
+   * Apple's sidebar link for a page, if the page renders one. Classical has no
+   * library, and a signed-out page has no All Playlists link.
+   * @param {string} page - Key into PAGES
+   * @returns {HTMLAnchorElement | null}
    */
-  function paintButton(button, color, opacity) {
-    button.style.setProperty("opacity", opacity, "important");
-    button.style.setProperty("color", color, "important");
-    var svg = button.querySelector("svg");
-    if (svg) svg.style.setProperty("stroke", color, "important");
+  function appleLink(page) {
+    return document.querySelector(
+      'a.navigation-item__link[data-testid="' + PAGES[page].testid + '"]',
+    );
   }
 
   /**
-   * Create a navigation button that sends an IPC message on click.
-   * @param {string} label - Accessible label for the button
+   * The storefront for a fallback path: the first path segment when it is one,
+   * otherwise the one in Apple's own sidebar links, otherwise "us".
+   * @returns {string}
+   */
+  function storefront() {
+    var fromPath = window.location.pathname.split("/")[1] || "";
+    if (/^[a-z]{2}$/.test(fromPath)) return fromPath;
+    var link = document.querySelector("a.navigation-item__link[href]");
+    if (link) {
+      var fromLink = new URL(link.href, window.location.href).pathname.split("/")[1] || "";
+      if (/^[a-z]{2}$/.test(fromLink)) return fromLink;
+    }
+    return "us";
+  }
+
+  /**
+   * The path a page button leads to, without a trailing slash.
+   * @param {string} page - Key into PAGES
+   * @returns {string}
+   */
+  function targetPath(page) {
+    var link = appleLink(page);
+    var path = link
+      ? new URL(link.href, window.location.href).pathname
+      : PAGES[page].path(storefront());
+    return path.replace(/\/+$/, "") || "/";
+  }
+
+  /**
+   * Navigate in-app so playback continues: click Apple's own link, which runs
+   * its router, or push the path and let the router answer the popstate.
+   * @param {string} page - Key into PAGES
+   * @returns {void}
+   */
+  function goToPage(page) {
+    var link = appleLink(page);
+    if (link) {
+      link.click();
+      return;
+    }
+    window.history.pushState({}, "", PAGES[page].path(storefront()));
+    window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+  }
+
+  /**
+   * Paint a button. Inline !important styles override stylesheet :hover
+   * rules, so JavaScript must update the hover styles. The current page keeps
+   * the accent colour, as Apple's own sidebar does.
+   *
+   * @param {HTMLButtonElement} button - Button to paint
+   * @param {boolean} hovered - Whether the pointer is over the button
+   * @returns {void}
+   */
+  function paintButton(button, hovered) {
+    var current = button.getAttribute("aria-current") === "page";
+    button.style.setProperty("opacity", hovered || current ? "1" : "0.7", "important");
+    button.style.setProperty("color", hovered || current ? ACTIVE_COLOR : IDLE_COLOR, "important");
+  }
+
+  /**
+   * Swap a page button's own icon for Apple's when the sidebar link renders
+   * one, so the strip shows the icons the expanded sidebar uses.
+   * @param {HTMLButtonElement} button - Page button
+   * @returns {void}
+   */
+  function adoptAppleIcon(button) {
+    if (button.getAttribute("data-sidra-icon") === "apple") return;
+    var link = appleLink(button.getAttribute("data-sidra-page"));
+    var source = link && link.querySelector("svg");
+    var current = button.querySelector("svg");
+    if (!source || !current) return;
+    var icon = source.cloneNode(true);
+    // Apple draws these inside a 24px box with wide margins, so keep that
+    // size and pull it into the 20px slot the other icons use.
+    icon.setAttribute("width", "24");
+    icon.setAttribute("height", "24");
+    icon.style.setProperty("margin", "-2px", "important");
+    icon.setAttribute("aria-hidden", "true");
+    icon.style.setProperty("fill", "currentColor", "important");
+    icon.style.setProperty("stroke", "none", "important");
+    button.replaceChild(icon, current);
+    button.setAttribute("data-sidra-icon", "apple");
+  }
+
+  /**
+   * Mark the button for the current page and adopt Apple's icons once they
+   * have rendered. Runs on every injection, including each in-page navigation.
+   * @param {HTMLElement} container - The #sidra-nav-buttons row
+   * @returns {void}
+   */
+  function refresh(container) {
+    var here = window.location.pathname.replace(/\/+$/, "") || "/";
+    var buttons = container.querySelectorAll("button[data-sidra-page]");
+    for (var i = 0; i < buttons.length; i++) {
+      var button = buttons[i];
+      var page = button.getAttribute("data-sidra-page");
+      adoptAppleIcon(button);
+      if (targetPath(page) === here) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+      paintButton(button, false);
+    }
+  }
+
+  /**
+   * Create one button. Display is set without !important so the stylesheet
+   * can swap the expanded and collapsed sets; everything else is !important
+   * to hold against Apple's button styles.
+   * @param {{ label: string, show: string, channel?: string, page?: string }} spec - Button definition
    * @param {SVGSVGElement} svgElement - Icon to display inside the button
-   * @param {string} channel - IPC channel name sent via window.AMWrapper
    * @returns {HTMLButtonElement}
    */
-  function createButton(label, svgElement, channel) {
+  function createButton(spec, svgElement) {
     const btn = document.createElement("button");
-    btn.setAttribute("aria-label", label);
+    btn.setAttribute("aria-label", spec.label);
+    btn.setAttribute("title", spec.label);
+    btn.setAttribute("data-sidra-show", spec.show);
+    if (spec.page) btn.setAttribute("data-sidra-page", spec.page);
     btn.setAttribute(
       "style",
       [
+        "display: " + (spec.show === "collapsed" ? "none" : "flex"),
         "background: none !important",
         "border: none !important",
         "cursor: pointer !important",
         "padding: 6px !important",
         "border-radius: 6px !important",
-        "display: flex !important",
         "align-items: center !important",
         "justify-content: center !important",
         "color: " + IDLE_COLOR + " !important",
@@ -178,28 +319,63 @@
     btn.appendChild(svgElement);
 
     btn.addEventListener("mouseenter", function () {
-      paintButton(this, HOVER_COLOR, "1");
+      paintButton(this, true);
     });
     btn.addEventListener("mouseleave", function () {
-      paintButton(this, IDLE_COLOR, "0.7");
+      paintButton(this, false);
     });
 
     btn.addEventListener("click", function () {
-      sendToMain(channel);
+      if (spec.page) goToPage(spec.page);
+      else if (spec.channel) sendToMain(spec.channel);
     });
 
     return btn;
   }
 
+  // SPA navigation can retain the header, so a repeat run must not duplicate buttons.
+  var existing = document.getElementById("sidra-nav-buttons");
+  if (existing) {
+    refresh(existing);
+    return;
+  }
+
+  const header = document.querySelector(".navigation__header");
+  if (!header) {
+    console.warn("Sidra: .navigation__header not found");
+    return;
+  }
+
+  const container = document.createElement("div");
+  container.id = "sidra-nav-buttons";
+  // Its own grid row below the logo, aligned with the logo's 20px inset (the
+  // buttons carry 6px of padding). Apple's sidebar content overlaps the
+  // header with a negative top margin, hence the stacking context. Padding,
+  // gap and direction stay overridable for the collapsed strip.
+  container.setAttribute(
+    "style",
+    [
+      "position: relative !important",
+      "z-index: 1 !important",
+      "display: flex !important",
+      "align-items: center !important",
+      "pointer-events: auto !important",
+      "gap: 0",
+      "padding: 0 14px",
+    ].join("; "),
+  );
+
   BUTTONS.forEach(function (spec) {
+    if (spec.page === "all-playlists" && IS_CLASSICAL) return;
     var svg = createSvgElement("svg", sharedAttrs);
     spec.icon.forEach(function (child) {
       svg.appendChild(createSvgElement(child[0], child[1]));
     });
-    container.appendChild(createButton(spec.label, svg, spec.channel));
+    container.appendChild(createButton(spec, svg));
   });
 
-  logoEl.appendChild(container);
+  header.appendChild(container);
+  refresh(container);
 
   console.log("[Sidra] Navigation bar injected");
 })();

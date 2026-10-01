@@ -19,22 +19,28 @@
     width: var(--web-navigation-width) !important;
   }
 
-  /* Keep only Sidra's buttons: the logo, search, links and account menu
-     return when the sidebar is expanded. */
-  html[data-sidra-sidebar-collapsed] .navigation__header .logo > :not(#sidra-nav-buttons),
+  /* Keep only Sidra's row: the logo, search, links and account menu return
+     when the sidebar is expanded. The row is its own grid row below the logo. */
+  html[data-sidra-sidebar-collapsed] .navigation__header .logo,
   html[data-sidra-sidebar-collapsed] .navigation__content {
     display: none !important;
   }
   html[data-sidra-sidebar-collapsed] .navigation__header {
     grid-template-columns: 100% !important;
   }
-  html[data-sidra-sidebar-collapsed] .navigation__header .logo {
-    height: auto !important;
-    padding: 8px 0 !important;
-  }
   html[data-sidra-sidebar-collapsed] #sidra-nav-buttons {
     flex-direction: column !important;
     gap: 4px !important;
-    margin-inline: auto !important;
+    padding: 8px 0 !important;
+  }
+
+  /* The strip swaps Back, Forward, Reload and Settings, which keep their
+     keyboard shortcuts, for Home, Search and All Playlists. assets/navigationBar.js
+     gives each button its default display without !important, so these win. */
+  html[data-sidra-sidebar-collapsed] #sidra-nav-buttons > [data-sidra-show="expanded"] {
+    display: none !important;
+  }
+  html[data-sidra-sidebar-collapsed] #sidra-nav-buttons > [data-sidra-show="collapsed"] {
+    display: flex !important;
   }
 }

@@ -85,7 +85,7 @@ const bootstrap = vi.hoisted(() => {
     handleHookReady: vi.fn(),
     applyPerformanceMode: vi.fn(() => Promise.resolve()),
     applySidebar: vi.fn(() => Promise.resolve()),
-    teardownSidebarShortcut: vi.fn(),
+    teardownShortcuts: vi.fn(),
     toggleSidebarCollapsed: vi.fn(),
     handlePlaybackCapabilitiesDidChange: vi.fn(),
     browserWindow: vi.fn(),
@@ -221,7 +221,9 @@ vi.mock("../src/settings", () => ({
 }));
 vi.mock("../src/sidebar", () => ({
   applySidebar: bootstrap.applySidebar,
-  initSidebarShortcut: vi.fn(() => bootstrap.teardownSidebarShortcut),
+}));
+vi.mock("../src/shortcuts", () => ({
+  initShortcuts: vi.fn(() => bootstrap.teardownShortcuts),
 }));
 vi.mock("../src/settingsWindow", () => ({
   initSettingsWindow: vi.fn(),
@@ -434,8 +436,7 @@ describe("main bootstrap", () => {
     ).toBeLessThan(bootstrap.applySidebar.mock.invocationCallOrder[0]);
   });
 
-  it("toggles the sidebar only from the main window's main frame and tears the shortcut down on quit", async () => {
-    const { initSidebarShortcut } = await import("../src/sidebar");
+  it("toggles the sidebar only from the main window's main frame", async () => {
     await startMain();
     const toggle = bootstrap.ipcOn.mock.calls.find(
       ([channel]) => channel === "nav:sidebar",
@@ -449,14 +450,40 @@ describe("main bootstrap", () => {
     expect(bootstrap.toggleSidebarCollapsed).not.toHaveBeenCalled();
     toggle?.(event);
     expect(bootstrap.toggleSidebarCollapsed).toHaveBeenCalledOnce();
+  });
 
-    expect(initSidebarShortcut).toHaveBeenCalledExactlyOnceWith(
-      bootstrap.mainWindow,
-      bootstrap.toggleSidebarCollapsed,
-    );
+  // The collapsed sidebar hides Back, Forward and Reload, so the keys must do
+  // exactly what those buttons do.
+  it("gives the shortcuts the same actions as the buttons and tears them down on quit", async () => {
+    const { initShortcuts } = await import("../src/shortcuts");
+    const { goBackIfPossible } = await import("../src/controllerIPC");
+    const { reset: resetWedgeDetector } = await import("../src/wedgeDetector");
+    await startMain();
+
+    expect(initShortcuts).toHaveBeenCalledOnce();
+    const [window, actions] = vi.mocked(initShortcuts).mock.calls[0];
+    expect(window).toBe(bootstrap.mainWindow);
+    expect(actions.sidebar).toBe(bootstrap.toggleSidebarCollapsed);
+    const button = (channel: string) =>
+      bootstrap.ipcOn.mock.calls.find(([name]) => name === channel)?.[1];
+    expect(actions.back).toBe(button("nav:back"));
+    expect(actions.forward).toBe(button("nav:forward"));
+    expect(actions.reload).toBe(button("nav:reload"));
+
+    actions.back();
+    expect(goBackIfPossible).toHaveBeenCalledWith(bootstrap.mainWindow);
+    actions.forward();
+    expect(bootstrap.webContents.navigationHistory.goForward).toHaveBeenCalledOnce();
+    actions.reload();
+    expect(resetWedgeDetector).toHaveBeenCalledOnce();
+    expect(bootstrap.webContents.reload).toHaveBeenCalledOnce();
+    expect(
+      vi.mocked(resetWedgeDetector).mock.invocationCallOrder[0],
+    ).toBeLessThan(bootstrap.webContents.reload.mock.invocationCallOrder[0]);
+
     expect(bootstrap.appOn).toHaveBeenCalledWith(
       "will-quit",
-      bootstrap.teardownSidebarShortcut,
+      bootstrap.teardownShortcuts,
     );
   });
 

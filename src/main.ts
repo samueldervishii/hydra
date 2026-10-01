@@ -52,7 +52,8 @@ import {
   notifySettingsChanged,
   toggleSidebarCollapsed,
 } from "./settings";
-import { applySidebar, initSidebarShortcut } from "./sidebar";
+import { applySidebar } from "./sidebar";
+import { initShortcuts } from "./shortcuts";
 import { handleSettingsNavigation, initSettingsWindow } from "./settingsWindow";
 import { initCommandBridge } from "./commandBridge";
 import { initControllerIPC, goBackIfPossible } from "./controllerIPC";
@@ -583,14 +584,20 @@ function setupWindowZoomAndNav(win: BrowserWindow): void {
     handleSettingsNavigation(event, win);
   win.once("closed", () => ipcMain.removeListener("nav:settings", onSettings));
 
+  // The buttons and the keyboard shortcuts share these, so the collapsed
+  // sidebar, which hides Back, Forward and Reload, loses nothing.
+  const back = (): void => goBackIfPossible(win);
+  const forward = (): void => win.webContents.navigationHistory.goForward();
+  const reload = (): void => {
+    resetWedgeDetector();
+    win.webContents.reload();
+  };
+
   onSendChannels<NavSendChannel>({
     "nav:settings": onSettings,
-    "nav:back": () => goBackIfPossible(win),
-    "nav:forward": () => win.webContents.navigationHistory.goForward(),
-    "nav:reload": () => {
-      resetWedgeDetector();
-      win.webContents.reload();
-    },
+    "nav:back": back,
+    "nav:forward": forward,
+    "nav:reload": reload,
     "nav:sidebar": (event) => {
       if (
         event.sender !== win.webContents ||
@@ -600,7 +607,15 @@ function setupWindowZoomAndNav(win: BrowserWindow): void {
       toggleSidebarCollapsed();
     },
   });
-  app.on("will-quit", initSidebarShortcut(win, toggleSidebarCollapsed));
+  app.on(
+    "will-quit",
+    initShortcuts(win, {
+      sidebar: toggleSidebarCollapsed,
+      back,
+      forward,
+      reload,
+    }),
+  );
 }
 
 // Contain injection failures in both full-load and in-page navigation handlers.
