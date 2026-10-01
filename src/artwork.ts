@@ -81,7 +81,7 @@ async function fetchArtwork(url: string): Promise<string | null> {
   if (fs.existsSync(filepath)) {
     artworkLog.debug("cache hit: %s", filepath);
     // Refresh mtime so cleanup preserves artwork in daily use.
-    // Do not await the timestamp write because notification delivery needs the path.
+    // Do not await the timestamp write because the caller is waiting for the path.
     const now = new Date();
     fsPromises.utimes(filepath, now, now).catch(() => {});
     return filepath;

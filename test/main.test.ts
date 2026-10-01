@@ -63,7 +63,6 @@ const bootstrap = vi.hoisted(() => {
   };
 
   const integrations = {
-    notifications: vi.fn(),
     dock: vi.fn(),
     windowsTaskbar: vi.fn(),
     wedgeDetector: vi.fn(),
@@ -251,9 +250,6 @@ vi.mock("../src/musicService", () => ({
   isAllowedNavigationUrl: vi.fn(() => true),
 }));
 
-vi.mock("../src/integrations/notifications", () => ({
-  init: bootstrap.integrations.notifications,
-}));
 vi.mock("../src/integrations/macos-dock", () => ({
   init: bootstrap.integrations.dock,
 }));
@@ -268,7 +264,6 @@ vi.mock("../src/wedgeDetector", () => ({
 vi.mock("../src/contentReady", () => ({
   contentReadyProbeScript: vi.fn(() => "true"),
 }));
-vi.mock("../src/notify", () => ({ initNotificationProbe: vi.fn() }));
 vi.mock("../src/utils/openExternal", () => ({ openExternalUrl: vi.fn() }));
 
 // Use the real module because it imports electron only as a type.
@@ -389,7 +384,6 @@ describe("main bootstrap", () => {
     expect(didFinishLoad).toBeDefined();
     await didFinishLoad?.();
 
-    expect(bootstrap.integrations.notifications).toHaveBeenCalledOnce();
     expect(bootstrap.integrations.dock).toHaveBeenCalledOnce();
     expect(bootstrap.integrations.windowsTaskbar).toHaveBeenCalledOnce();
     expect(bootstrap.integrations.wedgeDetector).toHaveBeenCalledOnce();
@@ -593,7 +587,7 @@ describe("main bootstrap", () => {
   });
 
   it("permits later SPA injection after initial integration and hook failures", async () => {
-    bootstrap.integrations.notifications.mockImplementationOnce(() => {
+    bootstrap.integrations.dock.mockImplementationOnce(() => {
       throw new Error("integration unavailable");
     });
     bootstrap.webContents.executeJavaScript.mockRejectedValueOnce(
@@ -607,7 +601,7 @@ describe("main bootstrap", () => {
     ).resolves.toBeUndefined();
 
     expect(bootstrap.log.error).toHaveBeenCalledWith(
-      "integration initialisation failed: notifications:",
+      "integration initialisation failed: dock:",
       expect.any(Error),
     );
     expect(bootstrap.log.warn).toHaveBeenCalledWith(
@@ -618,7 +612,7 @@ describe("main bootstrap", () => {
     expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(2);
     await navigate?.({}, "https://music.apple.com/gb/new");
     expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(4);
-    expect(bootstrap.integrations.notifications).toHaveBeenCalledOnce();
+    expect(bootstrap.integrations.dock).toHaveBeenCalledOnce();
   });
 
   // The bare timeout can fire after startup destruction, when reading win.webContents throws before a promise exists.

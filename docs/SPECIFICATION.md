@@ -22,7 +22,6 @@ The codebase is tightly focused and as lean as possible. Five runtime dependenci
 - [Apple Music Classical](#apple-music-classical)
 - [Authentication](#authentication)
 - [Theming](#theming)
-- [Track Change Notifications](#track-change-notifications)
 - [Settings Window](#settings-window)
 - [Tray](#tray)
 - [macOS Dock](#macos-dock)
@@ -73,7 +72,7 @@ The codebase is tightly focused and as lean as possible. Five runtime dependenci
 │  │  │ Integrations   │  │      │  │ Hook script  │           │   │
 │  │  │ ├─ MPRIS       │◄─┼──────┼──┤(injected JS) │           │   │
 │  │  │                │  │      │  └──────────────┘           │   │
-│  │  │ ├─ Notifier    │  │      │                             │   │
+│  │  │                │  │      │                             │   │
 │  │  │ └─ Taskbar/Dock│  │      │  ┌──────────────┐           │   │
 │  │  └───────┬────────┘  │      │  │  preload.ts  │           │   │
 │  │          │           │      │  │ IPC + Gamepad│           │   │
@@ -123,9 +122,6 @@ sidra/
 │   ├── wedgeDetector.ts           - detects playback stalls and auto-skips forward
 │   ├── pauseTimer.ts              - createPauseTimer() factory; shared by the tray and dock
 │   ├── utils.ts                   - errorMessage() utility
-│   ├── notify.ts                  - notification gate: createNotification(), notificationsAvailable(), initNotificationProbe()
-│   ├── notificationDaemon.ts      - D-Bus probe for org.freedesktop.Notifications (Linux only)
-│   ├── linuxNotifications.ts      - Track notifications and actions over D-Bus (Linux only)
 │   ├── utils/
 │   │   └── progressBar.ts         - updateProgressBar() / clearProgressBar(); platform-agnostic win.setProgressBar()
 │   ├── aboutWindow.ts             - showAboutWindow() and related constants (extracted from tray.ts)
@@ -133,8 +129,6 @@ sidra/
 │   └── integrations/
 │       ├── mpris/
 │       │   └── index.ts           - D-Bus MPRIS service (Linux only)
-│       ├── notifications/
-│       │   └── index.ts           - Track change desktop notifications
 │       ├── macos-dock/
 │       │   └── index.ts           - Dock right-click menu + progress bar (macOS only)
 │       └── windows-taskbar/
@@ -224,7 +218,7 @@ The `main` scope records these process events with fixed, allow-listed fields:
 
 `preloadPath` contains only the basename. The fixed `errorName` allowlist contains `AggregateError`, `Error`, `EvalError`, `RangeError`, `ReferenceError`, `SyntaxError`, `TypeError`, and `URIError`. Every other value becomes `UnknownError`. Diagnostic logs exclude user-supplied arguments, full URLs, other paths, metadata, messages, stacks, titles, artists, playlist names, usernames, tokens, and credentials.
 
-Diagnostic logging only records existing outcomes. It leaves recovery, dependencies, feature flags, process switches, timers, queues, coalescing, notification gates, and playback behaviour unchanged.
+Diagnostic logging only records existing outcomes. It leaves recovery, dependencies, feature flags, process switches, timers, queues, coalescing, and playback behaviour unchanged.
 
 ---
 
@@ -238,9 +232,9 @@ When a full-document navigation commits, `main.ts` calls `Player.resetForDocumen
 
 | Event | Payload | Consumers |
 |---|---|---|
-| `playbackStateDidChange` | `{ status: bool, state }` | MPRIS, Notifications, Dock, Taskbar |
-| `nowPlayingItemDidChange` | `NowPlayingPayload` (see `src/player.ts`) or `null` | MPRIS, Notifications, Dock, Taskbar |
-| `timedMetadataDidChange` | Bounded song candidate, or an incomplete-transition marker | MPRIS, Notifications |
+| `playbackStateDidChange` | `{ status: bool, state }` | MPRIS, Dock, Taskbar |
+| `nowPlayingItemDidChange` | `NowPlayingPayload` (see `src/player.ts`) or `null` | MPRIS, Dock, Taskbar |
+| `timedMetadataDidChange` | Bounded song candidate, or an incomplete-transition marker | MPRIS |
 | `playbackCapabilitiesDidChange` | `PlaybackCapabilities` | MPRIS |
 | `playbackStopped` | `{ requestId, success }` | MPRIS |
 | `hookReady` | Injected document generation, validated against the current document | MPRIS |
@@ -495,7 +489,7 @@ if (process.platform === 'win32') {
 }
 ```
 
-The GSMTC overlay (media flyout on Windows 11) will show "Sidra" as the controlling app. `app.setAppUserModelId()` is also required for desktop notifications to appear on Windows - without it, `Notification.show()` is silently ignored.
+The GSMTC overlay (media flyout on Windows 11) will show "Sidra" as the controlling app.
 
 ### Windows: Taskbar Thumbnail Toolbar and Overlay Icon
 
@@ -833,75 +827,6 @@ Each queued operation captures `documentGeneration`. A main-frame `did-navigate`
 
 ---
 
-## Track Change Notifications
-
-Track notifications show the current track with localised **Play/Pause**, **Previous** and **Next** controls.
-A body click shows and focuses the main window, subject to action support on Linux.
-
-| Platform | Delivery | Action requirements |
-|---|---|---|
-| Linux | `src/linuxNotifications.ts`, through `org.freedesktop.Notifications` | The daemon must report the `actions` capability. Otherwise, Sidra sends a plain notification |
-| Windows | Electron `Notification` | Native notification actions |
-| macOS | Electron `Notification` | A signed app and alert-style notifications |
-
-The macOS package sets `NSUserNotificationAlertStyle` to `alert` through `build.mac.extendInfo` in `package.json`. Current unsigned releases do not meet the signing requirement.
-All controls use the typed `sendCommand()` bridge. Last.fm notifications keep the Electron delivery path and do not gain track controls.
-
-The playback button uses the shared playback snapshot. Playing shows Pause, while paused and terminal states show Play.
-Transient states retain the previous label. The action sends explicit Play or Pause, and does nothing if playback already matches the requested state.
-State changes refresh only the current announcement. They do not reopen a notification after the platform reports its dismissal or closure.
-
-Timed radio metadata announces each changed title, artist or album with station artwork. Repeated display fields do not create another announcement.
-Queue-item changes reset that radio display state. Slow artwork and stale actions cannot apply to a newer announcement.
-
-### Replacement and history
-
-| Platform | Playback notification lifecycle |
-|---|---|
-| Linux | Reuse the daemon's notification ID for replacement. Send `transient=true` to request no history retention. Daemon policy controls the result |
-| macOS | Give each native notification a unique ID in the `playback` group. Close previous objects and clear the group at startup and quit |
-| Windows | Give each native notification a unique ID in the `playback` group. Close previous objects on replacement and quit. Startup-history cleanup is unsupported |
-
-Native notifications use a new ID on each delivery, not a shared replacement ID. Pending objects retain their delegates until `show` or `failed` arrives.
-A late `show` for an obsolete announcement closes that object immediately. Closed Windows banners retain their objects for actions and explicit cleanup.
-Playback refresh stops after a native close event, even when Windows retains the announcement in Action Center.
-
-**Do not gate on `Notification.isSupported()`** - in CastLabs Electron this returns `false` even when the platform fully supports notifications. Rely on the `failed` event to surface OS-level rejection instead.
-
-On Windows, `app.setAppUserModelId()` must be called before `app.whenReady()` or notifications will not appear (see [Windows: Chromium's GSMTC Bridge](#windows-chromiums-gsmtc-bridge)).
-
-### The notification daemon gate
-
-On Linux, `Notification.show()` blocks the browser UI thread when nothing owns `org.freedesktop.Notifications`. Electron calls `notify_notification_show()` inline, and libnotify builds its `GDBusProxy` without `DO_NOT_AUTO_START`, so GLib runs `StartServiceByName` in a nested main loop and each attempt waits the 25 second D-Bus activation timeout. Electron queries server capabilities three times before the show, so a single notification freezes the window for about 100 seconds.
-
-`createNotification()` in `src/notify.ts` is the only place that constructs an Electron `Notification`. It returns `null` when the gate is closed, and callers skip the notification. The Last.fm `force` flag bypasses the notification preference but not this gate. Linux track notifications use the same gate before direct D-Bus delivery.
-
-`src/notificationDaemon.ts` drives the gate on Linux. It holds its own session bus, subscribes to `NameOwnerChanged` for the notification name, then asks `NameHasOwner`: one round trip that never triggers activation. A daemon started mid-session re-enables notifications with no restart. The gate starts closed on Linux and opens on the first probe reply; off Linux it is open from the start and no bus is opened. `main.ts` calls `initNotificationProbe()` in `app.whenReady()`, before the window exists.
-
-The `failed` listener latches the gate closed on Linux only, as a second line behind the probe. macOS and Windows have no `NameOwnerChanged` recovery path, so a latch there would kill notifications for the rest of the session.
-
-The Electron path still blocks if a daemon owns the name but hangs during `Notify`. Electron waits on `g_dbus_proxy_call_sync` with an infinite timeout.
-Linux track notifications use asynchronous D-Bus calls instead. A failed `Notify` does not fall back to Electron, because that can send a duplicate notification.
-The adapter validates action signals against the daemon sender, notification ID and action. Daemon replacement and quit clear the action state.
-Delivery waits at most five seconds. A missing or failed `Notify` reply blocks further delivery to that daemon until its owner changes.
-An uncertain reply does not prove that the daemon failed to display the announcement. Blocking avoids duplicate delivery without a known replacement ID.
-
-The implementation lives in `src/integrations/notifications/index.ts`:
-
-- **Gate check**: `notificationsAvailable()` is checked before the artwork download, so a daemon-less session does no repeated network and disk work per track
-- **Artwork**: `downloadArtwork()` fetches and caches the image. Linux sends its file URL in `image-path` and keeps Sidra's logo as the application icon. Native notifications use `icon`
-- **Debounce**: 1500 ms for queue-item changes and changed radio display metadata
-- **Artwork race timeout**: 500 ms. A slower download leaves the announcement without artwork
-- **Body format**: `artistName - albumName` (fields joined with ` - ` via `filter(Boolean).join(' - ')`)
-- **Controls**: Play/Pause, Previous and Next use existing translated labels. A body click shows and focuses the main window
-- **Silent**: Native notifications use `silent: true`. Linux sends the `suppress-sound` hint
-
-On NixOS, keep `libnotify` in the dev shell's `LD_LIBRARY_PATH` for the Electron notification path. Direct D-Bus track notifications do not use it.
-
-Notifications are toggleable via an `electron-conf` boolean setting (default: on).
-
----
-
 ## Settings Window
 
 Sidra has two settings surfaces: the tray menu and a Settings window. `src/settingsWindow.ts` owns the window. `src/settings.ts` owns the state and the validated `SettingsAction` union that Settings and the tray controls share.
@@ -1092,7 +1017,6 @@ The top-level `productName: "Sidra"` in `package.json` is the single source for 
 | MPRIS metadata | title/artist/album/artwork/duration/trackId | Queue-item metadata, effective duration and timed radio songs |
 | MPRIS volume | Two-way with pending-echo queue | musicKitHook.js + main MPRIS plugin |
 | MPRIS repeat/shuffle | Two-way | `repeatModeDidChange` + `shuffleModeDidChange` |
-| Track change notifications | D-Bus on Linux, Electron `Notification` elsewhere | Tracks and radio songs, artwork, replacement, and Play/Pause/Previous/Next controls where supported |
 | Regional storefront detection | `app.getLocaleCountryCode()` → `/gb/new`, `/ch/new` etc. | Fallback chain: persisted → detected → `us` |
 | Storefront preference persistence | `electron-conf` + `did-navigate` listener | Survives restarts; language parameter preserved |
 | User-agent spoofing | `webRequest.onBeforeSendHeaders` | Standard Chrome UA |
@@ -1131,7 +1055,7 @@ The top-level `productName: "Sidra"` in `package.json` is the single source for 
 
 #### Tray Menu Implementation Notes
 
-- Use `type: 'radio'` within submenus for all toggle items (e.g. notifications on/off, theme selection, start page). On all platforms this renders a native radio indicator for the active selection.
+- Use `type: 'radio'` within submenus for all toggle items (e.g. close to tray on/off, theme selection, start page). On all platforms this renders a native radio indicator for the active selection.
 
 ### v0.3 - Nice to Have
 

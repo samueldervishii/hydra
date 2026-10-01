@@ -19,7 +19,6 @@ const configLog = log.scope('config');
 interface StoreSchema {
   storefront: string;
   language: string | null;
-  'notifications.enabled': boolean;
   'closeToTray.enabled': boolean;
   theme: ThemeName;
   'performanceMode.enabled': boolean;
@@ -77,16 +76,6 @@ export function getLanguage(): string | null | undefined {
 /** Persist `language` without applying the setting to running components. */
 export function setLanguage(lang: string | null): void {
   setConfigValue('language', lang);
-}
-
-/** Read `notifications.enabled`, defaulting to `true` when absent. */
-export function getNotificationsEnabled(): boolean {
-  return getConfigValue('notifications.enabled', true);
-}
-
-/** Persist `notifications.enabled` without applying the setting to running components. */
-export function setNotificationsEnabled(enabled: boolean): void {
-  setConfigValue('notifications.enabled', enabled);
 }
 
 /** Read `closeToTray.enabled`, defaulting to `false` when absent. */

@@ -3,8 +3,7 @@
 /**
  * The name the system knows the app by, which a display rename must not
  * move: the package and executable name, the sidra.desktop entry, the MPRIS
- * bus name (org.mpris.MediaPlayer2.sidra), the notification desktop-entry
- * hint and the cache folder. What users see is package.json's productName,
+ * bus name (org.mpris.MediaPlayer2.sidra) and the cache folder. What users see is package.json's productName,
  * read through app.getName().
  */
 export const INTERNAL_NAME = "sidra";

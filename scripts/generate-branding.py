@@ -8,7 +8,7 @@ square, and everything outside its rounded corners is made transparent:
 - assets/branding/hydra-icon.png and hydra-splash.png, 1024 pixel masters
 - build/icon.png, icon.ico, icon.icns and build/icons/<size>x<size>.png, the
   app icon electron-builder packages (build.linux.icon is build/icons)
-- assets/hydra-logo.png, the icon the About window and notifications show
+- assets/hydra-logo.png, the icon the About window shows
 - assets/hydra-splash.png, the image on the loading screen: the splash
   hydra cut out of its square, so it sits straight on the splash background
 - assets/icons/hydra-tray*.png and hydraTemplate*.png, the tray icons: a

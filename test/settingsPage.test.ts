@@ -29,7 +29,7 @@ class Element {
 function fixture(): SettingsState {
   return {
     musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1,
-    performanceMode: true, sidebarCollapsed: false, closeToTray: false, notifications: true,
+    performanceMode: true, sidebarCollapsed: false, closeToTray: false,
     options: {
       musicService: [{ value: 'music', label: 'Apple Music' }, { value: 'classical', label: 'Apple Music Classical' }],
       startPage: [{ value: 'new', label: 'New' }],
@@ -155,10 +155,10 @@ describe('settings page', () => {
     h.apply.mockImplementationOnce(() => pending.promise);
     h.element('closeToTray').fire('change');
     await settle();
-    h.push({ ...fixture(), notifications: false });
+    h.push({ ...fixture(), performanceMode: false });
     pending.resolve(fixture());
     await settle();
-    expect(h.element('notifications').checked).toBe(false);
+    expect(h.element('performanceMode').checked).toBe(false);
   });
 
   it('renders the Performance mode toggle and sends its new value', async () => {
@@ -185,9 +185,9 @@ describe('settings page', () => {
 
   it('keeps a pushed state when the initial read resolves later', async () => {
     const h = harness();
-    h.push({ ...fixture(), notifications: false });
+    h.push({ ...fixture(), performanceMode: false });
     await settle();
-    expect(h.element('notifications').checked).toBe(false);
+    expect(h.element('performanceMode').checked).toBe(false);
   });
 
   it('does not dispatch queued edits after the page closes', async () => {
@@ -196,7 +196,7 @@ describe('settings page', () => {
     const pending = deferred<SettingsState>();
     h.apply.mockImplementationOnce(() => pending.promise);
     h.element('closeToTray').fire('change');
-    h.element('notifications').fire('change');
+    h.element('performanceMode').fire('change');
     await settle();
     h.close();
     pending.resolve({ ...fixture(), lang: 'ar' });

@@ -40,8 +40,6 @@ export const LOADING_TEXT: Record<string, string> = loadingData.LOADING_TEXT;
 export const ABOUT_TEXT: Record<string, string> = trayData.ABOUT_TEXT;
 /** Translations for quit, keyed by BCP 47 language tag. */
 export const QUIT_TEXT: Record<string, string> = trayData.QUIT_TEXT;
-/** Translations for notifications, keyed by BCP 47 language tag. */
-export const NOTIFICATIONS_TEXT: Record<string, string> = trayData.NOTIFICATIONS_TEXT;
 /** Translations for start page, keyed by BCP 47 language tag. */
 export const START_PAGE_TEXT: Record<string, string> = trayData.START_PAGE_TEXT;
 /** Translations for start page home, keyed by BCP 47 language tag. */
@@ -201,7 +199,6 @@ export interface TrayStrings {
   settingsError: string;
   about: string;
   quit: string;
-  notifications: string;
   player: string;
   startPage: string;
   startPageHome: string;
@@ -249,7 +246,6 @@ const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   settingsError: SETTINGS_ERROR_TEXT,
   about: ABOUT_TEXT,
   quit: QUIT_TEXT,
-  notifications: NOTIFICATIONS_TEXT,
   player: PLAYER_TEXT,
   startPage: START_PAGE_TEXT,
   startPageHome: START_PAGE_HOME_TEXT,

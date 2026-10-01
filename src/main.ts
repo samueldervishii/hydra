@@ -66,7 +66,6 @@ import {
   allServices,
   isAllowedNavigationUrl,
 } from "./musicService";
-import { init as initNotifications } from "./integrations/notifications";
 import { init as initDock } from "./integrations/macos-dock";
 import { init as initWindowsTaskbar } from "./integrations/windows-taskbar";
 import { cleanArtworkCache } from "./artwork";
@@ -75,7 +74,6 @@ import {
   reset as resetWedgeDetector,
 } from "./wedgeDetector";
 import { contentReadyProbeScript } from "./contentReady";
-import { initNotificationProbe } from "./notify";
 import { errorMessage, liveWebContents, runSteps } from "./utils";
 import { openExternalUrl } from "./utils/openExternal";
 
@@ -136,8 +134,8 @@ app.on("child-process-gone", (_event, details) => {
   );
 });
 
-// --- App identity: must be set before app.whenReady() on Windows, or neither
-// desktop notifications nor the GSMTC media identity attach to Sidra ---
+// --- App identity: must be set before app.whenReady() on Windows, or the
+// GSMTC media identity does not attach to Sidra ---
 if (process.platform === "win32") {
   app.setAppUserModelId("com.wimpysworld.sidra");
 }
@@ -824,10 +822,6 @@ function setupContentHandlers(
       // markCssReady() until the splash timeout.
       runSteps(
         [
-          [
-            "notifications",
-            () => initNotifications({ player, getMainWindow: () => win }),
-          ],
           ["dock", () => initDock({ player, getMainWindow: () => win })],
           [
             "windowsTaskbar",
@@ -889,7 +883,6 @@ if (gotLock) {
       const { splash, minDisplay, cssReady, markCssReady } = createSplash();
       setupApplicationMenu();
       const player = initPlayerIPC();
-      initNotificationProbe();
       const ses = await initSession();
       cleanArtworkCache();
 

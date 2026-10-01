@@ -18,7 +18,6 @@ import {
   type NowPlayingPayload,
 } from "./player";
 import {
-  getNotificationsEnabled,
   getCloseToTrayEnabled,
 } from "./config";
 import { showAboutWindow } from "./aboutWindow";
@@ -40,7 +39,6 @@ export type MenuIconKey =
   | "about"
   | "player"
   | "start-page"
-  | "notifications"
   | "style"
   | "zoom"
   | "quit"
@@ -64,7 +62,6 @@ const menuIconFileMap: Partial<Record<MenuIconKey, string>> = {
   about: "circle-info",
   player: "headphones",
   "start-page": "music",
-  notifications: "bell",
   style: "palette",
   zoom: "expand",
   quit: "eject",
@@ -86,7 +83,6 @@ const menuIconSFSymbolMap: Record<MenuIconKey, string> = {
   about: "info.circle",
   player: "headphones",
   "start-page": "music.note",
-  notifications: "bell",
   style: "paintpalette",
   zoom: "arrow.up.left.and.arrow.down.right",
   quit: "xmark.circle",
@@ -315,7 +311,7 @@ function buildToggleSubmenu(
   label: string,
   iconKey: MenuIconKey,
   enabled: boolean,
-  type: "notifications" | "closeToTray",
+  type: "closeToTray",
   ctx: SubmenuContext,
   extraItems: Electron.MenuItemConstructorOptions[] = [],
 ): Electron.MenuItemConstructorOptions {
@@ -335,18 +331,6 @@ function buildToggleSubmenu(
       ...extraItems,
     ],
   };
-}
-
-function buildNotificationsSubmenu(
-  ctx: SubmenuContext,
-): Electron.MenuItemConstructorOptions {
-  return buildToggleSubmenu(
-    ctx.strings.notifications,
-    "notifications",
-    getNotificationsEnabled(),
-    "notifications",
-    ctx,
-  );
 }
 
 function buildCloseToTraySubmenu(
@@ -596,7 +580,6 @@ function buildContextMenu(tray: Tray): Menu {
     buildPlayerSubmenu(ctx),
     buildStartPageSubmenu(ctx),
     buildCloseToTraySubmenu(ctx),
-    buildNotificationsSubmenu(ctx),
     buildStyleSubmenu(ctx),
     buildZoomSubmenu(ctx),
     { type: "separator" },

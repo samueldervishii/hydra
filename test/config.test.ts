@@ -8,8 +8,6 @@ import {
   setStorefront,
   getLanguage,
   setLanguage,
-  getNotificationsEnabled,
-  setNotificationsEnabled,
   getCloseToTrayEnabled,
   setCloseToTrayEnabled,
   getTheme,
@@ -62,14 +60,6 @@ describe("Config store type assertions", () => {
 
   it("setLanguage accepts string | null", () => {
     expectTypeOf(setLanguage).parameter(0).toEqualTypeOf<string | null>();
-  });
-
-  it("getNotificationsEnabled returns boolean", () => {
-    expectTypeOf(getNotificationsEnabled).returns.toEqualTypeOf<boolean>();
-  });
-
-  it("setNotificationsEnabled accepts boolean", () => {
-    expectTypeOf(setNotificationsEnabled).parameter(0).toEqualTypeOf<boolean>();
   });
 
   it("getTheme returns ThemeName", () => {
@@ -192,10 +182,6 @@ describe("Config store runtime behaviour", () => {
   it("setStorefront persists value", () => {
     setStorefront("gb");
     expect(getStorefront()).toBe("gb");
-  });
-
-  it("getNotificationsEnabled defaults to true", () => {
-    expect(getNotificationsEnabled()).toBe(true);
   });
 
   it("getTheme defaults to apple-music", () => {

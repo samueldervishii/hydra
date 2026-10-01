@@ -33,7 +33,6 @@ export type SettingsAction =
   | {
       type:
         | "closeToTray"
-        | "notifications"
         | "performanceMode"
         | "sidebarCollapsed";
       value: boolean;
@@ -53,7 +52,6 @@ export interface SettingsState {
   performanceMode: boolean;
   sidebarCollapsed: boolean;
   closeToTray: boolean;
-  notifications: boolean;
   options: {
     musicService: SettingsOption<MusicServiceId>[];
     startPage: SettingsOption<AnyStartPageId | "last">[];
@@ -143,7 +141,6 @@ export function getSettingsState(): SettingsState {
     performanceMode: config.getPerformanceModeEnabled(),
     sidebarCollapsed: config.getSidebarCollapsed(),
     closeToTray: config.getCloseToTrayEnabled(),
-    notifications: config.getNotificationsEnabled(),
     options: {
       musicService: allServices().map((service) => ({
         value: service.id,
@@ -212,7 +209,6 @@ function isSettingsAction(
         (option) => option.value === data.value,
       );
     case "closeToTray":
-    case "notifications":
     case "performanceMode":
     case "sidebarCollapsed":
       return typeof data.value === "boolean";
@@ -272,9 +268,6 @@ export function applySettingsAction(action: unknown): SettingsState {
       }
       break;
     }
-    case "notifications":
-      config.setNotificationsEnabled(action.value);
-      break;
   }
   runtime.refreshTray();
   notifySettingsChanged();

@@ -11,8 +11,6 @@ import type { TrayStrings } from "../src/i18n";
 
 // Mock modules that import electron-conf/main at import time.
 vi.mock("../src/config", () => ({
-  getNotificationsEnabled: () => true,
-  setNotificationsEnabled: vi.fn(),
   setTheme: vi.fn(),
   getStartPage: () => "new",
   setStartPage: vi.fn(),
@@ -39,7 +37,6 @@ const mockTrayStrings: TrayStrings = {
   settingsError: "Could not apply this setting.",
   about: "About Sidra",
   quit: "Quit",
-  notifications: "Notifications",
   player: "Player",
   startPage: "Start Page",
   startPageHome: "Home",
@@ -291,7 +288,7 @@ describe("createTray - menu template inspection", () => {
     const unsubscribe = subscribeSettingsChanges(listener);
     try {
       createTray();
-      const item = findItem(getLastTemplate(), "Notifications");
+      const item = findItem(getLastTemplate(), "Close to tray");
       const choices = item?.submenu as Electron.MenuItemConstructorOptions[];
       choices[1].click?.(
         {} as Electron.MenuItem,
@@ -424,7 +421,7 @@ describe("createTray - menu template inspection", () => {
       for (const labelSubstring of [
         "Player",
         "Start Page",
-        "Notifications",
+        "Close to tray",
         "Style",
         "Zoom",
       ]) {
@@ -587,7 +584,7 @@ describe("createTray - menu template inspection", () => {
       for (const labelSubstring of [
         "Player",
         "Start Page",
-        "Notifications",
+        "Close to tray",
         "Style",
         "Zoom",
       ]) {
@@ -632,7 +629,7 @@ describe("createTray - menu template inspection", () => {
       const template = getLastTemplate();
       expect(findItem(template, "About Sidra")).toBeDefined();
       expect(findItem(template, "Start Page")).toBeDefined();
-      expect(findItem(template, "Notifications")).toBeDefined();
+      expect(findItem(template, "Close to tray")).toBeDefined();
       expect(findItem(template, "Style")).toBeDefined();
       expect(findItem(template, "Zoom")).toBeDefined();
       expect(findItem(template, "Quit")).toBeDefined();
@@ -657,7 +654,6 @@ describe("createTray - menu template inspection", () => {
         "Player",
         "Start Page",
         "Close to tray",
-        "Notifications",
         "Style",
         "Zoom",
       ]);

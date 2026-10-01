@@ -63,10 +63,6 @@ vi.mock('../../src/tray', () => ({
   setApplyZoomCallback: vi.fn(),
 }));
 
-vi.mock('../../src/integrations/notifications', () => ({
-  init: vi.fn(),
-}));
-
 vi.mock('../../src/wedgeDetector', () => ({
   init: vi.fn(),
   reset: vi.fn(),
