@@ -383,6 +383,9 @@ export function getNavigationStrings(): {
   back: string;
   forward: string;
   reload: string;
+  home: string;
+  search: string;
+  allPlaylists: string;
 } {
   const langs = getSystemLanguages();
   return {
@@ -391,6 +394,10 @@ export function getNavigationStrings(): {
     back: getLocalizedString(BACK_TEXT, langs),
     forward: getLocalizedString(FORWARD_TEXT, langs),
     reload: getLocalizedString(RELOAD_TEXT, langs),
+    // The collapsed sidebar's page buttons reuse the start page labels.
+    home: getLocalizedString(START_PAGE_HOME_TEXT, langs),
+    search: getLocalizedString(START_PAGE_SEARCH_TEXT, langs),
+    allPlaylists: getLocalizedString(START_PAGE_ALL_PLAYLISTS_TEXT, langs),
   };
 }
 
