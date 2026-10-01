@@ -12,6 +12,7 @@ import type { EventEmitter } from "node:events";
 import { pathToFileURL } from "node:url";
 import { getAssetPath } from "./paths";
 import { closeBus } from "./utils/closeBus";
+import { INTERNAL_NAME } from "./identity";
 
 const NAME = "org.freedesktop.Notifications";
 const PATH = "/org/freedesktop/Notifications";
@@ -280,7 +281,7 @@ export function createLinuxNotifications(
       const hints: Record<string, Variant> = {
         "suppress-sound": new Variant("b", true),
         transient: new Variant("b", true),
-        "desktop-entry": new Variant("s", app.getName().toLowerCase()),
+        "desktop-entry": new Variant("s", INTERNAL_NAME),
       };
       if (notification.icon)
         hints["image-path"] = new Variant(

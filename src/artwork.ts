@@ -7,6 +7,7 @@ import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import log from "electron-log/main";
 import { errorMessage } from "./utils";
+import { INTERNAL_NAME } from "./identity";
 
 const artworkLog = log.scope("artwork");
 
@@ -15,10 +16,10 @@ const ARTWORK_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const ARTWORK_CACHE_DIR = process.env.SNAP
   ? path.join(
       process.env.XDG_RUNTIME_DIR ?? app.getPath("cache"),
-      app.getName().toLowerCase(),
+      INTERNAL_NAME,
       "artwork",
     )
-  : path.join(app.getPath("cache"), app.getName().toLowerCase(), "artwork");
+  : path.join(app.getPath("cache"), INTERNAL_NAME, "artwork");
 
 function cleanupTmpFile(tmpPath: string): void {
   fsPromises.unlink(tmpPath).catch(() => {});
