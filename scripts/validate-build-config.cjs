@@ -123,6 +123,15 @@ function main() {
   const desktop = config.linux?.desktop;
   const busName = `org.mpris.MediaPlayer2.${String(pkg.name).toLowerCase()}`;
   const actionMethods = ["PlayPause", "Next", "Previous", "Stop"];
+  // Chromium sets the window class from sidra.desktop (app.setDesktopName()),
+  // not from productName, so the launcher must name the same class or the
+  // dock cannot tie the running window to it.
+  if (desktop?.entry?.StartupWMClass !== String(pkg.name)) {
+    throw new Error(
+      `Linux desktop entry StartupWMClass must be "${pkg.name}", the window class`,
+    );
+  }
+  console.log(`  \u2713 Linux desktop StartupWMClass: ${pkg.name}`);
   if (desktop?.entry?.Actions !== "PlayPause;Next;Previous;Stop;") {
     throw new Error(
       "Linux desktop entry Actions must be PlayPause;Next;Previous;Stop;",

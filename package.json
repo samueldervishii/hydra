@@ -92,6 +92,7 @@
       "desktop": {
         "entry": {
           "Actions": "PlayPause;Next;Previous;Stop;",
+          "StartupWMClass": "sidra",
           "MimeType": "x-scheme-handler/itms;"
         },
         "desktopActions": {

@@ -22,11 +22,13 @@ describe('getProductInfo', () => {
     expect(getProductInfo()).toBe(getProductInfo());
   });
 
-  // author names this fork's maintainer for the .deb; the About window's
-  // copyright line must keep naming the original author.
-  it('takes the copyright holder from build.copyright, not from author', async () => {
+  // author names this fork's maintainer for the .deb, and the packaged
+  // package.json has no build key, so the About window's holder is a constant
+  // that must stay equal to build.copyright.
+  it('keeps the copyright holder equal to build.copyright, not author', async () => {
     const pkg = await import('../package.json');
-    expect(pkg.build.copyright).toBe('Copyright (c) Martin Wimpress');
-    expect(pkg.author.name).toBe('samueldervishii');
+    const { COPYRIGHT_HOLDER } = await import('../src/identity');
+    expect(pkg.build.copyright).toBe(`Copyright (c) ${COPYRIGHT_HOLDER}`);
+    expect(pkg.author.name).not.toBe(COPYRIGHT_HOLDER);
   });
 });

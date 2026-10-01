@@ -1,5 +1,6 @@
 import { app } from "electron";
 import path from "path";
+import { COPYRIGHT_HOLDER } from "./identity";
 
 /**
  * Resolve a path to a bundled asset in both a checkout and a packaged build. A
@@ -17,7 +18,6 @@ export function getAssetPath(...parts: string[]): string {
 interface PackageJson {
  description?: string;
  license?: string;
- build?: { copyright?: string };
 }
 
 /** Product details shared by the About window and tray. */
@@ -33,7 +33,7 @@ let cachedProductInfo: ProductInfo | null = null;
 
 /**
  * Read and cache product details from package.json and Electron's application name.
- * The copyright holder comes from build.copyright, not author: author names this
+ * The copyright holder is COPYRIGHT_HOLDER, not author: author names this
  * fork's maintainer for the .deb, while the copyright stays with the original
  * author. require() reads package.json through the asar archive, so it needs no
  * asarUnpack entry.
@@ -44,14 +44,10 @@ export function getProductInfo(): ProductInfo {
  }
 
  const pkg = require(path.join(__dirname, "..", "package.json")) as PackageJson;
- const copyrightHolder = (pkg.build?.copyright ?? "")
-  .replace(/^\s*(copyright\s*)?(\(c\)|©)?\s*/i, "")
-  .trim();
-
  cachedProductInfo = {
   productName: app.getName(),
   description: pkg.description ?? "",
-  copyrightHolder,
+  copyrightHolder: COPYRIGHT_HOLDER,
   license: pkg.license ?? "",
  };
 
