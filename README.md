@@ -82,6 +82,10 @@ I am a presenter on Linux Matters and discussed Sidra's origins in Episode 79. L
 > [!IMPORTANT]
 > Sidra's macOS and Windows releases are currently unsigned, requiring Gatekeeper and SmartScreen workarounds at install time. [Sponsoring the project](https://github.com/sponsors/flexiondotorg) 🩷 goes directly towards code-signing certificates to remove that friction for every user.
 
+## Releases of this fork
+
+This fork publishes only a Linux amd64 `.deb` on [its own releases page](https://github.com/samueldervishii/sidra/releases), versioned `1.1.2-hydra.N`. A push to `main` that changes the version in `package.json` builds it, tags the commit and publishes the release with a `SHA256SUMS` file; check a download with `sha256sum -c SHA256SUMS`. It ships without Last.fm credentials and without automatic updates. The install notes below describe upstream's releases.
+
 ## Install
 
 Grab the latest release from [GitHub Releases](https://github.com/wimpysworld/sidra/releases).

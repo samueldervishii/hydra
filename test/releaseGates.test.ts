@@ -34,11 +34,6 @@ type BuildHook = (context: HookContext) => Promise<void>;
 
 const afterPack = require("../build/afterPack.cjs").default as BuildHook;
 const afterSign = require("../build/afterSign.cjs").default as BuildHook;
-const builderWorkflow = readFileSync(".github/workflows/builder.yml", "utf8");
-const manualSnapWorkflow = readFileSync(
-  ".github/workflows/publish-snap-manual.yml",
-  "utf8",
-);
 const releaseWorkflow = readFileSync(
   ".github/workflows/release-linux.yml",
   "utf8",
@@ -297,18 +292,4 @@ it("registers the platform VMP hooks without disabling Windows executable edits"
   expect(packageJson.build.afterPack).toBe("build/afterPack.cjs");
   expect(packageJson.build.afterSign).toBe("build/afterSign.cjs");
   expect(packageJson.build.win?.signAndEditExecutable).not.toBe(false);
-});
-
-it("restricts Last.fm credentials to tag builds", () => {
-  expect(builderWorkflow).toContain(
-    "SIDRA_LASTFM_API_KEY: ${{ startsWith(github.ref, 'refs/tags/') && secrets.SIDRA_LASTFM_API_KEY || '' }}",
-  );
-  expect(builderWorkflow).toContain(
-    "SIDRA_LASTFM_API_SECRET: ${{ startsWith(github.ref, 'refs/tags/') && secrets.SIDRA_LASTFM_API_SECRET || '' }}",
-  );
-});
-
-it("does not expose EVS credentials to the Linux Snap build", () => {
-  expect(manualSnapWorkflow).not.toContain("EVS_ACCOUNT_NAME");
-  expect(manualSnapWorkflow).not.toContain("EVS_PASSWD");
 });

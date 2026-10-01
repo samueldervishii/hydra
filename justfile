@@ -215,8 +215,8 @@ clear:
     rm -rf ~/.cache/sidra
     @echo "Sidra data cleared"
 
-# This recipe makes a fast local package, not a release build. Add release targets to
-# .github/workflows/builder.yml and package.json build.linux.target instead.
+# This recipe makes a fast local package, not a release build. Releases come from
+# .github/workflows/release-linux.yml when main changes the version in package.json.
 # Build a local development package for Linux or macOS
 package: build
     #!/usr/bin/env bash
@@ -243,50 +243,3 @@ logs:
 logs:
     @echo "Log file: ~/Library/Logs/Sidra/main.log"
     @tail -50 ~/Library/Logs/Sidra/main.log 2>/dev/null || echo "No log file yet. Run the app first."
-
-# Cut a release: just release 1.2.3
-release VERSION:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    if [[ ! "{{VERSION}}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        echo "Error: VERSION must be semver (e.g. 1.2.3)" >&2
-        exit 1
-    fi
-
-    version="{{VERSION}}"
-
-    branch=$(git branch --show-current)
-    if [[ "$branch" != "main" ]]; then
-        echo "Error: must be on main branch (currently on $branch)" >&2
-        exit 1
-    fi
-
-    if git rev-parse --verify --quiet "refs/tags/$version" >/dev/null; then
-        echo "Error: Tag $version already exists" >&2
-        exit 1
-    fi
-
-    current_version=$(node -p "require('./package.json').version")
-    if [[ "$current_version" != "$version" ]]; then
-        npm version "$version" --no-git-tag-version
-        git add package.json package-lock.json
-        git commit -m "chore(release): bump version to $version" -- package.json package-lock.json
-        echo "✓ Version bumped to $version"
-    else
-        echo "✓ Version already at $version"
-    fi
-
-    echo "Creating release $version..."
-    git tag -a "$version" -m "v$version"
-    echo "✓ Tag $version created"
-    echo ""
-    echo "To publish the release:"
-    echo "  git push origin main"
-    echo "  # Wait for the Builder workflow on main to pass"
-    echo "  git push origin $version"
-    echo ""
-    echo "This will trigger the GitHub Actions release workflow which will:"
-    echo "  - Build binaries for all platforms"
-    echo "  - Generate changelog from commits"
-    echo "  - Create GitHub release with downloadable assets"

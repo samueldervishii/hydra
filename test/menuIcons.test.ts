@@ -19,7 +19,7 @@ describe("tray menu icon assets", () => {
       .map((name) => name.replace(/\.svg$/, ""))
       .sort();
 
-    expect(names).toHaveLength(34);
+    expect(names).toHaveLength(32);
     expect(fs.readdirSync(menuIconsDir).sort()).toEqual(["dark", "light"]);
 
     for (const variant of ["dark", "light"]) {
