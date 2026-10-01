@@ -1,7 +1,7 @@
 {
   "name": "sidra",
   "productName": "Hydra",
-  "version": "1.1.2-hydra.6",
+  "version": "1.1.2-hydra.7",
   "description": "Apple Music desktop client for Linux",
   "main": "dist/main.js",
   "scripts": {
