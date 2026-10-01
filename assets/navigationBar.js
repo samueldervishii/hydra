@@ -5,7 +5,7 @@
 
   // loadAssets() in src/main.ts replaces NAV_LABELS_TOKEN from src/i18n.ts with JSON.
   // executeJavaScript() cannot supply loadFile() query parameters, so the raw asset requires substitution.
-  /** @type {{ back: string, forward: string, reload: string, settings: string }} */
+  /** @type {{ sidebar: string, back: string, forward: string, reload: string, settings: string }} */
   var LABELS = __SIDRA_NAV_LABELS__;
 
   const logoEl = document.querySelector(".navigation__header .logo");
@@ -91,6 +91,14 @@
   // Each icon defines geometry only. Its parent SVG carries sharedAttrs.
   /** @type {Array<{ label: string, channel: string, icon: Array<[string, Record<string, string>]> }>} */
   var BUTTONS = [
+    {
+      label: LABELS.sidebar,
+      channel: "nav:sidebar",
+      icon: [
+        ["rect", { x: "3", y: "4", width: "18", height: "16", rx: "2" }],
+        ["line", { x1: "9", y1: "4", x2: "9", y2: "20" }],
+      ],
+    },
     {
       label: LABELS.back,
       channel: "nav:back",

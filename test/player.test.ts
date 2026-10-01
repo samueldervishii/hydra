@@ -797,7 +797,8 @@ describe('Channel contract', () => {
       | 'nav:back'
       | 'nav:forward'
       | 'nav:reload'
-      | 'nav:settings';
+      | 'nav:settings'
+      | 'nav:sidebar';
 
     expectTypeOf<SendChannel>().toEqualTypeOf<ExpectedSend>();
   });

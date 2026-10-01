@@ -12,7 +12,13 @@ const navBarSource = fs.readFileSync(
 
 // Substitute the label token as main.ts loadAssets() does before executing the asset.
 // Non-English labels distinguish injected translations from asset defaults.
-const LABELS = { back: 'Zurück', forward: 'Vorwärts', reload: 'Neu laden', settings: 'Einstellungen' };
+const LABELS = {
+  sidebar: 'Seitenleiste umschalten',
+  back: 'Zurück',
+  forward: 'Vorwärts',
+  reload: 'Neu laden',
+  settings: 'Einstellungen',
+};
 
 const navBarScript = navBarSource.replace(NAV_LABELS_TOKEN, () => JSON.stringify(LABELS));
 
@@ -120,12 +126,18 @@ describe('navigationBar', () => {
     expect(anchor?.children).toContain(bar());
   });
 
-  it('places settings after back, forward and reload with the substituted labels', () => {
+  it('places the sidebar toggle first and settings after back, forward and reload', () => {
     const { bar, run } = createHarness();
 
     run();
 
-    expect(labelsOf(bar()?.children ?? [])).toEqual([LABELS.back, LABELS.forward, LABELS.reload, LABELS.settings]);
+    expect(labelsOf(bar()?.children ?? [])).toEqual([
+      LABELS.sidebar,
+      LABELS.back,
+      LABELS.forward,
+      LABELS.reload,
+      LABELS.settings,
+    ]);
   });
 
   it('appends nothing and throws nothing when the anchor is missing', () => {
@@ -150,15 +162,16 @@ describe('navigationBar', () => {
 
     run();
 
-    expect(buttons()).toHaveLength(4);
+    expect(buttons()).toHaveLength(5);
 
     run();
 
-    expect(buttons()).toHaveLength(4);
+    expect(buttons()).toHaveLength(5);
     expect(anchor?.children).toHaveLength(1);
   });
 
   it.each([
+    [LABELS.sidebar, 'nav:sidebar'],
     [LABELS.settings, 'nav:settings'],
     [LABELS.back, 'nav:back'],
     [LABELS.forward, 'nav:forward'],

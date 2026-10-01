@@ -38,6 +38,7 @@ interface StoreSchema {
   'lastfm.pendingScrobbles': PendingScrobble[];
   theme: ThemeName;
   'performanceMode.enabled': boolean;
+  'sidebar.collapsed': boolean;
   startPage: MusicStartPageId | 'last';
   lastPageUrl: string;
   'classical.startPage': ClassicalStartPageId | 'last';
@@ -217,6 +218,16 @@ export function getPerformanceModeEnabled(): boolean {
 /** Persist `performanceMode.enabled` without applying the setting to running components. */
 export function setPerformanceModeEnabled(enabled: boolean): void {
   setConfigValue('performanceMode.enabled', enabled);
+}
+
+/** Read `sidebar.collapsed`, defaulting to `false` when absent. */
+export function getSidebarCollapsed(): boolean {
+  return getConfigValue('sidebar.collapsed', false);
+}
+
+/** Persist `sidebar.collapsed` without applying the setting to running components. */
+export function setSidebarCollapsed(collapsed: boolean): void {
+  setConfigValue('sidebar.collapsed', collapsed);
 }
 
 /** Read `lastPageUrl`, returning undefined when the key is absent. */

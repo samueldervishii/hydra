@@ -14,6 +14,7 @@ import {
 import { BUNDLED_THEMES, type ThemeName } from "./palettes";
 import { applyTheme, hasCustomTheme, resolveTheme } from "./theme";
 import { applyPerformanceMode } from "./performanceMode";
+import { applySidebar } from "./sidebar";
 import { liveWebContents } from "./utils";
 import {
   enable as enableDiscord,
@@ -40,7 +41,8 @@ export type SettingsAction =
         | "notifications"
         | "discord"
         | "lastfmEnabled"
-        | "performanceMode";
+        | "performanceMode"
+        | "sidebarCollapsed";
       value: boolean;
     }
   | { type: "lastfmConnect" | "lastfmDisconnect" };
@@ -57,6 +59,7 @@ export interface SettingsState {
   theme: ThemeName;
   zoomFactor: number;
   performanceMode: boolean;
+  sidebarCollapsed: boolean;
   closeToTray: boolean;
   notifications: boolean;
   discord: boolean;
@@ -158,6 +161,7 @@ export function getSettingsState(): SettingsState {
     theme: resolveTheme(),
     zoomFactor: config.getZoomFactor(),
     performanceMode: config.getPerformanceModeEnabled(),
+    sidebarCollapsed: config.getSidebarCollapsed(),
     closeToTray: config.getCloseToTrayEnabled(),
     notifications: config.getNotificationsEnabled(),
     discord: config.getDiscordEnabled(),
@@ -242,6 +246,7 @@ function isSettingsAction(
     case "notifications":
     case "discord":
     case "performanceMode":
+    case "sidebarCollapsed":
       return typeof data.value === "boolean";
     case "lastfmEnabled":
       return (
@@ -256,6 +261,17 @@ function isSettingsAction(
     default:
       return false;
   }
+}
+
+/**
+ * Flip the sidebar for the navigation bar button and Ctrl+B. It goes through
+ * the same action as the Settings toggle, so all three stay in step.
+ */
+export function toggleSidebarCollapsed(): void {
+  applySettingsAction({
+    type: "sidebarCollapsed",
+    value: !config.getSidebarCollapsed(),
+  });
 }
 
 /** Validate an action against available choices, apply it and refresh the tray and Settings. */
@@ -284,6 +300,10 @@ export function applySettingsAction(action: unknown): SettingsState {
     case "performanceMode":
       config.setPerformanceModeEnabled(action.value);
       void applyPerformanceMode(liveWebContents(runtime.getMainWindow()));
+      break;
+    case "sidebarCollapsed":
+      config.setSidebarCollapsed(action.value);
+      void applySidebar(liveWebContents(runtime.getMainWindow()));
       break;
     case "closeToTray": {
       config.setCloseToTrayEnabled(action.value);

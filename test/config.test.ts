@@ -25,6 +25,8 @@ import {
   setTheme,
   getPerformanceModeEnabled,
   setPerformanceModeEnabled,
+  getSidebarCollapsed,
+  setSidebarCollapsed,
   getLastPageUrl,
   setLastPageUrl,
   getStartPage,
@@ -102,6 +104,14 @@ describe("Config store type assertions", () => {
 
   it("setPerformanceModeEnabled accepts boolean", () => {
     expectTypeOf(setPerformanceModeEnabled).parameter(0).toEqualTypeOf<boolean>();
+  });
+
+  it("getSidebarCollapsed returns boolean", () => {
+    expectTypeOf(getSidebarCollapsed).returns.toEqualTypeOf<boolean>();
+  });
+
+  it("setSidebarCollapsed accepts boolean", () => {
+    expectTypeOf(setSidebarCollapsed).parameter(0).toEqualTypeOf<boolean>();
   });
 
   it("getLastPageUrl returns string | undefined", () => {
@@ -232,6 +242,15 @@ describe("Config store runtime behaviour", () => {
   it("setPerformanceModeEnabled persists value", () => {
     setPerformanceModeEnabled(false);
     expect(getPerformanceModeEnabled()).toBe(false);
+  });
+
+  it("getSidebarCollapsed defaults to false", () => {
+    expect(getSidebarCollapsed()).toBe(false);
+  });
+
+  it("setSidebarCollapsed persists value", () => {
+    setSidebarCollapsed(true);
+    expect(getSidebarCollapsed()).toBe(true);
   });
 
   it("getStartPage defaults to new", () => {

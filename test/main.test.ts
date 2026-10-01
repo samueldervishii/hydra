@@ -84,6 +84,9 @@ const bootstrap = vi.hoisted(() => {
     resetForDocumentReplacement,
     handleHookReady: vi.fn(),
     applyPerformanceMode: vi.fn(() => Promise.resolve()),
+    applySidebar: vi.fn(() => Promise.resolve()),
+    teardownSidebarShortcut: vi.fn(),
+    toggleSidebarCollapsed: vi.fn(),
     handlePlaybackCapabilitiesDidChange: vi.fn(),
     browserWindow: vi.fn(),
     ipcOn: vi.fn(),
@@ -214,6 +217,11 @@ vi.mock("../src/tray", () => ({
 vi.mock("../src/settings", () => ({
   initSettingsActions: vi.fn(() => vi.fn()),
   notifySettingsChanged: vi.fn(),
+  toggleSidebarCollapsed: bootstrap.toggleSidebarCollapsed,
+}));
+vi.mock("../src/sidebar", () => ({
+  applySidebar: bootstrap.applySidebar,
+  initSidebarShortcut: vi.fn(() => bootstrap.teardownSidebarShortcut),
 }));
 vi.mock("../src/settingsWindow", () => ({
   initSettingsWindow: vi.fn(),
@@ -404,13 +412,14 @@ describe("main bootstrap", () => {
     );
   });
 
-  it("inserts the Performance mode stylesheet and applies the setting on every load", async () => {
+  it("inserts both feature stylesheets and applies both settings on every load", async () => {
     await startMain();
     const finish = bootstrap.mainWebListeners.get("did-finish-load");
     await finish?.();
     await finish?.();
-    // fs is mocked to return "asset" for every file, so each insert carries it.
-    expect(bootstrap.webContents.insertCSS).toHaveBeenCalledTimes(4);
+    // Each load inserts styleFix.css, performanceMode.css and sidebar.css; the
+    // theme is mocked. fs is mocked to return "asset" for every file.
+    expect(bootstrap.webContents.insertCSS).toHaveBeenCalledTimes(6);
     expect(bootstrap.applyPerformanceMode).toHaveBeenCalledTimes(2);
     expect(bootstrap.applyPerformanceMode).toHaveBeenCalledWith(
       bootstrap.webContents,
@@ -418,6 +427,37 @@ describe("main bootstrap", () => {
     expect(
       bootstrap.webContents.insertCSS.mock.invocationCallOrder[1],
     ).toBeLessThan(bootstrap.applyPerformanceMode.mock.invocationCallOrder[0]);
+    expect(bootstrap.applySidebar).toHaveBeenCalledTimes(2);
+    expect(bootstrap.applySidebar).toHaveBeenCalledWith(bootstrap.webContents);
+    expect(
+      bootstrap.webContents.insertCSS.mock.invocationCallOrder[2],
+    ).toBeLessThan(bootstrap.applySidebar.mock.invocationCallOrder[0]);
+  });
+
+  it("toggles the sidebar only from the main window's main frame and tears the shortcut down on quit", async () => {
+    const { initSidebarShortcut } = await import("../src/sidebar");
+    await startMain();
+    const toggle = bootstrap.ipcOn.mock.calls.find(
+      ([channel]) => channel === "nav:sidebar",
+    )?.[1];
+    const event = {
+      sender: bootstrap.webContents,
+      senderFrame: bootstrap.webContents.mainFrame,
+    };
+    toggle?.({ ...event, sender: {} });
+    toggle?.({ ...event, senderFrame: { url: event.senderFrame.url } });
+    expect(bootstrap.toggleSidebarCollapsed).not.toHaveBeenCalled();
+    toggle?.(event);
+    expect(bootstrap.toggleSidebarCollapsed).toHaveBeenCalledOnce();
+
+    expect(initSidebarShortcut).toHaveBeenCalledExactlyOnceWith(
+      bootstrap.mainWindow,
+      bootstrap.toggleSidebarCollapsed,
+    );
+    expect(bootstrap.appOn).toHaveBeenCalledWith(
+      "will-quit",
+      bootstrap.teardownSidebarShortcut,
+    );
   });
 
   it("initialises controller IPC once and reuses guarded back navigation", async () => {

@@ -28,6 +28,8 @@ vi.mock("../src/config", () => ({
   setZoomFactor: vi.fn(),
   getPerformanceModeEnabled: () => true,
   setPerformanceModeEnabled: vi.fn(),
+  getSidebarCollapsed: () => false,
+  setSidebarCollapsed: vi.fn(),
   getCloseToTrayEnabled: vi.fn(() => false),
   setCloseToTrayEnabled: vi.fn(),
   getMusicService: vi.fn(() => "music"),
@@ -85,6 +87,7 @@ const mockTrayStrings: TrayStrings = {
   showWindow: "Show Sidra",
   closeToTray: "Close to tray",
   performanceMode: "Performance mode",
+  sidebarCollapsed: "Collapse sidebar",
 };
 
 // Expected menu label per registry page id. Typed over the union, so a new page
