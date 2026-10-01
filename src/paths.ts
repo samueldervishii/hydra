@@ -15,16 +15,17 @@ export function getAssetPath(...parts: string[]): string {
 }
 
 interface PackageJson {
- author: string | { name: string };
  description?: string;
  license?: string;
+ build?: { copyright?: string };
 }
 
 /** Product details shared by the About window and tray. */
 export interface ProductInfo {
  productName: string;
  description: string;
- author: string;
+ /** The original author, who holds the copyright. Not the fork's maintainer. */
+ copyrightHolder: string;
  license: string;
 }
 
@@ -32,8 +33,10 @@ let cachedProductInfo: ProductInfo | null = null;
 
 /**
  * Read and cache product details from package.json and Electron's application name.
- * Keep only author text before '<' so bracketed contact details cannot remain after a partial replacement.
- * require() reads package.json through the asar archive, so it needs no asarUnpack entry.
+ * The copyright holder comes from build.copyright, not author: author names this
+ * fork's maintainer for the .deb, while the copyright stays with the original
+ * author. require() reads package.json through the asar archive, so it needs no
+ * asarUnpack entry.
  */
 export function getProductInfo(): ProductInfo {
  if (cachedProductInfo) {
@@ -41,15 +44,14 @@ export function getProductInfo(): ProductInfo {
  }
 
  const pkg = require(path.join(__dirname, "..", "package.json")) as PackageJson;
- const author =
-  typeof pkg.author === "string"
-   ? pkg.author.split("<")[0].trim()
-   : (pkg.author?.name ?? "");
+ const copyrightHolder = (pkg.build?.copyright ?? "")
+  .replace(/^\s*(copyright\s*)?(\(c\)|©)?\s*/i, "")
+  .trim();
 
  cachedProductInfo = {
   productName: app.getName(),
   description: pkg.description ?? "",
-  author,
+  copyrightHolder,
   license: pkg.license ?? "",
  };
 

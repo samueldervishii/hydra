@@ -60,7 +60,7 @@ export function showAboutWindow(): void {
       version: app.getVersion(),
       description: aboutStrings.description,
       lang: getLoadingText().lang,
-      author: info.author,
+      author: info.copyrightHolder,
       license: info.license,
       about: trayStrings.about,
       close: aboutStrings.close,

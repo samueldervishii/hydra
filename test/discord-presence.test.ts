@@ -291,7 +291,7 @@ describe("discord presence integration", () => {
       details: "Blue Monday",
       state: "by New Order",
       buttons: [
-        { label: "Test Player", url: "https://github.com/wimpysworld/sidra" },
+        { label: "Test Player", url: "https://github.com/samueldervishii/sidra" },
         { label: "Play on Apple Music", url: TRACK.url },
       ],
       smallImageKey: "sidra_logo",
@@ -345,7 +345,7 @@ describe("discord presence integration", () => {
     expect(activity().buttons).toEqual([
       {
         label: expect.any(String),
-        url: "https://github.com/wimpysworld/sidra",
+        url: "https://github.com/samueldervishii/sidra",
       },
     ]);
   });

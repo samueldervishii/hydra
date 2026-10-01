@@ -10,8 +10,18 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "author": "Martin Wimpress <code@wimpress.io>",
-  "homepage": "https://github.com/wimpysworld/sidra",
+  "author": {
+    "name": "samueldervishii",
+    "url": "https://github.com/samueldervishii"
+  },
+  "homepage": "https://github.com/samueldervishii/sidra",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/samueldervishii/sidra.git"
+  },
+  "bugs": {
+    "url": "https://github.com/samueldervishii/sidra/issues"
+  },
   "license": "BlueOak-1.0.0",
   "type": "commonjs",
   "devDependencies": {
@@ -120,11 +130,11 @@
       "artifactName": "${productName}-${os}-${arch}.${ext}"
     },
     "deb": {
-      "maintainer": "Martin Wimpress <code@wimpress.io>",
+      "maintainer": "samueldervishii (https://github.com/samueldervishii)",
       "priority": "optional"
     },
     "rpm": {
-      "vendor": "Martin Wimpress"
+      "vendor": "samueldervishii"
     },
     "snapcraft": {
       "base": "core24",

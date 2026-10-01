@@ -21,7 +21,7 @@ vi.mock("../src/paths", () => ({
   getProductInfo: () => ({
     productName: "Test Player",
     description: "Apple Music client",
-    author: "Test",
+    copyrightHolder: "Test",
     license: "MIT",
   }),
 }));
