@@ -10,8 +10,6 @@ vi.mock("../src/i18n", () => ({
     description: "Un client Apple Music minimaliste.",
     close: "Close",
     versionPrefix: "Version",
-    copyrightSuffix: "All rights reserved",
-    licensePrefix: "License",
   }),
   getLoadingText: () => ({ lang: "fr", text: "Chargement..." }),
 }));
@@ -21,7 +19,6 @@ vi.mock("../src/paths", () => ({
   getProductInfo: () => ({
     productName: "Test Player",
     description: "Apple Music client",
-    copyrightHolder: "Test",
     license: "MIT",
   }),
 }));
@@ -132,14 +129,11 @@ describe("showAboutWindow", () => {
           version: app.getVersion(),
           description: "Un client Apple Music minimaliste.",
           lang: "fr",
-          author: "Test",
-          license: "MIT",
+          copyright: "Test Player \u00A9 2026 Samuel Dervishi",
+          credit: "Based on Sidra \u00A9 Martin Wimpress \u00B7 MIT",
           about: "About Sidra",
           close: "Close",
           versionPrefix: "Version",
-          copyrightSuffix: "All rights reserved",
-          licensePrefix: "License",
-          year: String(new Date().getFullYear()),
         },
       },
     );

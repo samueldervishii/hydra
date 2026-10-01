@@ -42,7 +42,7 @@
   },
   "build": {
     "appId": "world.wimpys.sidra",
-    "copyright": "Copyright (c) Martin Wimpress",
+    "copyright": "© 2026 Samuel Dervishi. Based on Sidra © Martin Wimpress.",
     "publish": null,
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "asar": true,

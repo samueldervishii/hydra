@@ -131,10 +131,6 @@ export const CLOSE_TEXT: Record<string, string> = aboutData.CLOSE_TEXT;
 export const ABOUT_DESCRIPTION_TEXT: Record<string, string> = aboutData.ABOUT_DESCRIPTION_TEXT;
 /** Translations for version prefix, keyed by BCP 47 language tag. */
 export const VERSION_PREFIX: Record<string, string> = aboutData.VERSION_PREFIX;
-/** Translations for copyright suffix, keyed by BCP 47 language tag. */
-export const COPYRIGHT_SUFFIX: Record<string, string> = aboutData.COPYRIGHT_SUFFIX;
-/** Translations for license prefix, keyed by BCP 47 language tag. */
-export const LICENSE_PREFIX: Record<string, string> = aboutData.LICENSE_PREFIX;
 
 // --- Cached system language list ---
 // Cache the list because every tray rebuild resolves all labels. Changes to
@@ -406,15 +402,11 @@ export function getAboutStrings(): {
   description: string;
   close: string;
   versionPrefix: string;
-  copyrightSuffix: string;
-  licensePrefix: string;
 } {
   const langs = getSystemLanguages();
   return {
     close: getLocalizedString(CLOSE_TEXT, langs),
     description: getLocalizedString(ABOUT_DESCRIPTION_TEXT, langs),
     versionPrefix: getLocalizedString(VERSION_PREFIX, langs),
-    copyrightSuffix: getLocalizedString(COPYRIGHT_SUFFIX, langs),
-    licensePrefix: getLocalizedString(LICENSE_PREFIX, langs),
   };
 }

@@ -16,19 +16,19 @@ describe('getProductInfo', () => {
     expect(getProductInfo()).toEqual({
       productName: 'Test Player',
       description: pkg.description,
-      copyrightHolder: 'Martin Wimpress',
       license: pkg.license,
     });
     expect(getProductInfo()).toBe(getProductInfo());
   });
 
-  // author names this fork's maintainer for the .deb, and the packaged
-  // package.json has no build key, so the About window's holder is a constant
-  // that must stay equal to build.copyright.
-  it('keeps the copyright holder equal to build.copyright, not author', async () => {
+  // The packaged package.json has no build key, so the About window's notices
+  // come from constants that must stay equal to build.copyright.
+  it('keeps build.copyright equal to the About window constants', async () => {
     const pkg = await import('../package.json');
-    const { COPYRIGHT_HOLDER } = await import('../src/identity');
-    expect(pkg.build.copyright).toBe(`Copyright (c) ${COPYRIGHT_HOLDER}`);
-    expect(pkg.author.name).not.toBe(COPYRIGHT_HOLDER);
+    const ids = await import('../src/identity');
+    expect(pkg.build.copyright).toBe(
+      `\u00A9 ${ids.COPYRIGHT_YEAR} ${ids.COPYRIGHT_HOLDER}. Based on ${ids.ORIGINAL_NAME} \u00A9 ${ids.ORIGINAL_AUTHOR}.`,
+    );
+    expect(ids.ORIGINAL_AUTHOR).toBe('Martin Wimpress');
   });
 });

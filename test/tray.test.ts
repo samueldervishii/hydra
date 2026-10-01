@@ -108,8 +108,6 @@ vi.mock("../src/i18n", () => ({
   getAboutStrings: () => ({
     close: "Close",
     versionPrefix: "Version",
-    copyrightSuffix: "All rights reserved",
-    licensePrefix: "License",
   }),
 }));
 
@@ -137,7 +135,6 @@ vi.mock("../src/paths", () => ({
   getProductInfo: () => ({
     productName: "Sidra",
     description: "Apple Music client",
-    copyrightHolder: "Test",
     license: "MIT",
   }),
 }));

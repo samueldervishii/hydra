@@ -3,6 +3,12 @@ import log from 'electron-log/main';
 import { getTrayStrings, getAboutStrings, getLoadingText } from './i18n';
 import { getAssetPath, getProductInfo } from './paths';
 import { getZoomFactor } from './config';
+import {
+  COPYRIGHT_HOLDER,
+  COPYRIGHT_YEAR,
+  ORIGINAL_AUTHOR,
+  ORIGINAL_NAME,
+} from './identity';
 
 const ABOUT_WINDOW_WIDTH_PX = 400;
 const ABOUT_WINDOW_HEIGHT_PX = 400;
@@ -60,14 +66,12 @@ export function showAboutWindow(): void {
       version: app.getVersion(),
       description: aboutStrings.description,
       lang: getLoadingText().lang,
-      author: info.copyrightHolder,
-      license: info.license,
+      // Two lines: this fork's notice, then the credit to Sidra and the licence.
+      copyright: `${info.productName} \u00A9 ${COPYRIGHT_YEAR} ${COPYRIGHT_HOLDER}`,
+      credit: `Based on ${ORIGINAL_NAME} \u00A9 ${ORIGINAL_AUTHOR} \u00B7 ${info.license}`,
       about: trayStrings.about,
       close: aboutStrings.close,
       versionPrefix: aboutStrings.versionPrefix,
-      copyrightSuffix: aboutStrings.copyrightSuffix,
-      licensePrefix: aboutStrings.licensePrefix,
-      year: String(new Date().getFullYear()),
     },
   });
 }

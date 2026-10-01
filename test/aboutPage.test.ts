@@ -29,4 +29,24 @@ describe('About page display name', () => {
     expect(elements.get('icon')?.alt).toBe(name);
     expect(html).not.toMatch(/innerHTML|insertAdjacentHTML/);
   });
+
+  it('shows the fork notice and the Sidra credit on separate lines', () => {
+    const elements = new Map([...html.matchAll(/id="([^"]+)"/g)].map(match => [
+      match[1], { textContent: '', alt: '', addEventListener: vi.fn() },
+    ]));
+    const document = {
+      title: '',
+      documentElement: { lang: '', dir: '' },
+      getElementById: (id: string) => elements.get(id),
+      querySelector: () => elements.get('close-btn'),
+    };
+    const search = '?' + new URLSearchParams({
+      copyright: 'Hydra \u00A9 2026 Samuel Dervishi',
+      credit: 'Based on Sidra \u00A9 Martin Wimpress \u00B7 BlueOak-1.0.0',
+    });
+    vm.runInNewContext(script, { document, window: { location: { search } }, URLSearchParams });
+
+    expect(elements.get('copyright')?.textContent).toBe('Hydra \u00A9 2026 Samuel Dervishi');
+    expect(elements.get('credit')?.textContent).toBe('Based on Sidra \u00A9 Martin Wimpress \u00B7 BlueOak-1.0.0');
+  });
 });

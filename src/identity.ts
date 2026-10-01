@@ -9,13 +9,22 @@
  */
 export const INTERNAL_NAME = "sidra";
 
-/**
- * Sidra's original author, who holds the copyright the About window shows.
- * A constant, not read from package.json: electron-builder drops the build
- * key, and build.copyright with it, from the packaged copy, and author names
- * this fork's maintainer. test/paths.test.ts keeps it equal to build.copyright.
- */
-export const COPYRIGHT_HOLDER = "Martin Wimpress";
+// Both copyright notices the About window shows. Constants, not read from
+// package.json: electron-builder drops the build key, and build.copyright with
+// it, from the packaged copy. test/paths.test.ts keeps build.copyright equal
+// to these.
+
+/** The year of this fork's copyright notice. */
+export const COPYRIGHT_YEAR = "2026";
+
+/** This fork's author. */
+export const COPYRIGHT_HOLDER = "Samuel Dervishi";
+
+/** The project this fork is based on. */
+export const ORIGINAL_NAME = "Sidra";
+
+/** Sidra's author, who keeps the copyright in the code this fork started from. */
+export const ORIGINAL_AUTHOR = "Martin Wimpress";
 
 /**
  * The folder under the platform's app data directory that holds settings,
