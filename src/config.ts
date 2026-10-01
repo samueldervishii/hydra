@@ -37,6 +37,7 @@ interface StoreSchema {
   'lastfm.username': string | null;
   'lastfm.pendingScrobbles': PendingScrobble[];
   theme: ThemeName;
+  'sidebar.collapsed': boolean;
   startPage: MusicStartPageId | 'last';
   lastPageUrl: string;
   'classical.startPage': ClassicalStartPageId | 'last';
@@ -206,6 +207,16 @@ export function getTheme(): ThemeName {
 /** Persist `theme` without applying the setting to running components. */
 export function setTheme(name: ThemeName): void {
   setConfigValue('theme', name);
+}
+
+/** Read `sidebar.collapsed`, defaulting to `false` when absent. */
+export function getSidebarCollapsed(): boolean {
+  return getConfigValue('sidebar.collapsed', false);
+}
+
+/** Persist `sidebar.collapsed` without applying the setting to running components. */
+export function setSidebarCollapsed(collapsed: boolean): void {
+  setConfigValue('sidebar.collapsed', collapsed);
 }
 
 /** Read `lastPageUrl`, returning undefined when the key is absent. */

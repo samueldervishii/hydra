@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Conf } from 'electron-conf/main';
 import type { BrowserWindow } from 'electron';
 import * as config from '../src/config';
-import { applySettingsAction, getSettingsState, initSettingsActions, notifySettingsChanged, subscribeSettingsChanges } from '../src/settings';
+import { applySettingsAction, getSettingsState, initSettingsActions, notifySettingsChanged, subscribeSettingsChanges, toggleSidebarCollapsed } from '../src/settings';
 import { applyTheme, hasCustomTheme } from '../src/theme';
 import * as lastfm from '../src/integrations/lastfm';
 import { enable as enableDiscord } from '../src/integrations/discord-presence';
@@ -20,7 +20,8 @@ vi.mock('../src/integrations/lastfm', () => ({
 const applyZoom = vi.fn();
 const refreshTray = vi.fn();
 const switchService = vi.fn((id: 'music' | 'classical') => config.setMusicService(id));
-const window = { isVisible: () => false, show: vi.fn(), focus: vi.fn() };
+const contents = { isDestroyed: () => false, executeJavaScript: vi.fn(() => Promise.resolve()) };
+const window = { isVisible: () => false, show: vi.fn(), focus: vi.fn(), isDestroyed: () => false, webContents: contents };
 let dispose: () => void;
 
 beforeEach(() => {
@@ -36,7 +37,7 @@ describe('settings actions', () => {
   it('reads defaults and excludes account credentials from state', () => {
     config.setLastfmSession('private-session', 'listener');
     const state = getSettingsState();
-    expect(state).toMatchObject({ musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1 });
+    expect(state).toMatchObject({ musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1, sidebarCollapsed: false });
     expect(state.lastfm).toEqual({ available: true, connected: true, enabled: false, username: 'listener' });
     expect(JSON.stringify(state)).not.toContain('private-session');
   });
@@ -55,6 +56,29 @@ describe('settings actions', () => {
     unsubscribe();
     notifySettingsChanged();
     expect(listener).toHaveBeenCalledTimes(4);
+  });
+
+  it('persists the sidebar state before applying it to the open page', () => {
+    contents.executeJavaScript.mockImplementationOnce(() => {
+      expect(config.getSidebarCollapsed()).toBe(true);
+      return Promise.resolve();
+    });
+    expect(applySettingsAction({ type: 'sidebarCollapsed', value: true }).sidebarCollapsed).toBe(true);
+    expect(contents.executeJavaScript).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('toggleAttribute("data-sidra-sidebar-collapsed", true)'));
+  });
+
+  it('toggles the sidebar through the Settings action, so Settings follows the button and shortcut', () => {
+    const listener = vi.fn();
+    subscribeSettingsChanges(listener);
+    toggleSidebarCollapsed();
+    expect(config.getSidebarCollapsed()).toBe(true);
+    expect(listener).toHaveBeenLastCalledWith(expect.objectContaining({ sidebarCollapsed: true }));
+    toggleSidebarCollapsed();
+    expect(config.getSidebarCollapsed()).toBe(false);
+    expect(contents.executeJavaScript).toHaveBeenLastCalledWith(
+      expect.stringContaining('toggleAttribute("data-sidra-sidebar-collapsed", false)'));
+    expect(refreshTray).toHaveBeenCalledTimes(2);
   });
 
   it('shows a hidden player when close to tray is disabled', () => {
@@ -83,7 +107,7 @@ describe('settings actions', () => {
     { type: 'musicService', value: 'other' }, { type: 'theme', value: 'custom' },
     { type: 'theme', value: 'other' }, { type: 'startPage', serviceId: 'music', value: 'search' },
     { type: 'notifications', value: true, extra: true }, { type: 'lastfmDisconnect' },
-    { type: 'lastfmEnabled', value: true },
+    { type: 'lastfmEnabled', value: true }, { type: 'sidebarCollapsed', value: 1 },
   ])('rejects unavailable or malformed actions: %j', action => {
     expect(() => applySettingsAction(action)).toThrow('Invalid settings action');
     expect(refreshTray).not.toHaveBeenCalled();

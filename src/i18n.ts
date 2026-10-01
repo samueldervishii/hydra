@@ -260,11 +260,13 @@ export interface TrayStrings {
   hideWindow: string;
   showWindow: string;
   closeToTray: string;
+  sidebarCollapsed: string;
 }
 
 // Map each TrayStrings field to its translation record. The keyed Record makes
-// a missing field a compile error. Brand names and zoom steps use English-only
-// records because getLocalizedString() uses English as its final fallback.
+// a missing field a compile error. Brand names, zoom steps and this fork's own
+// labels use English-only records because getLocalizedString() uses English as
+// its final fallback.
 const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   settings: SETTINGS_TEXT,
   integrations: INTEGRATIONS_TEXT,
@@ -310,6 +312,7 @@ const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   hideWindow: HIDE_WINDOW_TEXT,
   showWindow: SHOW_WINDOW_TEXT,
   closeToTray: CLOSE_TO_TRAY_TEXT,
+  sidebarCollapsed: { en: 'Collapse sidebar' },
 };
 
 // TRAY_TEXT is a Record literal, so excess property checking already rules out
@@ -366,8 +369,14 @@ export function getLastfmConnectFailedText(): string {
  */
 export const NAV_LABELS_TOKEN = '__SIDRA_NAV_LABELS__';
 
+// English only, like this fork's tray labels. Not exported, because
+// test/i18n-consistency.test.ts treats every exported object as a record that
+// must carry every language.
+const SIDEBAR_TOGGLE_TEXT: Record<string, string> = { en: 'Toggle sidebar' };
+
 /** Resolve the labels for the injected navigation bar. */
 export function getNavigationStrings(): {
+  sidebar: string;
   settings: string;
   back: string;
   forward: string;
@@ -375,6 +384,7 @@ export function getNavigationStrings(): {
 } {
   const langs = getSystemLanguages();
   return {
+    sidebar: getLocalizedString(SIDEBAR_TOGGLE_TEXT, langs),
     settings: getLocalizedString(SETTINGS_TEXT, langs),
     back: getLocalizedString(BACK_TEXT, langs),
     forward: getLocalizedString(FORWARD_TEXT, langs),

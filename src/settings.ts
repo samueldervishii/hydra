@@ -13,6 +13,8 @@ import {
 } from "./musicService";
 import { BUNDLED_THEMES, type ThemeName } from "./palettes";
 import { applyTheme, hasCustomTheme, resolveTheme } from "./theme";
+import { applySidebar } from "./sidebar";
+import { liveWebContents } from "./utils";
 import {
   enable as enableDiscord,
   disable as disableDiscord,
@@ -33,7 +35,12 @@ export type SettingsAction =
   | { type: "theme"; value: ThemeName }
   | { type: "zoomFactor"; value: ZoomFactor }
   | {
-      type: "closeToTray" | "notifications" | "discord" | "lastfmEnabled";
+      type:
+        | "closeToTray"
+        | "notifications"
+        | "discord"
+        | "lastfmEnabled"
+        | "sidebarCollapsed";
       value: boolean;
     }
   | { type: "lastfmConnect" | "lastfmDisconnect" };
@@ -49,6 +56,7 @@ export interface SettingsState {
   startPage: AnyStartPageId | "last";
   theme: ThemeName;
   zoomFactor: number;
+  sidebarCollapsed: boolean;
   closeToTray: boolean;
   notifications: boolean;
   discord: boolean;
@@ -149,6 +157,7 @@ export function getSettingsState(): SettingsState {
       : service.defaultStartPage,
     theme: resolveTheme(),
     zoomFactor: config.getZoomFactor(),
+    sidebarCollapsed: config.getSidebarCollapsed(),
     closeToTray: config.getCloseToTrayEnabled(),
     notifications: config.getNotificationsEnabled(),
     discord: config.getDiscordEnabled(),
@@ -232,6 +241,7 @@ function isSettingsAction(
     case "closeToTray":
     case "notifications":
     case "discord":
+    case "sidebarCollapsed":
       return typeof data.value === "boolean";
     case "lastfmEnabled":
       return (
@@ -246,6 +256,17 @@ function isSettingsAction(
     default:
       return false;
   }
+}
+
+/**
+ * Flip the sidebar for the navigation bar button and Ctrl+B. It goes through
+ * the same action as the Settings toggle, so all three stay in step.
+ */
+export function toggleSidebarCollapsed(): void {
+  applySettingsAction({
+    type: "sidebarCollapsed",
+    value: !config.getSidebarCollapsed(),
+  });
 }
 
 /** Validate an action against available choices, apply it and refresh the tray and Settings. */
@@ -270,6 +291,10 @@ export function applySettingsAction(action: unknown): SettingsState {
     case "zoomFactor":
       config.setZoomFactor(action.value);
       runtime.applyZoom(action.value);
+      break;
+    case "sidebarCollapsed":
+      config.setSidebarCollapsed(action.value);
+      void applySidebar(liveWebContents(runtime.getMainWindow()));
       break;
     case "closeToTray": {
       config.setCloseToTrayEnabled(action.value);

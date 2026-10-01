@@ -46,7 +46,12 @@ import {
   rebuildTrayMenu,
   setGetMainWindowCallback,
 } from "./tray";
-import { initSettingsActions, notifySettingsChanged } from "./settings";
+import {
+  initSettingsActions,
+  notifySettingsChanged,
+  toggleSidebarCollapsed,
+} from "./settings";
+import { applySidebar, initSidebarShortcut } from "./sidebar";
 import { handleSettingsNavigation, initSettingsWindow } from "./settingsWindow";
 import { initCommandBridge } from "./commandBridge";
 import { initControllerIPC, goBackIfPossible } from "./controllerIPC";
@@ -234,6 +239,7 @@ function routeItmsTarget(target: ItmsTarget | null): void {
 /** Local styles and scripts prepared for injection into service pages and authentication frames. */
 export interface Assets {
   STYLE_FIX_CSS: string;
+  SIDEBAR_CSS: string;
   authFrameScript: string;
   navBarScript: string;
   hookScript: string;
@@ -435,6 +441,10 @@ async function initSession(): Promise<Electron.Session> {
 function loadAssets(): Assets {
   const styleFixCssPath = getAssetPath("assets", "styleFix.css");
   const STYLE_FIX_CSS = fs.readFileSync(styleFixCssPath, "utf-8");
+  const SIDEBAR_CSS = fs.readFileSync(
+    getAssetPath("assets", "sidebar.css"),
+    "utf-8",
+  );
   const authStyleFixCssPath = getAssetPath("assets", "authStyleFix.css");
   const authCss = fs.readFileSync(authStyleFixCssPath, "utf-8");
   const authFramePath = getAssetPath("assets", "authFrameFix.js");
@@ -457,7 +467,13 @@ function loadAssets(): Assets {
     .replace("__SIDRA_SERVICE_HOSTS__", () =>
       JSON.stringify(allServices().map((service) => service.host)),
     );
-  return { STYLE_FIX_CSS, authFrameScript, navBarScript, hookScript };
+  return {
+    STYLE_FIX_CSS,
+    SIDEBAR_CSS,
+    authFrameScript,
+    navBarScript,
+    hookScript,
+  };
 }
 
 function createMainWindow(ses: Electron.Session): {
@@ -568,7 +584,16 @@ function setupWindowZoomAndNav(win: BrowserWindow): void {
       resetWedgeDetector();
       win.webContents.reload();
     },
+    "nav:sidebar": (event) => {
+      if (
+        event.sender !== win.webContents ||
+        event.senderFrame !== win.webContents.mainFrame
+      )
+        return;
+      toggleSidebarCollapsed();
+    },
   });
+  app.on("will-quit", initSidebarShortcut(win, toggleSidebarCollapsed));
 }
 
 // Contain injection failures in both full-load and in-page navigation handlers.
@@ -747,6 +772,10 @@ function setupContentHandlers(
     win.webContents.setZoomFactor(getZoomFactor());
     await win.webContents.insertCSS(assets.STYLE_FIX_CSS);
     mainLog.debug("CSS fixes injected");
+    // Inserted on every load and gated on an <html> attribute, so the toggle
+    // reaches the open page without inserting or removing CSS.
+    await win.webContents.insertCSS(assets.SIDEBAR_CSS);
+    await applySidebar(win.webContents);
     await injectThemeCss(win.webContents);
     await injectRendererScripts(win, assets, "on load");
   }

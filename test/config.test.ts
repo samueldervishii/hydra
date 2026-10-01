@@ -23,6 +23,8 @@ import {
   setPendingScrobbles,
   getTheme,
   setTheme,
+  getSidebarCollapsed,
+  setSidebarCollapsed,
   getLastPageUrl,
   setLastPageUrl,
   getStartPage,
@@ -92,6 +94,14 @@ describe("Config store type assertions", () => {
 
   it("setTheme accepts ThemeName", () => {
     expectTypeOf(setTheme).parameter(0).toEqualTypeOf<ThemeName>();
+  });
+
+  it("getSidebarCollapsed returns boolean", () => {
+    expectTypeOf(getSidebarCollapsed).returns.toEqualTypeOf<boolean>();
+  });
+
+  it("setSidebarCollapsed accepts boolean", () => {
+    expectTypeOf(setSidebarCollapsed).parameter(0).toEqualTypeOf<boolean>();
   });
 
   it("getLastPageUrl returns string | undefined", () => {
@@ -213,6 +223,15 @@ describe("Config store runtime behaviour", () => {
 
   it("getTheme defaults to apple-music", () => {
     expect(getTheme()).toBe("apple-music");
+  });
+
+  it("getSidebarCollapsed defaults to false", () => {
+    expect(getSidebarCollapsed()).toBe(false);
+  });
+
+  it("setSidebarCollapsed persists value", () => {
+    setSidebarCollapsed(true);
+    expect(getSidebarCollapsed()).toBe(true);
   });
 
   it("getStartPage defaults to new", () => {
