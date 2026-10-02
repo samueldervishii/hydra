@@ -20,11 +20,11 @@ Run `just --list` to see all available recipes. Key entry points: `just install`
 
 ## Releases
 
-This fork ships one artefact: the Linux amd64 `.deb`. Versions follow `1.1.2-hydra.N`. To release, set the new version on `main` and push:
+Hydra ships one artefact: the Linux amd64 `.deb`. Versions are plain `MAJOR.MINOR.PATCH` from 2.0.0, and the release workflow refuses any other form; the `1.1.2-hydra.N` tags and releases from before stay as they are. To release, set the new version on `main` and push:
 
 ```bash
-source .tools/env.sh && npm version 1.1.2-hydra.N --no-git-tag-version
-git commit -am "chore(release): set version to 1.1.2-hydra.N" && git push origin main
+source .tools/env.sh && npm version X.Y.Z --no-git-tag-version
+git commit -am "chore(release): set version to X.Y.Z" && git push origin main
 ```
 
 `.github/workflows/release-linux.yml` runs on every push to `main` that changes `package.json`. Its `check` job stops when a tag or a GitHub release named after the version already exists, so a dependency-only edit releases nothing. Otherwise it runs `npm ci`, `just test` and `just build`, packages the `.deb`, writes `SHA256SUMS`, creates the annotated tag on the pushed commit and publishes the release. Do not push the tag yourself: the workflow creates it, and an existing tag makes it skip the release. The macOS, Windows, snap, rpm and AppImage configuration left in `package.json` and `build/` is unused by this release process. The flake provides only the development shell; there is no Nix package.

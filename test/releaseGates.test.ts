@@ -217,6 +217,14 @@ it("releases the fork from main without secrets", () => {
   expect(releaseWorkflow).not.toMatch(/secrets\.|SIDRA_LASTFM|EVS_|GITHUB_REF_TYPE/);
 });
 
+// From 2.0.0 versions are plain MAJOR.MINOR.PATCH, so a pre-release suffix
+// such as the old -hydra.N must stop the release rather than tag it.
+it("releases plain MAJOR.MINOR.PATCH versions only", () => {
+  expect(releaseWorkflow).toContain(
+    'if [[ ! "$VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then',
+  );
+});
+
 it("pins castlabs-evs to an exact release", () => {
   expect(EVS_PACKAGE).toMatch(/^castlabs-evs==\d+\.\d+\.\d+$/);
 });
