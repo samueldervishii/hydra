@@ -51,7 +51,7 @@ function run(search: string) {
     createTextNode: (text: string) => node({ text }),
     createElement: (tag: string) => node({ tag, href: '', target: '', rel: '' }),
   };
-  vm.runInNewContext(script, { document, window: { location: { search } }, URLSearchParams });
+  vm.runInNewContext(script, { document, window: { location: { search } }, URLSearchParams, URL });
   return { document, elements };
 }
 
@@ -101,11 +101,40 @@ describe('About page display name', () => {
     }
   });
 
-  it('shows a name off github.com as plain text, never as a link', () => {
-    const { elements } = run('?' + new URLSearchParams({ ...ABOUT_QUERY, authorUrl: 'javascript:alert(1)' }));
+  it.each([
+    'javascript:alert(1)',
+    'data:text/html,<script>alert(1)</script>',
+    'http://github.com/samueldervishii',
+    'https://github.com.evil.example/samueldervishii',
+    'https://evil.example/https://github.com/samueldervishii',
+    'https://user:pass@github.com/samueldervishii',
+    'https://github.com:8443/samueldervishii',
+    'https://github.com/samueldervishii?tab=repositories',
+    'https://github.com/samueldervishii#top',
+    'https://github.com/samueldervishii/hydra',
+    'https://github.com/',
+    'not a url',
+    '',
+  ])('shows the name as plain text, never as a link, for %j', (authorUrl) => {
+    const { elements } = run('?' + new URLSearchParams({ ...ABOUT_QUERY, authorUrl }));
 
     expect(elements.get('copyright')?.children.some((child) => child.tag === 'a')).toBe(false);
     expect(rendered(elements.get('copyright'))).toBe('Hydra © 2026 Samuel Dervishi');
+  });
+
+  // The href is rebuilt from the fixed origin, so the query never sets the
+  // scheme or the host, and every child is a text node or that one link.
+  it('builds every line from text nodes and its own profile links only', () => {
+    const { elements } = run('?' + new URLSearchParams({ ...ABOUT_QUERY, author: '<img src=x onerror=alert(1)>' }));
+    const children = ['copyright', 'credit'].flatMap((id) => elements.get(id)?.children ?? []);
+
+    for (const child of children) {
+      expect(child.tag === 'a' || typeof child.text === 'string').toBe(true);
+    }
+    const link = elements.get('copyright')?.children.find((child) => child.tag === 'a');
+    expect(link?.textContent).toBe('<img src=x onerror=alert(1)>');
+    expect(link?.href).toBe('https://github.com/samueldervishii');
+    expect(html).not.toMatch(/appendChild\(part|innerHTML|insertAdjacentHTML|outerHTML|document\.write/);
   });
 
   it('uses the Hydra palette instead of the maroon and gold', () => {
