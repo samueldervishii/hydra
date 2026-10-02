@@ -113,13 +113,8 @@ validate:
     @ELECTRON_SKIP_BINARY_DOWNLOAD=1 node scripts/validate-build-config.cjs
     npm audit --omit=dev
 
-# Generate all app, logo, DMG, tray, menu and README assets
-generate-assets: _generate-branding _generate-dmg-background _generate-menu-icons _generate-readme-image
-
-# Compose the README image from the original screenshots
-[private]
-_generate-readme-image:
-    python3 scripts/generate-readme-image.py
+# Generate all app, logo, DMG, tray and menu assets
+generate-assets: _generate-branding _generate-dmg-background _generate-menu-icons
 
 # Generate the app icon, logo, splash image and tray icons from assets/branding
 [private]
