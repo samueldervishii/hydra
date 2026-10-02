@@ -17,34 +17,10 @@
         "aarch64-linux"
       ];
       forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
-
-      # Release packages exist only for these systems.
-      packageSystems = [
-        "x86_64-linux"
-        "aarch64-darwin"
-        "aarch64-linux"
-      ];
-      forPackageSystems = nixpkgs.lib.genAttrs packageSystems;
-
-      version = (nixpkgs.lib.importJSON ./package.json).version;
     in
     {
-      packages = forPackageSystems (
-        system:
-        let
-          pkgs = import nixpkgs { inherit system; };
-          sidra =
-            if pkgs.stdenv.hostPlatform.isDarwin then
-              pkgs.callPackage ./nix/darwin.nix { inherit version; }
-            else
-              pkgs.callPackage ./nix/linux.nix { inherit version; };
-        in
-        {
-          inherit sidra;
-          default = sidra;
-        }
-      );
-
+      # Development shell only. This fork ships the .deb from GitHub Releases
+      # and has no Nix package.
       devShells = forAllSystems (
         system:
         let
