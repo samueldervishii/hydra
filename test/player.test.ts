@@ -244,7 +244,7 @@ describe('Player event forwarding', () => {
 
     player.handleTimedMetadataDidChange(payload);
 
-    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ ...payload, transition: 'initial' }));
+    expect(listener).toHaveBeenCalledWith(payload);
   });
 
   it('emits repeatModeDidChange with mode', () => {
@@ -579,13 +579,13 @@ describe('Player handle* payload validation', () => {
       expect(listener).toHaveBeenCalledTimes(1);
       vi.advanceTimersByTime(1);
       expect(listener).toHaveBeenCalledTimes(2);
-      expect(listener.mock.calls[1][0]).toEqual(expect.objectContaining({ name: 'D', transition: 'clean' }));
+      expect(listener.mock.calls[1][0]).toEqual(expect.objectContaining({ name: 'D' }));
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('derives an ambiguous transition after incomplete direct IPC metadata', () => {
+  it('delivers the same song again after incomplete direct IPC metadata', () => {
     vi.useFakeTimers();
     try {
       const player = new Player();
@@ -599,7 +599,7 @@ describe('Player handle* payload validation', () => {
       player.handleTimedMetadataDidChange(timedPayload());
       vi.advanceTimersByTime(1500);
 
-      expect(listener.mock.calls.map(([payload]) => payload.transition)).toEqual(['initial', 'ambiguous']);
+      expect(listener).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }
@@ -619,13 +619,13 @@ describe('Player handle* payload validation', () => {
       vi.advanceTimersByTime(1500);
 
       expect(listener).toHaveBeenCalledTimes(1);
-      expect(listener).toHaveBeenCalledWith(expect.objectContaining({ name: 'A', transition: 'initial' }));
+      expect(listener).toHaveBeenCalledWith(expect.objectContaining({ name: 'A' }));
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('cancels queued metadata across services and starts the next station as initial', () => {
+  it('cancels queued metadata across services and delivers the next station afresh', () => {
     vi.useFakeTimers();
     try {
       const player = new Player();
@@ -641,8 +641,7 @@ describe('Player handle* payload validation', () => {
       player.handleTimedMetadataDidChange(timedPayload({ name: 'C' }));
       vi.advanceTimersByTime(1500);
 
-      expect(listener.mock.calls.map(([payload]) => [payload.name, payload.transition]))
-        .toEqual([['A', 'initial'], ['C', 'initial']]);
+      expect(listener.mock.calls.map(([payload]) => payload.name)).toEqual(['A', 'C']);
     } finally {
       vi.useRealTimers();
     }
@@ -672,10 +671,8 @@ describe('Player handle* payload validation', () => {
     }
   });
 
-  it('keeps the first receipt time when a pending identity gains catalogue data', () => {
-    const startMs = new Date('2026-01-01T00:00:00Z').getTime();
+  it('delivers the catalogue data a pending identity gains', () => {
     vi.useFakeTimers();
-    vi.setSystemTime(startMs);
     try {
       const player = new Player();
       const listener = vi.fn();
@@ -695,7 +692,6 @@ describe('Player handle* payload validation', () => {
       expect(listener.mock.calls[1][0]).toEqual(expect.objectContaining({
         name: 'B',
         trackId: '123',
-        observedAtMs: startMs + 100,
       }));
     } finally {
       vi.useRealTimers();

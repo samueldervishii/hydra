@@ -1420,7 +1420,6 @@ describe("MPRIS radio song metadata", () => {
     albumName: "Album",
     trackId: "123",
     playParams: { kind: "song", catalogId: "123" },
-    transition: "clean",
   };
 
   beforeEach(() => {
@@ -1473,7 +1472,6 @@ describe("MPRIS radio song metadata", () => {
     player.emitTimedMetadata({
       name: "Next song",
       artistName: "Next artist",
-      transition: "clean",
     });
     expect(iface.Metadata["xesam:title"].value).toBe("Next song");
     expect(iface.Metadata["xesam:album"]).toBeUndefined();
@@ -1488,22 +1486,17 @@ describe("MPRIS radio song metadata", () => {
     player.emitTimedMetadata({
       name: "Next song",
       artistName: "Next artist",
-      transition: "clean",
     });
     expect(iface.Metadata["xesam:url"]).toBeUndefined();
   });
 
-  it("deduplicates unchanged display fields regardless of transition and receipt time", () => {
+  it("deduplicates unchanged display fields when the song is delivered again", () => {
     initPlayerInterface();
     player.emitNowPlaying(station);
     player.emitTimedMetadata(song);
     vi.advanceTimersByTime(250);
     emissions = [];
-    player.emitTimedMetadata({
-      ...song,
-      transition: "ambiguous",
-      observedAtMs: Date.now(),
-    });
+    player.emitTimedMetadata({ ...song });
     vi.advanceTimersByTime(250);
     expect(emissions).toEqual([]);
   });
@@ -1562,7 +1555,6 @@ describe("MPRIS radio song metadata", () => {
     player.emitTimedMetadata({
       name: "Newest song",
       artistName: "Newest artist",
-      transition: "clean",
     });
     resolveArtwork("/tmp/station.jpg");
     await Promise.resolve();

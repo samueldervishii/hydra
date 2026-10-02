@@ -169,9 +169,6 @@
       "icon": "build/icon.icns",
       "category": "public.app-category.music",
       "darkModeSupport": true,
-      "extendInfo": {
-        "NSUserNotificationAlertStyle": "alert"
-      },
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",

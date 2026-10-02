@@ -77,7 +77,6 @@ vi.mock("electron", () => ({
     setImage = vi.fn();
     on = vi.fn();
   },
-  Notification: Object.assign(vi.fn(), { removeGroup: vi.fn() }),
   dialog: { showMessageBox: vi.fn() },
   net: { fetch: vi.fn() },
   contextBridge: { exposeInMainWorld: vi.fn() },

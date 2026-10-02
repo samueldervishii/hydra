@@ -37,9 +37,6 @@ export interface NowPlayingPayload {
   sourceHost?: string;
 }
 
-/** Classification of a delivered radio song relative to the previous identity. */
-export type RadioMetadataTransition = "initial" | "clean" | "ambiguous";
-
 /** Catalogue identity for a song announced within a radio stream. */
 export interface TimedPlayParams {
   catalogId: string;
@@ -55,12 +52,8 @@ export interface TimedMetadataInput {
   playParams?: TimedPlayParams;
 }
 
-/** Validated radio metadata with the main process's transition classification. */
-export interface TimedMetadataPayload extends TimedMetadataInput {
-  transition: RadioMetadataTransition;
-  /** Main-process receipt time for the delivered candidate. */
-  observedAtMs?: number;
-}
+/** Validated radio metadata delivered to the integrations. */
+export type TimedMetadataPayload = TimedMetadataInput;
 
 interface TimedMetadataIdentity {
   catalogId: string | null;
@@ -406,10 +399,7 @@ export class Player extends TypedEmitter<PlayerEvents> {
   private timedMetadataIdentity: TimedMetadataIdentity | null = null;
   private timedMetadataInterrupted = false;
   private lastTimedMetadataEmitAt: number | null = null;
-  private pendingTimedMetadata: {
-    input: TimedMetadataInput;
-    observedAtMs: number;
-  } | null = null;
+  private pendingTimedMetadata: TimedMetadataInput | null = null;
   private pendingTimedMetadataInterrupted = false;
   private timedMetadataTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -422,10 +412,7 @@ export class Player extends TypedEmitter<PlayerEvents> {
     this.timedMetadataInterrupted = false;
   }
 
-  private deliverTimedMetadata(
-    input: TimedMetadataInput,
-    observedAtMs: number,
-  ): boolean {
+  private deliverTimedMetadata(input: TimedMetadataInput): boolean {
     if (this.pendingTimedMetadataInterrupted)
       this.timedMetadataInterrupted = true;
     this.pendingTimedMetadataInterrupted = false;
@@ -448,12 +435,10 @@ export class Player extends TypedEmitter<PlayerEvents> {
       return false;
     }
 
-    const transition: RadioMetadataTransition =
-      previous === null ? "initial" : repeated ? "ambiguous" : "clean";
     this.timedMetadataIdentity = identity;
     this.timedMetadataInterrupted = false;
     playerLog.debug("timedMetadataDidChange: accepted");
-    this.emit("timedMetadataDidChange", { ...input, transition, observedAtMs });
+    this.emit("timedMetadataDidChange", { ...input });
     return true;
   }
 
@@ -464,29 +449,19 @@ export class Player extends TypedEmitter<PlayerEvents> {
         ? 0
         : TIMED_METADATA_INTERVAL_MS - (now - this.lastTimedMetadataEmitAt);
     if (remaining <= 0) {
-      if (this.deliverTimedMetadata(input, now))
+      if (this.deliverTimedMetadata(input))
         this.lastTimedMetadataEmitAt = now;
       return;
     }
 
-    const pending = this.pendingTimedMetadata;
-    const samePending =
-      pending !== null &&
-      (pending.input.trackId && input.trackId
-        ? pending.input.trackId === input.trackId
-        : pending.input.artistName === input.artistName &&
-          pending.input.name === input.name);
-    this.pendingTimedMetadata = {
-      input,
-      observedAtMs: samePending ? pending.observedAtMs : now,
-    };
+    this.pendingTimedMetadata = input;
     if (this.timedMetadataTimer) return;
     this.timedMetadataTimer = setTimeout(() => {
       this.timedMetadataTimer = null;
       const pending = this.pendingTimedMetadata;
       this.pendingTimedMetadata = null;
       if (!pending || !this._isRadioStation) return;
-      if (this.deliverTimedMetadata(pending.input, pending.observedAtMs)) {
+      if (this.deliverTimedMetadata(pending)) {
         this.lastTimedMetadataEmitAt = Date.now();
       }
     }, remaining);
@@ -647,7 +622,7 @@ export class Player extends TypedEmitter<PlayerEvents> {
     this.emit("nowPlayingItemDidChange", sanitised);
   }
 
-  /** Validate radio song candidates and coalesce them before classifying transitions. */
+  /** Validate radio song candidates and coalesce them before comparing with the last delivered song. */
   handleTimedMetadataDidChange(payload: unknown): void {
     if (!this._isRadioStation) {
       playerLog.warn("timedMetadataDidChange: ignored outside radio playback");
