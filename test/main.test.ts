@@ -50,6 +50,9 @@ const bootstrap = vi.hoisted(() => {
     restore: vi.fn(),
     isVisible: vi.fn(() => true),
     isMinimized: vi.fn(() => false),
+    setMinimumSize: vi.fn(),
+    getSize: vi.fn(() => [1280, 800]),
+    setSize: vi.fn(),
   };
 
   const splashWindow = {
@@ -713,6 +716,25 @@ describe("main bootstrap", () => {
       "https://music.apple.com/gb/new",
     );
     expect(notifySettingsChanged).toHaveBeenCalledTimes(2);
+  });
+
+  // Below 484 CSS pixels Apple swaps the sidebar for a top bar, where the
+  // button row covered its Sign In button; zoom moves that point outwards.
+  it("keeps the window wide enough for Apple's desktop layout at every zoom", async () => {
+    const { initSettingsActions } = await import("../src/settings");
+    await startMain();
+    expect(bootstrap.mainWindow.setMinimumSize).toHaveBeenCalledWith(484, 0);
+    expect(bootstrap.mainWindow.setSize).not.toHaveBeenCalled();
+    const { applyZoom } = vi.mocked(initSettingsActions).mock.calls[0][0];
+    // A raised minimum leaves a narrower window as it is, so it is widened.
+    bootstrap.mainWindow.getSize.mockReturnValueOnce([500, 700]);
+    applyZoom(1.25);
+    expect(bootstrap.webContents.setZoomFactor).toHaveBeenLastCalledWith(1.25);
+    expect(bootstrap.mainWindow.setMinimumSize).toHaveBeenLastCalledWith(605, 0);
+    expect(bootstrap.mainWindow.setSize).toHaveBeenCalledWith(605, 700);
+    bootstrap.mainWindow.isDestroyed.mockReturnValue(true);
+    applyZoom(2);
+    expect(bootstrap.mainWindow.setMinimumSize).toHaveBeenCalledTimes(2);
   });
 
   it("resets controller state only for main-frame navigation", async () => {

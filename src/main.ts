@@ -85,6 +85,10 @@ const SPLASH_WIDTH_PX = 300;
 const SPLASH_HEIGHT_PX = 350;
 const MAIN_WINDOW_WIDTH_PX = 1280;
 const MAIN_WINDOW_HEIGHT_PX = 800;
+// Below this page width, in CSS pixels, Apple swaps the sidebar for a top bar,
+// where Sidra's button row covers Apple's Sign In button and the sidebar toggle
+// has nothing to collapse. Matches the breakpoint in assets/sidebar.css.
+const DESKTOP_LAYOUT_MIN_WIDTH_PX = 484;
 const PRELOAD_ERROR_NAMES = new Set([
   "AggregateError",
   "Error",
@@ -577,8 +581,25 @@ function setupSessionHeaders(ses: Electron.Session): void {
   );
 }
 
+/**
+ * Zoom the page and keep the window wide enough for Apple's desktop layout at
+ * that zoom: a zoomed page reaches the breakpoint at a wider window. A raised
+ * minimum does not resize the window by itself, so a narrower one is widened.
+ */
+function applyMainWindowZoom(
+  win: BrowserWindow | null,
+  factor: number,
+): void {
+  liveWebContents(win)?.setZoomFactor(factor);
+  if (!win || win.isDestroyed()) return;
+  const minWidth = Math.ceil(DESKTOP_LAYOUT_MIN_WIDTH_PX * factor);
+  win.setMinimumSize(minWidth, 0);
+  const [width, height] = win.getSize();
+  if (width < minWidth) win.setSize(minWidth, height);
+}
+
 function setupWindowZoomAndNav(win: BrowserWindow): void {
-  win.webContents.setZoomFactor(getZoomFactor());
+  applyMainWindowZoom(win, getZoomFactor());
   const onSettings: SendListener = (event) =>
     handleSettingsNavigation(event, win);
   win.once("closed", () => ipcMain.removeListener("nav:settings", onSettings));
@@ -924,7 +945,7 @@ if (gotLock) {
       });
       const teardownSettingsActions = initSettingsActions({
         getMainWindow: () => win,
-        applyZoom: (factor) => liveWebContents(win)?.setZoomFactor(factor),
+        applyZoom: (factor) => applyMainWindowZoom(win, factor),
         switchService,
         refreshTray: () => {
           if (appTray) rebuildTrayMenu(appTray);
