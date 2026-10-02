@@ -2,10 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
-import { extractInlineScript } from './mocks/inlineScript';
 
 const html = fs.readFileSync(path.join(__dirname, '../assets/about.html'), 'utf8');
-const script = extractInlineScript(html);
+const script = fs.readFileSync(path.join(__dirname, '../assets/about.js'), 'utf8');
 
 interface StubNode {
   text?: string;
@@ -76,7 +75,7 @@ describe('About page display name', () => {
     expect(document.title).toBe(`About ${name}`);
     expect(elements.get('name')?.textContent).toBe(name);
     expect(elements.get('icon')?.alt).toBe(name);
-    expect(html).not.toMatch(/innerHTML|insertAdjacentHTML/);
+    expect(script).not.toMatch(/innerHTML|insertAdjacentHTML/);
   });
 
   it('shows the fork notice and the Sidra credit on separate lines', () => {
@@ -134,7 +133,26 @@ describe('About page display name', () => {
     const link = elements.get('copyright')?.children.find((child) => child.tag === 'a');
     expect(link?.textContent).toBe('<img src=x onerror=alert(1)>');
     expect(link?.href).toBe('https://github.com/samueldervishii');
-    expect(html).not.toMatch(/appendChild\(part|innerHTML|insertAdjacentHTML|outerHTML|document\.write/);
+    expect(script).not.toMatch(/appendChild\(part|innerHTML|insertAdjacentHTML|outerHTML|document\.write/);
+  });
+
+  // With the script in its own file the page allows no inline script at all,
+  // so markup that ever reached the page could not run code.
+  it('runs only its own script file under a CSP without unsafe-inline scripts', () => {
+    const csp = /http-equiv="Content-Security-Policy" content="([^"]+)"/.exec(html)?.[1] ?? '';
+    const directives = Object.fromEntries(
+      csp.split(';').map((d) => d.trim().split(/\s+/)).map(([name, ...values]) => [name, values]),
+    );
+    expect(directives['default-src']).toEqual(["'none'"]);
+    expect(directives['script-src']).toEqual(["'self'"]);
+    expect(directives['base-uri']).toEqual(["'none'"]);
+    expect(directives['form-action']).toEqual(["'none'"]);
+    expect(html.match(/<script[^>]*>/g)).toEqual(['<script src="about.js">']);
+    expect(html).not.toMatch(/\son[a-z]+=/i);
+    const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8')) as {
+      build: { asarUnpack: string[] };
+    };
+    expect(pkg.build.asarUnpack).toEqual(expect.arrayContaining(['assets/about.html', 'assets/about.js']));
   });
 
   it('uses the Hydra palette instead of the maroon and gold', () => {

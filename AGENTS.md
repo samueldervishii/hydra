@@ -230,6 +230,8 @@ Active Apple Music userstyle repositories provide reliable cross-referenced vari
 
 A CSS file read via `fs.readFileSync` at runtime must be covered by an `asarUnpack` entry in `package.json`, or the packaged build cannot read it. An uncovered file fails at runtime and never at build time, so nothing catches it before a user does. `asarUnpack` takes glob patterns as well as literal paths; the list names most files one by one and uses `assets/icons/**` for the icons.
 
+The About page's script is `assets/about.js`, loaded with `<script src>` so the page's CSP can be `script-src 'self'` with no `'unsafe-inline'`; it needs its `asarUnpack` entry for the same reason as the stylesheet below. It builds every line from text nodes and `textContent`, and an author link only from `githubProfileUrl()`, which accepts `https://github.com/<user>` alone and rebuilds the `href` from that fixed origin. Do not move the script back inline or let a query value reach a node or attribute any other way.
+
 A file a Hydra window pulls in with a `<link>` needs an entry too. `assets/windowChrome.css` holds the chrome `splash.html` and `about.html` share, and both load it as a sibling of the HTML file, which `getAssetPath()` resolved inside `app.asar.unpacked`. Both pages therefore carry `style-src 'self' 'unsafe-inline'` in their CSP; with `'self'` dropped the stylesheet is blocked and each window renders unstyled.
 
 ## Architecture notes

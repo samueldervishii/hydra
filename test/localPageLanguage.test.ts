@@ -5,8 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { extractInlineScript } from './mocks/inlineScript';
 
 describe.each(['about', 'splash'])('%s page language', page => {
-  const html = fs.readFileSync(path.join(__dirname, `../assets/${page}.html`), 'utf8');
-  const script = extractInlineScript(html);
+  // The About page loads its script from about.js; the splash keeps it inline.
+  const script =
+    page === 'about'
+      ? fs.readFileSync(path.join(__dirname, '../assets/about.js'), 'utf8')
+      : extractInlineScript(fs.readFileSync(path.join(__dirname, `../assets/${page}.html`), 'utf8'));
 
   it.each([
     ['fr', 'ltr'],
@@ -25,7 +28,7 @@ describe.each(['about', 'splash'])('%s page language', page => {
       createElement: () => ({}),
     };
     const search = new URLSearchParams({ lang, text: 'Chargement...' }).toString();
-    vm.runInNewContext(script, { document, window: { location: { search } }, URLSearchParams });
+    vm.runInNewContext(script, { document, window: { location: { search } }, URLSearchParams, URL });
     expect(document.documentElement).toEqual({ lang: lang || 'en', dir });
     if (page === 'splash') {
       expect(document.title).toBe('Chargement...');
