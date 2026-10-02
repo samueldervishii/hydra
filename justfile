@@ -154,22 +154,22 @@ _generate-menu-icons:
 clean:
     rm -rf dist/
 
-# The cache directory is lowercase because src/artwork.ts builds it from app.getName().toLowerCase()
-# Clear all Sidra user data and caches
+# The cache directory is lowercase because src/artwork.ts names it INTERNAL_NAME from src/identity.ts
+# Clear all Hydra user data and caches
 [macos]
 clear:
     rm -rf ~/Library/Application\ Support/Sidra
     rm -rf ~/Library/Caches/sidra
-    rm -rf ~/Library/Logs/Sidra
-    @echo "Sidra data cleared"
+    rm -rf ~/Library/Logs/Hydra
+    @echo "Hydra data cleared"
 
-# The cache directory is lowercase because src/artwork.ts builds it from app.getName().toLowerCase()
-# Clear all Sidra user data and caches
+# The cache directory is lowercase because src/artwork.ts names it INTERNAL_NAME from src/identity.ts
+# Clear all Hydra user data and caches
 [linux]
 clear:
     rm -rf ~/.config/Sidra
     rm -rf ~/.cache/sidra
-    @echo "Sidra data cleared"
+    @echo "Hydra data cleared"
 
 # This recipe makes a fast local package, not a release build. Releases come from
 # .github/workflows/release-linux.yml when main changes the version in package.json.
@@ -197,5 +197,5 @@ logs:
 # Show log file location and tail recent entries
 [macos]
 logs:
-    @echo "Log file: ~/Library/Logs/Sidra/main.log"
-    @tail -50 ~/Library/Logs/Sidra/main.log 2>/dev/null || echo "No log file yet. Run the app first."
+    @echo "Log file: ~/Library/Logs/Hydra/main.log"
+    @tail -50 ~/Library/Logs/Hydra/main.log 2>/dev/null || echo "No log file yet. Run the app first."

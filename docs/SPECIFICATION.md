@@ -111,6 +111,12 @@ sidra/
 │   ├── serviceSwitch.ts           - switchService() and routeToMusicService(); the one service-switch sequence
 │   ├── contentReady.ts            - CONTENT_READY_SELECTOR and contentReadyProbeScript()
 │   ├── itms.ts                    - pure itms:// URL parser and argv extraction
+│   ├── identity.ts                - INTERNAL_NAME ("sidra"), the userData folder name and the About credits
+│   ├── userDataPath.ts            - pins userData to ~/.config/Sidra; first import in main.ts
+│   ├── rootAttribute.ts           - setRootAttribute(): toggles a gating attribute on the page's <html>
+│   ├── performanceMode.ts         - applyPerformanceMode(): mirrors the setting onto <html>
+│   ├── sidebar.ts                 - applySidebar(): mirrors the collapsed-sidebar setting onto <html>
+│   ├── shortcuts.ts               - Ctrl+B, Alt+Left/Right, Ctrl+R and F5 on the main window
 │   ├── types/
 │   │   ├── electron.d.ts          - module augmentations for CastLabs type gaps
 │   │   └── hook.d.ts              - hook-preload contract: SidraHook, AMWrapperBridge, SendChannel, ReceiveChannel, SidraCommandMessage, Window augmentations
@@ -139,7 +145,9 @@ sidra/
 │   │                                 electron-builder's `asarUnpack`: it is read with
 │   │                                 readFileSync at runtime and will crash AppImage
 │   │                                 builds if packed inside the asar archive
-│   ├── navigationBar.js           - Injected post-load; adds back/forward/reload buttons to sidebar.
+│   ├── navigationBar.js           - Injected post-load; adds the sidebar toggle, Back, Forward, Reload
+│   │                                 and Settings row above the logo, and the Home, Search and All
+│   │                                 Playlists buttons the collapsed strip shows.
 │   │                                 Its `__SIDRA_NAV_LABELS__` placeholder is replaced with the
 │   │                                 localised aria-labels when src/main.ts reads the file
 │   ├── authFrameFix.js            - Injected into Apple's sign-in iframe; hides the passkey and
@@ -153,23 +161,26 @@ sidra/
 │   │                                 background, the body layout and the icon rule. Both pages
 │   │                                 load it with a <link>, so both carry `style-src 'self'` in
 │   │                                 their CSP. Must be listed in `asarUnpack`
-│   ├── sidra-logo.png             - Product logo used in About window
+│   ├── hydra-logo.png             - Product logo used in About window
+│   ├── hydra-splash.png           - Artwork shown on the splash screen
+│   ├── performanceMode.css        - Performance mode; every rule gated on html[data-sidra-performance]
+│   ├── sidebar.css                - Collapsed sidebar; every rule gated on html[data-sidra-sidebar-collapsed]
 │   ├── locales/
 │   │   ├── loading.json           - 1 translation record: LOADING_TEXT
-│   │   ├── tray.json              - 37 translation records: tray menu, dock, Windows taskbar
+│   │   ├── tray.json              - 35 translation records: tray menu, dock, Windows taskbar
 │   │   │                             and navigation bar labels
-│   │   └── about.json             - 4 translation records: about window labels
+│   │   └── about.json             - 3 translation records: about window labels
 │   ├── styleFix.css               - CSS overrides injected via webContents.insertCSS()
 │   │                                 Hides "Get the app" and "Open in Music" banners
 │   │                                 that Apple shows to push users toward native apps
 │   ├── authStyleFix.css           - CSS injected into Apple auth iframes to hide
 │   │                                 unsupported passkey and "Sign in with iPhone" options
 │   └── icons/
-│       ├── sidraTemplate.png      - macOS tray (template image)
-│       ├── sidra-tray.png         - Windows tray
-│       ├── sidra-tray-outline.png - GNOME tray (outlined icon)
-│       ├── sidra-tray-dark.png    - Other Linux trays (dark theme)
-│       ├── sidra-tray-light.png   - Other Linux trays (light theme)
+│       ├── hydraTemplate.png      - macOS tray (template image)
+│       ├── hydra-tray.png         - Windows tray
+│       ├── hydra-tray-outline.png - GNOME tray (outlined icon)
+│       ├── hydra-tray-dark.png    - Other Linux trays (dark theme)
+│       ├── hydra-tray-light.png   - Other Linux trays (light theme)
 │       └── tray/menu/
 │           ├── dark/              - 18px dark-theme menu item PNGs
 │           └── light/             - 18px light-theme menu item PNGs
@@ -489,7 +500,7 @@ if (process.platform === 'win32') {
 }
 ```
 
-The GSMTC overlay (media flyout on Windows 11) will show "Sidra" as the controlling app.
+The GSMTC overlay (media flyout on Windows 11) will show "Hydra" as the controlling app.
 
 ### Windows: Taskbar Thumbnail Toolbar and Overlay Icon
 
@@ -887,10 +898,10 @@ The context menu rebuilds on track change, playback state change, and volume cha
 
 | Platform | Icon | Notes |
 |----------|------|-------|
-| macOS | `sidraTemplate.png` | Template image; OS handles dark/light automatically |
-| Windows | `sidra-tray.png` | Static icon |
-| Linux (GNOME) | `sidra-tray-outline.png` | Fixed white icon with a charcoal outline for light and dark panels, independent of the app theme |
-| Linux (other desktops) | `sidra-tray-dark.png` or `sidra-tray-light.png` | Switches on `nativeTheme.shouldUseDarkColors` and updates when the theme changes |
+| macOS | `hydraTemplate.png` | Template image; OS handles dark/light automatically |
+| Windows | `hydra-tray.png` | Static icon |
+| Linux (GNOME) | `hydra-tray-outline.png` | Fixed white icon with a charcoal outline for light and dark panels, independent of the app theme |
+| Linux (other desktops) | `hydra-tray-dark.png` or `hydra-tray-light.png` | Switches on `nativeTheme.shouldUseDarkColors` and updates when the theme changes |
 
 GNOME detection matches a complete `GNOME` token in the colon-separated `XDG_CURRENT_DESKTOP` value, regardless of case. For example, `ubuntu:GNOME` matches. Missing or unrecognised values retain the theme-selected Linux icons.
 
@@ -993,12 +1004,12 @@ When `getShareUrl()` returns `undefined`, the Share item is omitted from the men
 | Context | Menu |
 |---------|------|
 | `SIDRA_DEVTOOLS=1` | View menu with "Toggle Developer Tools" |
-| macOS (normal) | Single app-name menu: "About Sidra" + separator + "Quit Sidra" (Cmd+Q via `role: 'quit'`) |
+| macOS (normal) | Single app-name menu: "About Hydra" + separator + "Quit Hydra" (Cmd+Q via `role: 'quit'`) |
 | Linux / Windows | `Menu.setApplicationMenu(null)` - no menu bar |
 
 The About item uses `getMenuIcon('about')`, which resolves to the `info.circle` SF Symbol on macOS Tahoe or later (undefined on earlier versions, in which case the icon property is omitted entirely).
 
-The top-level `productName: "Sidra"` in `package.json` is the single source for the product display name. electron-builder inherits this field without a `build.productName` override. Runtime labels use `app.getName()` directly or through `getProductInfo().productName`. Technical identifiers, URLs and storage names remain unchanged.
+The top-level `productName: "Hydra"` in `package.json` is the single source for the product display name. electron-builder inherits this field without a `build.productName` override. Runtime labels use `app.getName()` directly or through `getProductInfo().productName`. Technical identifiers, URLs and storage names remain `sidra`: they come from `INTERNAL_NAME` in `src/identity.ts`, and `src/userDataPath.ts` keeps userData at `~/.config/Sidra`.
 
 `showAboutWindow()` is exported from `src/aboutWindow.ts` and imported by `src/main.ts` for use in the app menu. Both the About window and the splash window set `fullscreenable: false` and `fullscreen: false` to prevent them entering full-screen mode.
 
@@ -1027,7 +1038,7 @@ The top-level `productName: "Sidra"` in `package.json` is the single source for 
 
 | Feature | Implementation | Notes |
 |---|---|---|
-| macOS Now Playing | Chromium mediaSession → MPNowPlayingInfoCenter | Bundle name "Sidra" from productName |
+| macOS Now Playing | Chromium mediaSession → MPNowPlayingInfoCenter | Bundle name "Hydra" from productName |
 | Windows GSMTC | Chromium mediaSession → GSMTC | `app.setAppUserModelId('com.wimpysworld.sidra')` |
 | Explicit `navigator.mediaSession` updates | musicKitHook.js | Supplement Apple's own updates |
 | System tray | Electron `Tray` | Prev/play-pause/next + show/hide |
