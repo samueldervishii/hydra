@@ -158,8 +158,8 @@ clean:
 # Clear all Hydra user data and caches
 [macos]
 clear:
-    rm -rf ~/Library/Application\ Support/Sidra
-    rm -rf ~/Library/Caches/sidra
+    rm -rf ~/Library/Application\ Support/Hydra
+    rm -rf ~/Library/Caches/hydra
     rm -rf ~/Library/Logs/Hydra
     @echo "Hydra data cleared"
 
@@ -167,8 +167,8 @@ clear:
 # Clear all Hydra user data and caches
 [linux]
 clear:
-    rm -rf ~/.config/Sidra
-    rm -rf ~/.cache/sidra
+    rm -rf ~/.config/Hydra
+    rm -rf ~/.cache/hydra
     @echo "Hydra data cleared"
 
 # This recipe makes a fast local package, not a release build. Releases come from
@@ -191,8 +191,8 @@ package: build
 # Show log file location and tail recent entries
 [linux]
 logs:
-    @echo "Log file: ~/.config/Sidra/logs/main.log"
-    @tail -50 ~/.config/Sidra/logs/main.log 2>/dev/null || echo "No log file yet. Run the app first."
+    @echo "Log file: ~/.config/Hydra/logs/main.log"
+    @tail -50 ~/.config/Hydra/logs/main.log 2>/dev/null || echo "No log file yet. Run the app first."
 
 # Show log file location and tail recent entries
 [macos]

@@ -1,5 +1,5 @@
-// Must load before anything that reads userData. See src/userDataPath.ts.
-import "./userDataPath";
+// Must load before src/config.ts opens its store. See src/settingsMigration.ts.
+import { reportSettingsMigration } from "./settingsMigration";
 import {
   app,
   BrowserWindow,
@@ -110,6 +110,7 @@ log.transports.console.level = app.isPackaged ? false : "debug";
 log.transports.file.format =
   "[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}]{scope} {text}";
 log.transports.console.format = "{h}:{i}:{s}.{ms} [{level}]{scope} {text}";
+reportSettingsMigration();
 
 // Override log levels via environment variable (used by `just run-debug`).
 type LogLevel = "error" | "warn" | "info" | "debug" | "silly";

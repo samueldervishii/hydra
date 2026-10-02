@@ -36,8 +36,9 @@ export const ORIGINAL_AUTHOR = "Martin Wimpress";
 export const ORIGINAL_AUTHOR_URL = "https://github.com/flexiondotorg";
 
 /**
- * The folder under the platform's app data directory that holds settings,
- * the Apple Music sign-in and the logs (~/.config/Sidra on Linux). Electron
- * names it after productName, so src/userDataPath.ts pins it here instead.
+ * Sidra's folder under the platform's app data directory (~/.config/Sidra on
+ * Linux), which Hydra 1.x shared. Hydra keeps its own, named after
+ * productName, and src/settingsMigration.ts copies the settings from this one
+ * on the first start.
  */
-export const USER_DATA_DIR_NAME = "Sidra";
+export const LEGACY_USER_DATA_DIR_NAME = "Sidra";

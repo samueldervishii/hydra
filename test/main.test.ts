@@ -196,6 +196,8 @@ vi.mock("../src/player", () => ({
   },
 }));
 
+// Covered by test/settingsMigration.test.ts; here it would run against the fs stub.
+vi.mock("../src/settingsMigration", () => ({ reportSettingsMigration: vi.fn() }));
 vi.mock("../src/storefront", () => ({
   buildAppleMusicURL: vi.fn(() => "https://music.apple.com/gb/new"),
   buildItmsRouteURL: vi.fn(),
