@@ -31,6 +31,7 @@ const releaseWorkflow = readFileSync(
   "utf8",
 );
 const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
+  version: string;
   build: {
     afterPack?: string;
     afterSign?: string;
@@ -223,6 +224,10 @@ it("releases plain MAJOR.MINOR.PATCH versions only", () => {
   expect(releaseWorkflow).toContain(
     'if [[ ! "$VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then',
   );
+});
+
+it("carries a plain version the workflow will release", () => {
+  expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+$/);
 });
 
 it("pins castlabs-evs to an exact release", () => {
