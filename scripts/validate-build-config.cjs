@@ -131,6 +131,41 @@ function main() {
   }
   console.log("  \u2713 .deb replaces the sidra package: Conflicts, Replaces, Provides");
 
+  // The /usr/bin link is unregistered from prerm, while its target still
+  // exists; from postrm, after dpkg has deleted the files, update-alternatives
+  // warned that the link group was dangling. fpm copies the prerm untemplated,
+  // so its names must match this build's executable and install folder.
+  const prermPath = "build/linux/before-remove.sh";
+  const prermAt = fpm.indexOf("--before-remove");
+  if (prermAt === -1 || fpm[prermAt + 1] !== prermPath) {
+    throw new Error(`build.deb.fpm must pass --before-remove ${prermPath}`);
+  }
+  const executable = config.linux?.executableName;
+  const installDir = `/opt/${pkg.productName}`;
+  const prerm = fs.readFileSync(path.join(__dirname, "..", prermPath), "utf8");
+  for (const command of [
+    `update-alternatives --remove '${executable}' '${installDir}/${executable}'`,
+    `rm -f '/usr/bin/${executable}'`,
+  ]) {
+    if (!prerm.includes(command)) {
+      throw new Error(`${prermPath} must run: ${command}`);
+    }
+  }
+  const postrmPath = config.deb?.afterRemove;
+  const postrm =
+    typeof postrmPath === "string"
+      ? fs.readFileSync(path.join(__dirname, "..", postrmPath), "utf8")
+      : "";
+  const postrmCommands = postrm
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("#"));
+  if (!postrm || postrmCommands.some((line) => line.includes("update-alternatives"))) {
+    throw new Error(
+      "build.deb.afterRemove must name a postrm that leaves update-alternatives to the prerm",
+    );
+  }
+  console.log(`  \u2713 .deb unregisters /usr/bin/${executable} from prerm, not postrm`);
+
   // Pin the D-Bus commands for launcher controls, not their labels.
   // Match the MPRIS integration, which names its bus after INTERNAL_NAME in
   // src/identity.ts, the package name, so a display rename leaves it alone.

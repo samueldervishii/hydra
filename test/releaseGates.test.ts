@@ -255,3 +255,35 @@ describe("deb package swap", () => {
     }
   });
 });
+
+// Unregistering /usr/bin/hydra from postrm ran after dpkg had deleted the
+// target, so update-alternatives warned about a dangling link group.
+describe("deb remove scripts", () => {
+  const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
+    productName: string;
+    build: {
+      linux: { executableName: string };
+      deb: { afterRemove?: string; fpm?: string[] };
+    };
+  };
+  const exe = pkg.build.linux.executableName;
+
+  it("unregisters the link from prerm on remove, and leaves it on upgrade", () => {
+    const fpm = pkg.build.deb.fpm ?? [];
+    const prermPath = fpm[fpm.indexOf("--before-remove") + 1];
+    expect(prermPath).toBe("build/linux/before-remove.sh");
+    const prerm = readFileSync(prermPath, "utf8");
+    expect(prerm).toMatch(/case "\$1" in\n\s+remove\|deconfigure\)/);
+    expect(prerm).toContain(
+      `update-alternatives --remove '${exe}' '/opt/${pkg.productName}/${exe}'`,
+    );
+    expect(prerm).toContain(`rm -f '/usr/bin/${exe}'`);
+  });
+
+  it("keeps update-alternatives out of postrm", () => {
+    const postrm = readFileSync(pkg.build.deb.afterRemove ?? "", "utf8");
+    const commands = postrm.split("\n").filter((line) => !line.trim().startsWith("#"));
+    expect(commands.join("\n")).not.toContain("update-alternatives");
+    expect(postrm).toContain("APPARMOR_PROFILE_DEST='/etc/apparmor.d/${executable}'");
+  });
+});

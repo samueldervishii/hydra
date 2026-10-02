@@ -132,7 +132,10 @@
     "deb": {
       "maintainer": "samueldervishii (https://github.com/samueldervishii)",
       "priority": "optional",
+      "afterRemove": "build/linux/after-remove.tpl",
       "fpm": [
+        "--before-remove",
+        "build/linux/before-remove.sh",
         "--conflicts",
         "sidra",
         "--replaces",
