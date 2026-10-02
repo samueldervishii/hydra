@@ -1,6 +1,7 @@
 {
   "name": "hydra",
   "productName": "Hydra",
+  "desktopName": "hydra.desktop",
   "version": "2.0.1",
   "description": "Apple Music desktop client for Linux",
   "main": "dist/main.js",
@@ -87,7 +88,8 @@
         "snap"
       ],
       "category": "Audio",
-      "executableName": "hydra",
+      "executableName": "hydra-music",
+      "syncDesktopName": true,
       "desktop": {
         "entry": {
           "Actions": "PlayPause;Next;Previous;Stop;",
@@ -132,6 +134,7 @@
     "deb": {
       "maintainer": "samueldervishii (https://github.com/samueldervishii)",
       "priority": "optional",
+      "packageName": "hydra-music",
       "afterRemove": "build/linux/after-remove.tpl",
       "fpm": [
         "--before-remove",
@@ -141,7 +144,11 @@
         "--replaces",
         "sidra",
         "--provides",
-        "sidra"
+        "sidra",
+        "--deb-field",
+        "Breaks: hydra (<= 2.0.1)",
+        "--replaces",
+        "hydra (<= 2.0.1)"
       ]
     },
     "rpm": {

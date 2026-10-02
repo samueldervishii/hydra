@@ -1,5 +1,5 @@
 #!/bin/bash
-# postrm for the hydra .deb: electron-builder's after-remove.tpl without the
+# postrm for the hydra-music .deb: electron-builder's after-remove.tpl without the
 # update-alternatives step, which build/linux/before-remove.sh now runs
 # from prerm while the files still exist. electron-builder substitutes the
 # executable name below when it builds the package.

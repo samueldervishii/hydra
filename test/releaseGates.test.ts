@@ -254,6 +254,30 @@ describe("deb package swap", () => {
       expect(fpm[fpm.indexOf(field) + 1], field).toBe("sidra");
     }
   });
+
+  // Ubuntu and Debian ship THC-Hydra as hydra at a higher version, which apt
+  // offered as an upgrade over ours, and its /usr/bin/hydra clashed with ours.
+  it("ships as hydra-music and relates only to our own hydra <= 2.0.1", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
+      name: string;
+      desktopName: string;
+      build: {
+        linux: { executableName: string; syncDesktopName?: boolean };
+        deb: { packageName?: string; fpm?: string[] };
+      };
+    };
+    expect(pkg.build.deb.packageName).toBe("hydra-music");
+    expect(pkg.build.linux.executableName).toBe("hydra-music");
+    const fpm = pkg.build.deb.fpm ?? [];
+    const pairs = fpm.slice(0, -1).map((arg, i) => `${arg} ${fpm[i + 1]}`);
+    expect(pairs).toContain("--deb-field Breaks: hydra (<= 2.0.1)");
+    expect(pairs).toContain("--replaces hydra (<= 2.0.1)");
+    // An unversioned relation would block installing THC-Hydra beside us.
+    expect(fpm.filter((arg) => /^hydra\b/.test(arg))).toEqual(["hydra (<= 2.0.1)"]);
+    // The window class and MPRIS DesktopEntry stay hydra, so the launcher does.
+    expect(pkg.desktopName).toBe(`${pkg.name}.desktop`);
+    expect(pkg.build.linux.syncDesktopName).toBe(true);
+  });
 });
 
 // Unregistering /usr/bin/hydra from postrm ran after dpkg had deleted the

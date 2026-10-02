@@ -131,6 +131,34 @@ function main() {
   }
   console.log("  \u2713 .deb replaces the sidra package: Conflicts, Replaces, Provides");
 
+  // Ubuntu and Debian already ship a package named hydra (THC-Hydra, a network
+  // login cracker), whose higher version apt offered as an upgrade over ours
+  // and whose /usr/bin/hydra clashed with our link. The package and binary
+  // are hydra-music. Only our own old hydra packages (<= 2.0.1) are broken
+  // and replaced: an unversioned relation on hydra would block THC-Hydra.
+  if (config.deb?.packageName !== "hydra-music" || config.linux?.executableName !== "hydra-music") {
+    throw new Error("build.deb.packageName and build.linux.executableName must be hydra-music");
+  }
+  const oldHydra = "hydra (<= 2.0.1)";
+  const fpmPairs = fpm.slice(0, -1).map((arg, i) => `${arg} ${fpm[i + 1]}`);
+  for (const pair of [`--deb-field Breaks: ${oldHydra}`, `--replaces ${oldHydra}`]) {
+    if (!fpmPairs.includes(pair)) {
+      throw new Error(`build.deb.fpm must pass ${pair}`);
+    }
+  }
+  if (fpm.some((arg) => /^hydra\b/.test(arg) && arg !== oldHydra)) {
+    throw new Error("build.deb.fpm must not relate to hydra beyond our own versions <= 2.0.1");
+  }
+  console.log(`  \u2713 .deb is hydra-music: Breaks and Replaces ${oldHydra} only`);
+  // The executable no longer matches the window class or MPRIS DesktopEntry,
+  // so the desktop file keeps its own name through desktopName.
+  if (pkg.desktopName !== `${pkg.name}.desktop` || config.linux?.syncDesktopName !== true) {
+    throw new Error(
+      `package.json desktopName must be ${pkg.name}.desktop with build.linux.syncDesktopName true, so the launcher matches the window class and MPRIS DesktopEntry`,
+    );
+  }
+  console.log(`  \u2713 desktop file: ${pkg.desktopName}`);
+
   // The /usr/bin link is unregistered from prerm, while its target still
   // exists; from postrm, after dpkg has deleted the files, update-alternatives
   // warned that the link group was dangling. fpm copies the prerm untemplated,
