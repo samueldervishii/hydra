@@ -239,6 +239,18 @@ describe('buildThemeCss', () => {
 // Keep checks of palette values in the per-theme loop above.
 describe('buildThemeCss emitted structure', () => {
   const css = buildThemeCss(BUNDLED_THEMES[0]);
+
+  // assets/performanceMode.css draws the side panel's opaque base from this
+  // property, so the theme's own panel colour survives Performance mode.
+  it('hands every side panel colour to Performance mode', () => {
+    const panels = [...css.matchAll(/\.side-panel \{([^}]*)\}/g)].map((m) => m[1]);
+    expect(panels.length).toBeGreaterThan(0);
+    for (const body of panels) {
+      const colour = /background-color: ([^;]+) !important;/.exec(body)?.[1];
+      expect(colour).toBeDefined();
+      expect(body).toContain(`--sidra-side-panel-material: ${colour};`);
+    }
+  });
   const darkCss = mediaBlock(css, 'prefers-color-scheme: dark');
   const lightCss = mediaBlock(css, 'prefers-color-scheme: light');
 

@@ -53,3 +53,42 @@ html[data-sidra-performance] .app-container.has-theme-override .chrome-volume__s
     linear-gradient(var(--systemStandardMediumMaterialSover), var(--systemStandardMediumMaterialSover)),
     var(--joe-color, var(--pageBG)) !important;
 }
+
+/* Panels, menus and modals that float over content were made legible by
+   their blur alone: Apple's materials are 55 to 90% opaque. Each keeps its own
+   material, layered over the page colour as above. --sidra-material names the
+   material per surface so one rule draws them all; the context menu and the
+   bubble tip's arrow paint theirs on ::before, which inherits it. Sidra's
+   themes set --sidra-side-panel-material to their own panel colour. */
+html[data-sidra-performance] .side-panel {
+  --sidra-material: var(--sidra-side-panel-material, var(--glassMaterialBackground));
+}
+html[data-sidra-performance] .mini-player {
+  --sidra-material: var(--glassMaterialBackground);
+}
+html[data-sidra-performance] :is(.contextual-menu, .search-suggestions, .popover-toggle__popover, .error-modal__container) {
+  --sidra-material: var(--systemStandardThickMaterialSover);
+}
+html[data-sidra-performance] .action-modal {
+  --sidra-material: var(--systemStandardMediumMaterialSover);
+}
+html[data-sidra-performance] .bubble-tip {
+  --sidra-material: var(--systemStandardUltrathickMaterialSover);
+}
+html[data-sidra-performance] .content-scope-bar {
+  --sidra-material: var(--systemHeaderMaterialSover);
+}
+html[data-sidra-performance] :is(.side-panel, .mini-player, .search-suggestions, .popover-toggle__popover, .error-modal__container, .action-modal, .bubble-tip, .content-scope-bar),
+html[data-sidra-performance] .contextual-menu::before,
+html[data-sidra-performance] .bubble-tip--has-arrow::before {
+  background:
+    linear-gradient(var(--sidra-material), var(--sidra-material)),
+    var(--pageBG) !important;
+}
+html[data-sidra-performance] .app-container.has-theme-override :is(.side-panel, .mini-player, .search-suggestions, .popover-toggle__popover, .error-modal__container, .action-modal, .bubble-tip, .content-scope-bar),
+html[data-sidra-performance] .app-container.has-theme-override .contextual-menu::before,
+html[data-sidra-performance] .app-container.has-theme-override .bubble-tip--has-arrow::before {
+  background:
+    linear-gradient(var(--sidra-material), var(--sidra-material)),
+    var(--joe-color, var(--pageBG)) !important;
+}

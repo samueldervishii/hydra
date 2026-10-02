@@ -95,6 +95,50 @@ describe("performanceMode.css", () => {
     expect(css).not.toMatch(/backdrop-filter:(?!\s*none)/);
   });
 
+  // Up Next, Lyrics and the "…" menu showed the page through their glass once
+  // the blur went. Each floating surface layers its own material over the
+  // page colour; the menu and the bubble tip's arrow paint on ::before.
+  it("puts an opaque page-coloured base under every floating panel, menu and modal", () => {
+    const all = rules(css);
+    const floating =
+      ":is(.side-panel, .mini-player, .search-suggestions, .popover-toggle__popover, .error-modal__container, .action-modal, .bubble-tip, .content-scope-bar)";
+    const layered = (base: string) =>
+      new RegExp(
+        `linear-gradient\\(var\\(--sidra-material\\), var\\(--sidra-material\\)\\),\\s*${base} !important`,
+      );
+    const page = all.find((rule) =>
+      rule.selectors.includes(`html[data-sidra-performance] ${floating}`),
+    );
+    expect(page?.body).toMatch(layered("var\\(--pageBG\\)"));
+    expect(page?.selectors).toEqual(
+      expect.arrayContaining([
+        "html[data-sidra-performance] .contextual-menu::before",
+        "html[data-sidra-performance] .bubble-tip--has-arrow::before",
+      ]),
+    );
+    const artist = all.find((rule) =>
+      rule.selectors.includes(
+        `html[data-sidra-performance] .app-container.has-theme-override ${floating}`,
+      ),
+    );
+    expect(artist?.body).toMatch(layered("var\\(--joe-color, var\\(--pageBG\\)\\)"));
+
+    // Every surface in the list names its material, and the side panel
+    // prefers the colour Sidra's themes hand it.
+    const material = (selector: string) =>
+      all.find((rule) =>
+        rule.selectors.some((s) => s === `html[data-sidra-performance] ${selector}` ||
+          (s.startsWith("html[data-sidra-performance] :is(") && s.includes(selector))) &&
+        /--sidra-material:/.test(rule.body),
+      )?.body ?? "";
+    for (const surface of [".side-panel", ".mini-player", ".contextual-menu", ".search-suggestions", ".popover-toggle__popover", ".error-modal__container", ".action-modal", ".bubble-tip", ".content-scope-bar"]) {
+      expect(material(surface), surface).toMatch(/--sidra-material:\s*var\(--/);
+    }
+    expect(material(".side-panel")).toMatch(
+      /--sidra-material:\s*var\(--sidra-side-panel-material, var\(--glassMaterialBackground\)\)/,
+    );
+  });
+
   it("gives the platters a solid background and drops their will-change", () => {
     const platters = rules(css).find((rule) =>
       rule.selectors.some((s) => s.includes(".more-button")),

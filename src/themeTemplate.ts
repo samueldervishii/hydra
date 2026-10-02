@@ -71,6 +71,9 @@ function rgbaSpaced(hex: string, alpha: number): string {
 //
 // .side-panel and its header wrapper paint a direct background-color, which no
 // :root variable reaches.
+// --sidra-side-panel-material hands the same colour to assets/performanceMode.css,
+// whose opaque base for the panel outranks this background-color and would
+// otherwise replace the theme's panel with Apple's glass.
 //
 // The scheme block carries no ::-webkit-scrollbar-* rules. From Chrome 121
 // Chromium ignores that pseudo-element on any element carrying a non-auto
@@ -154,6 +157,7 @@ function schemeBlock(c: SchemeColours): string {
   /* Side panels (Lyrics + Up Next) */
   .side-panel {
     background-color: ${rgbaSpaced(c.mantle, 0.97)} !important;
+    --sidra-side-panel-material: ${rgbaSpaced(c.mantle, 0.97)};
     backdrop-filter: blur(50px) saturate(100%) !important;
   }
   .side-panel.side-panel-header-wrapper,
