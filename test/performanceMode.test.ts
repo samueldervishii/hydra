@@ -100,6 +100,11 @@ describe("performanceMode.css", () => {
       rule.selectors.some((s) => s.includes(".more-button")),
     );
     expect(platters?.selectors[0]).toContain(".shelf-grid-nav__arrow");
+    // Track rows and the player bar use a bare "…" that has no platter; a
+    // grey square behind its dark glyph made it unreadable in light mode.
+    expect(platters?.selectors[0]).toContain(
+      ".more-button:not(.more-button--non-platter)",
+    );
     expect(platters?.body).toMatch(
       /background-color:\s*rgba\(70, 70, 70, 0\.9\) !important/,
     );

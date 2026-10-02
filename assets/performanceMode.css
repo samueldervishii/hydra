@@ -15,8 +15,10 @@ html[data-sidra-performance] *::after {
 
 /* These platters are 50% opaque and relied on the blur to stay legible.
    .more-button and .play-svg also carry will-change: backdrop-filter, which
-   keeps a compositing layer alive with nothing left to composite. */
-html[data-sidra-performance] :is(.more-button, .shelf-grid-nav__arrow, .play-svg) {
+   keeps a compositing layer alive with nothing left to composite. The
+   .more-button--non-platter variant on track rows and in the player bar has
+   no platter, so it stays bare: grey behind its dark glyph hid it in light mode. */
+html[data-sidra-performance] :is(.more-button:not(.more-button--non-platter), .shelf-grid-nav__arrow, .play-svg) {
   background-color: rgba(70, 70, 70, 0.9) !important;
   will-change: auto !important;
 }
