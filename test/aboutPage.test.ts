@@ -147,7 +147,9 @@ describe('About page display name', () => {
     expect(directives['script-src']).toEqual(["'self'"]);
     expect(directives['base-uri']).toEqual(["'none'"]);
     expect(directives['form-action']).toEqual(["'none'"]);
-    expect(html.match(/<script[^>]*>/g)).toEqual(['<script src="about.js">']);
+    // Counted case-insensitively without a tag regex: one script element, the file.
+    expect(html.toLowerCase().split('<script').length - 1).toBe(1);
+    expect(html).toContain('<script src="about.js"></script>');
     expect(html).not.toMatch(/\son[a-z]+=/i);
     const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json'), 'utf8')) as {
       build: { asarUnpack: string[] };
