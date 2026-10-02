@@ -1,9 +1,9 @@
-// Add navigation and Settings buttons to the sidebar because Sidra has no browser toolbar.
+// Add navigation and Settings buttons to the sidebar because Hydra has no browser toolbar.
 //
 // The buttons sit in their own row at the top of the sidebar, above the Apple
 // Music logo. The expanded sidebar shows the sidebar toggle, Back, Forward,
 // Reload and Settings. The collapsed strip (assets/sidebar.css, gated on
-// html[data-sidra-sidebar-collapsed]) shows the toggle, Back, Home, Search and
+// html[data-hydra-sidebar-collapsed]) shows the toggle, Back, Home, Search and
 // All Playlists instead. src/main.ts runs
 // this script on every load and every in-page navigation; a repeat run only
 // refreshes the current-page highlight, so no observer is needed.
@@ -11,7 +11,7 @@
   // loadAssets() in src/main.ts replaces NAV_LABELS_TOKEN from src/i18n.ts with JSON.
   // executeJavaScript() cannot supply loadFile() query parameters, so the raw asset requires substitution.
   /** @type {{ sidebar: string, back: string, forward: string, reload: string, settings: string, home: string, search: string, allPlaylists: string }} */
-  var LABELS = __SIDRA_NAV_LABELS__;
+  var LABELS = __HYDRA_NAV_LABELS__;
 
   /** @type {string} */
   var SVG_NS = "http://www.w3.org/2000/svg";
@@ -23,7 +23,7 @@
   var IS_CLASSICAL = window.location.hostname === "classical.music.apple.com";
 
   // Every icon draws in a 20px slot with the longer side of its glyph at
-  // 16px, so Sidra's icons and the ones adopted from Apple read at one size.
+  // 16px, so Hydra's icons and the ones adopted from Apple read at one size.
   // Each button is the same 32px target: the slot plus 6px of padding.
   /** @type {number} */
   var ICON_PX = 20;
@@ -300,14 +300,14 @@
    * @returns {void}
    */
   function adoptAppleIcon(button) {
-    if (button.getAttribute("data-sidra-icon") === "apple-measured") return;
-    var link = appleLink(button.getAttribute("data-sidra-page"));
+    if (button.getAttribute("data-hydra-icon") === "apple-measured") return;
+    var link = appleLink(button.getAttribute("data-hydra-page"));
     var source = link && link.querySelector("svg");
     var current = button.querySelector("svg");
     if (!source || !current) return;
     var box = measuredBox(source);
     var icon = current;
-    if (button.getAttribute("data-sidra-icon") !== "apple") {
+    if (button.getAttribute("data-hydra-icon") !== "apple") {
       icon = source.cloneNode(true);
       icon.setAttribute("aria-hidden", "true");
       icon.style.setProperty("fill", "currentColor", "important");
@@ -315,21 +315,21 @@
       button.replaceChild(icon, current);
     }
     fitIcon(icon, box || APPLE_DEFAULT_BOX);
-    button.setAttribute("data-sidra-icon", box ? "apple-measured" : "apple");
+    button.setAttribute("data-hydra-icon", box ? "apple-measured" : "apple");
   }
 
   /**
    * Mark the button for the current page and adopt Apple's icons once they
    * have rendered. Runs on every injection, including each in-page navigation.
-   * @param {HTMLElement} container - The #sidra-nav-buttons row
+   * @param {HTMLElement} container - The #hydra-nav-buttons row
    * @returns {void}
    */
   function refresh(container) {
     var here = window.location.pathname.replace(/\/+$/, "") || "/";
-    var buttons = container.querySelectorAll("button[data-sidra-page]");
+    var buttons = container.querySelectorAll("button[data-hydra-page]");
     for (var i = 0; i < buttons.length; i++) {
       var button = buttons[i];
-      var page = button.getAttribute("data-sidra-page");
+      var page = button.getAttribute("data-hydra-page");
       adoptAppleIcon(button);
       if (targetPath(page) === here) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
@@ -349,8 +349,8 @@
     const btn = document.createElement("button");
     btn.setAttribute("aria-label", spec.label);
     btn.setAttribute("title", spec.label);
-    btn.setAttribute("data-sidra-show", spec.show);
-    if (spec.page) btn.setAttribute("data-sidra-page", spec.page);
+    btn.setAttribute("data-hydra-show", spec.show);
+    if (spec.page) btn.setAttribute("data-hydra-page", spec.page);
     btn.setAttribute(
       "style",
       [
@@ -386,7 +386,7 @@
   }
 
   // SPA navigation can retain the header, so a repeat run must not duplicate buttons.
-  var existing = document.getElementById("sidra-nav-buttons");
+  var existing = document.getElementById("hydra-nav-buttons");
   if (existing) {
     refresh(existing);
     return;
@@ -394,12 +394,12 @@
 
   const header = document.querySelector(".navigation__header");
   if (!header) {
-    console.warn("Sidra: .navigation__header not found");
+    console.warn("Hydra: .navigation__header not found");
     return;
   }
 
   const container = document.createElement("div");
-  container.id = "sidra-nav-buttons";
+  container.id = "hydra-nav-buttons";
   // Its own grid row above the logo, spread across the sidebar. The 14px
   // inset plus each button's 6px padding puts the first and last icons on the
   // logo's 20px inset at both edges. Apple's sidebar content overlaps the
@@ -434,5 +434,5 @@
   header.insertBefore(container, header.firstChild);
   refresh(container);
 
-  console.log("[Sidra] Navigation bar injected");
+  console.log("[Hydra] Navigation bar injected");
 })();

@@ -71,11 +71,11 @@ run-debug: build
 
 # Run with DevTools open (builds first)
 run-devtools: build
-    SIDRA_DEVTOOLS=1 npx electron .
+    HYDRA_DEVTOOLS=1 npx electron .
 
 # Run with debug logging and DevTools (builds first)
 run-inspect: build
-    ELECTRON_LOG_LEVEL=debug SIDRA_DEVTOOLS=1 npx electron .
+    ELECTRON_LOG_LEVEL=debug HYDRA_DEVTOOLS=1 npx electron .
 
 # Run without building (use after initial build for faster iteration)
 run-fast:
@@ -87,7 +87,7 @@ run-cdp PORT="9222": build
 
 # Run with CDP, debug logging, and DevTools (builds first)
 run-cdp-inspect PORT="9222": build
-    ELECTRON_LOG_LEVEL=debug SIDRA_DEVTOOLS=1 npx electron . --remote-debugging-port={{PORT}} --remote-debugging-address=127.0.0.1
+    ELECTRON_LOG_LEVEL=debug HYDRA_DEVTOOLS=1 npx electron . --remote-debugging-port={{PORT}} --remote-debugging-address=127.0.0.1
 
 # Run with CDP without building (use after initial build for faster iteration)
 run-cdp-fast PORT="9222":
@@ -124,8 +124,8 @@ _generate-branding:
 # Generate DMG background PNGs from SVG source
 [private]
 _generate-dmg-background:
-    rsvg-convert -w 540 -h 380 -o build/background.png assets/source/sidra-background.svg
-    rsvg-convert -w 1080 -h 760 -o build/background@2x.png assets/source/sidra-background.svg
+    rsvg-convert -w 540 -h 380 -o build/background.png assets/source/hydra-background.svg
+    rsvg-convert -w 1080 -h 760 -o build/background@2x.png assets/source/hydra-background.svg
     optipng -strip all -o7 -quiet build/background.png build/background@2x.png
 
 # Generate tray menu icon PNGs from SVG sources

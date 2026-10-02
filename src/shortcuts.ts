@@ -6,7 +6,7 @@ export type ShortcutAction = "sidebar" | "back" | "forward" | "reload";
 /**
  * The action a key-down maps to, or null for keys that belong to the page.
  *
- * Sidra sets no application menu on Linux and Windows, so Chromium's own
+ * Hydra sets no application menu on Linux and Windows, so Chromium's own
  * browser keys never reach the page. These restore the usual ones, which the
  * collapsed sidebar relies on because it hides Back, Forward and Reload:
  * Ctrl+B toggles the sidebar, Alt+Left and Alt+Right go back and forward, and

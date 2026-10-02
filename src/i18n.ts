@@ -312,7 +312,7 @@ export function getTrayStrings(): TrayStrings {
  * Placeholder for JSON labels in assets/navigationBar.js. Injection through
  * executeJavaScript() has no query parameters, so loadAssets() substitutes it.
  */
-export const NAV_LABELS_TOKEN = '__SIDRA_NAV_LABELS__';
+export const NAV_LABELS_TOKEN = '__HYDRA_NAV_LABELS__';
 
 // English only, like this fork's tray labels. Not exported, because
 // test/i18n-consistency.test.ts treats every exported object as a record that

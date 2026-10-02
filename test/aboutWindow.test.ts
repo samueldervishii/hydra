@@ -5,7 +5,7 @@ vi.mock("../src/config", () => ({
 }));
 
 vi.mock("../src/i18n", () => ({
-  getTrayStrings: () => ({ about: "About Sidra" }),
+  getTrayStrings: () => ({ about: "About Hydra" }),
   getAboutStrings: () => ({
     description: "Un client Apple Music minimaliste.",
     close: "Close",
@@ -140,7 +140,7 @@ describe("showAboutWindow", () => {
           originalAuthor: "Martin Wimpress",
           originalAuthorUrl: "https://github.com/flexiondotorg",
           license: "MIT",
-          about: "About Sidra",
+          about: "About Hydra",
           close: "Close",
           versionPrefix: "Version",
         },

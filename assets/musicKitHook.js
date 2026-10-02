@@ -1,17 +1,17 @@
 (function () {
   // Keep this flag for the document lifetime to prevent duplicate message and pointerover listeners.
   // The five-second monitor handles MusicKit instance replacement without re-injection.
-  if (window.__sidraHookInjected) return;
-  window.__sidraHookInjected = true;
-  const injectedDocumentGeneration = __SIDRA_DOCUMENT_GENERATION__;
-  const serviceHosts = new Set(__SIDRA_SERVICE_HOSTS__);
+  if (window.__hydraHookInjected) return;
+  window.__hydraHookInjected = true;
+  const injectedDocumentGeneration = __HYDRA_DOCUMENT_GENERATION__;
+  const serviceHosts = new Set(__HYDRA_SERVICE_HOSTS__);
 
   const waitForMK = setInterval(() => {
     if (!window.MusicKit) return;
     // MusicKit can be present while getInstance() still throws during its own
     // initialisation. Resolve the instance before clearing the poll: a throw
     // after the clear would end setup for the document lifetime, because
-    // __sidraHookInjected blocks re-injection.
+    // __hydraHookInjected blocks re-injection.
     let mk;
     try {
       mk = MusicKit.getInstance();
@@ -152,7 +152,7 @@
      */
     function whileHooked(mk, listener) {
       return (...args) => {
-        if (window.__sidraHookedMk !== mk) return;
+        if (window.__hydraHookedMk !== mk) return;
         listener(...args);
       };
     }
@@ -170,7 +170,7 @@
     function attachPlaybackListeners(mk, resetStop) {
       let lastCapabilities;
       function reportCapabilities(item = mk.nowPlayingItem) {
-        if (window.__sidraHookedMk !== mk) return;
+        if (window.__hydraHookedMk !== mk) return;
         const duration = item ? effectiveDuration(mk) : null;
         const capabilities = {
           canPlay: !!item && typeof mk.play === "function",
@@ -396,7 +396,7 @@
       // real value immediately, not just on subsequent changes.
       sendToMain("volumeDidChange", lastVolume);
       // MusicKit publishes playbackVolumeDidChange, not volumeDidChange.
-      // Sidra's separate IPC channel keeps the volumeDidChange name.
+      // Hydra's separate IPC channel keeps the volumeDidChange name.
       mk.addEventListener(
         "playbackVolumeDidChange",
         whileHooked(mk, () => {
@@ -418,7 +418,7 @@
 
     /**
      * Attach event listeners to a MusicKit instance and expose control
-     * methods on window.__sidra.
+     * methods on window.__hydra.
      *
      * Called on initial hook and whenever MusicKit replaces its singleton.
      *
@@ -428,7 +428,7 @@
     function attachToInstance(mk) {
       // Claim the instance before attachment can throw, or the monitor adds duplicate listeners on each cycle.
       // attachSafely() logs partial attachment without retrying the same instance.
-      window.__sidraHookedMk = mk;
+      window.__hydraHookedMk = mk;
 
       let generation = 0;
       let resumeGeneration = 0;
@@ -446,7 +446,7 @@
       function current(operationGeneration, pageGeneration) {
         return (
           documentActive &&
-          window.__sidraHookedMk === mk &&
+          window.__hydraHookedMk === mk &&
           generation === operationGeneration &&
           documentGeneration === pageGeneration
         );
@@ -488,7 +488,7 @@
             sendToMain("playbackStopped", { requestId, success: true });
           })
           .catch(() => {
-            console.warn("[Sidra] failed to stop playback");
+            console.warn("[Hydra] failed to stop playback");
             if (current(operationGeneration, pageGeneration)) {
               sendToMain("playbackStopped", { requestId, success: false });
             }
@@ -518,10 +518,10 @@
           return (
             afterStop ? afterStop.then(run) : Promise.resolve(run())
           ).catch(() => {
-            console.warn("[Sidra] failed to resume playback");
+            console.warn("[Hydra] failed to resume playback");
           });
         } catch (_) {
-          console.warn("[Sidra] failed to resume playback");
+          console.warn("[Hydra] failed to resume playback");
           return Promise.resolve();
         }
       }
@@ -538,10 +538,10 @@
        * Assign only after listener attachment succeeds. A failure leaves the previous
        * hook object, or none on the first attachment, so the message listener checks it.
        *
-       * @type {SidraHook}
-       * @see {SidraHook} in src/types/hook.d.ts
+       * @type {HydraHook}
+       * @see {HydraHook} in src/types/hook.d.ts
        */
-      window.__sidra = {
+      window.__hydra = {
         openUri: async (uri) => {
           try {
             // Restrict queue changes to credential-free HTTPS URLs for the active service origin.
@@ -553,7 +553,7 @@
               url.username ||
               url.password ||
               !documentActive ||
-              window.__sidraHookedMk !== mk
+              window.__hydraHookedMk !== mk
             )
               return;
             if (blockedQueue)
@@ -566,14 +566,14 @@
                   request !== queueRequest ||
                   pageGeneration !== documentGeneration ||
                   !documentActive ||
-                  window.__sidraHookedMk !== mk
+                  window.__hydraHookedMk !== mk
                 )
                   return;
                 resetStop();
                 await mk.setQueue({ url: url.href, startPlaying: true });
               })
               .catch(() => {
-                console.warn("[Sidra] failed to open requested media");
+                console.warn("[Hydra] failed to open requested media");
               });
             let timeout;
             try {
@@ -597,7 +597,7 @@
               clearTimeout(timeout);
             }
           } catch (_) {
-            console.warn("[Sidra] failed to open requested media");
+            console.warn("[Hydra] failed to open requested media");
           }
         },
         play: () => resume(false),
@@ -636,14 +636,14 @@
       try {
         attachToInstance(mk);
       } catch (err) {
-        console.error("[Sidra] failed to attach to the MusicKit instance", err);
+        console.error("[Hydra] failed to attach to the MusicKit instance", err);
       }
     }
 
     /**
      * Allowed commands dispatched via window.postMessage from the
      * preload script. Must stay in sync with RECEIVE_CHANNELS in
-     * src/preload.ts and keyof SidraHook in src/types/hook.d.ts.
+     * src/preload.ts and keyof HydraHook in src/types/hook.d.ts.
      * @type {Set<string>}
      */
     const COMMANDS = new Set([
@@ -662,23 +662,23 @@
 
     /**
      * Bridge: the preload script (isolated world) forwards IPC commands via
-     * window.postMessage because it cannot access window.__sidra directly.
+     * window.postMessage because it cannot access window.__hydra directly.
      * @param {MessageEvent} event - The postMessage event
-     * @see {SidraCommandMessage} in src/types/hook.d.ts for the payload shape
+     * @see {HydraCommandMessage} in src/types/hook.d.ts for the payload shape
      */
     window.addEventListener("message", (event) => {
       if (event.source !== window) return;
-      if (!event.data || event.data.type !== "sidra:command") return;
+      if (!event.data || event.data.type !== "hydra:command") return;
 
       const { channel, args } = event.data;
       const method = channel.replace("player:", "");
       if (!COMMANDS.has(method)) {
-        console.warn(`[Sidra] blocked unrecognised command: "${method}"`);
+        console.warn(`[Hydra] blocked unrecognised command: "${method}"`);
         return;
       }
       // A failed initial attachment leaves no hook object, but this listener still runs.
-      if (typeof window.__sidra?.[method] === "function") {
-        window.__sidra[method](...(args || []));
+      if (typeof window.__hydra?.[method] === "function") {
+        window.__hydra[method](...(args || []));
       }
     });
     attachSafely(mk);
@@ -712,7 +712,7 @@
     /**
      * Change the volume when the wheel turns over the player bar volume
      * control. MusicKit's playbackVolumeDidChange event forwards mk.volume writes
-     * through Sidra's volumeDidChange IPC channel.
+     * through Hydra's volumeDidChange IPC channel.
      *
      * @param {WheelEvent} event - The wheel event
      * @returns {void}
@@ -724,7 +724,7 @@
       // accumulates and moves the volume nowhere.
       event.preventDefault();
 
-      const hookedMk = window.__sidraHookedMk;
+      const hookedMk = window.__hydraHookedMk;
       if (!hookedMk) return;
 
       // A reversal starts from zero, so a residual from scrolling one way does
@@ -785,18 +785,18 @@
 
     window.addEventListener("pointerover", onPointerOver, { passive: true });
 
-    console.log("[Sidra] MusicKit hooked successfully");
+    console.log("[Hydra] MusicKit hooked successfully");
 
     // MusicKit instance replacement raises no event, so compare the live instance with the marker.
     setInterval(() => {
       try {
         const currentMk = MusicKit.getInstance();
         if (
-          currentMk !== window.__sidraHookedMk &&
+          currentMk !== window.__hydraHookedMk &&
           typeof currentMk.addEventListener === "function"
         ) {
           attachSafely(currentMk);
-          console.log("[Sidra] MusicKit re-hooked (instance replaced)");
+          console.log("[Hydra] MusicKit re-hooked (instance replaced)");
         }
       } catch (_) {
         // Skip this cycle if MusicKit.getInstance() throws during re-initialisation.

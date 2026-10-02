@@ -89,7 +89,7 @@ const SPLASH_HEIGHT_PX = 350;
 const MAIN_WINDOW_WIDTH_PX = 1280;
 const MAIN_WINDOW_HEIGHT_PX = 800;
 // Below this page width, in CSS pixels, Apple swaps the sidebar for a top bar,
-// where Sidra's button row covers Apple's Sign In button and the sidebar toggle
+// where Hydra's button row covers Apple's Sign In button and the sidebar toggle
 // has nothing to collapse. Matches the breakpoint in assets/sidebar.css.
 const DESKTOP_LAYOUT_MIN_WIDTH_PX = 484;
 const PRELOAD_ERROR_NAMES = new Set([
@@ -143,7 +143,7 @@ app.on("child-process-gone", (_event, details) => {
 });
 
 // --- App identity: must be set before app.whenReady() on Windows, or the
-// GSMTC media identity does not attach to Sidra ---
+// GSMTC media identity does not attach to Hydra ---
 if (process.platform === "win32") {
   app.setAppUserModelId("io.github.samueldervishii.hydra");
 }
@@ -154,7 +154,7 @@ if (process.platform === "linux") {
     "enable-features",
     "UseOzonePlatform,WaylandWindowDecorations",
   );
-  // MediaSessionService off: Sidra registers its own MPRIS service, and
+  // MediaSessionService off: Hydra registers its own MPRIS service, and
   // Chromium's would be a second, conflicting registration on the same bus.
   // AudioServiceOutOfProcess off: it moves audio back in-process, which is
   // where SetGlobalAppName can reach PulseAudio at all.
@@ -317,7 +317,7 @@ function createSplash(): {
 }
 
 function setupApplicationMenu(): void {
-  if (process.env.SIDRA_DEVTOOLS === "1") {
+  if (process.env.HYDRA_DEVTOOLS === "1") {
     const menuTemplate: Electron.MenuItemConstructorOptions[] = [
       {
         role: "viewMenu",
@@ -482,7 +482,7 @@ function loadAssets(): Assets {
   const hookPath = getAssetPath("assets", "musicKitHook.js");
   const hookScript = fs
     .readFileSync(hookPath, "utf-8")
-    .replace("__SIDRA_SERVICE_HOSTS__", () =>
+    .replace("__HYDRA_SERVICE_HOSTS__", () =>
       JSON.stringify(allServices().map((service) => service.host)),
     );
   return {
@@ -665,7 +665,7 @@ async function injectRendererScripts(
     const currentUrl = win.webContents.getURL();
     if (isAllowedNavigationUrl(currentUrl)) {
       await win.webContents.executeJavaScript(
-        assets.hookScript.replace("__SIDRA_DOCUMENT_GENERATION__", () =>
+        assets.hookScript.replace("__HYDRA_DOCUMENT_GENERATION__", () =>
           String(rendererDocumentGeneration),
         ),
       );
@@ -713,7 +713,7 @@ function setupNavigationHandlers(win: BrowserWindow, player: Player): void {
 const AUTH_FRAME_HOSTS = new Set<string>(
   allServices().flatMap((svc) => [...svc.authFrameHosts]),
 );
-const AUTH_FRAME_LOG_PREFIX = "[sidra] auth-frame hide:";
+const AUTH_FRAME_LOG_PREFIX = "[hydra] auth-frame hide:";
 
 // assets/authFrameFix.js hides the passkey and "Sign in with iPhone" routes in
 // Apple's sign-in iframe, and reports what it hid back over console-message,
@@ -797,7 +797,7 @@ function setupWindowEvents(win: BrowserWindow, markCssReady: () => void): void {
 
   // Apple Music registers a beforeunload handler while audio plays. Electron
   // shows no confirmation dialog, so the handler silently blocks close() and
-  // app.quit() with no error. Overriding it here lets Sidra exit.
+  // app.quit() with no error. Overriding it here lets Hydra exit.
   win.webContents.on("will-prevent-unload", (event) => {
     event.preventDefault();
   });
@@ -986,9 +986,9 @@ if (gotLock) {
       setupNavigationHandlers(win, player);
       setupAuthFrameInjection(win, assets.authFrameScript);
       appTray = createTray();
-      if (process.env.SIDRA_DEVTOOLS === "1") {
+      if (process.env.HYDRA_DEVTOOLS === "1") {
         win.webContents.openDevTools();
-        mainLog.info("DevTools opened (SIDRA_DEVTOOLS=1)");
+        mainLog.info("DevTools opened (HYDRA_DEVTOOLS=1)");
       }
       mainLog.info("loading Apple Music...");
       win
@@ -1025,7 +1025,7 @@ app.on("window-all-closed", () => {
   app.quit();
 });
 
-// Restore a close-to-tray window when macOS activates Sidra from the dock.
+// Restore a close-to-tray window when macOS activates Hydra from the dock.
 app.on("activate", () => {
   focusMainWindow();
 });

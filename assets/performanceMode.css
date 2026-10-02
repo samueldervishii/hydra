@@ -1,15 +1,15 @@
-/* Performance mode. Every rule is gated on html[data-sidra-performance], which
+/* Performance mode. Every rule is gated on html[data-hydra-performance], which
    src/performanceMode.ts sets from the Settings toggle. */
 
 /* Apple paints ~400 elements with backdrop-filter blur(60px), most of them the
    .more-button, .play-svg and .contextual-menu__trigger platters on every shelf
    item, and compositing them all is what makes dragging the window lag. The
    universal selectors remove every blur, including .navigation, the player
-   bar, the volume slider and the .side-panel blur Sidra's themes add, and win
+   bar, the volume slider and the .side-panel blur Hydra's themes add, and win
    over the theme rule on specificity. */
-html[data-sidra-performance] *,
-html[data-sidra-performance] *::before,
-html[data-sidra-performance] *::after {
+html[data-hydra-performance] *,
+html[data-hydra-performance] *::before,
+html[data-hydra-performance] *::after {
   backdrop-filter: none !important;
 }
 
@@ -18,7 +18,7 @@ html[data-sidra-performance] *::after {
    keeps a compositing layer alive with nothing left to composite. The
    .more-button--non-platter variant on track rows and in the player bar has
    no platter, so it stays bare: grey behind its dark glyph hid it in light mode. */
-html[data-sidra-performance] :is(.more-button:not(.more-button--non-platter), .shelf-grid-nav__arrow, .play-svg) {
+html[data-hydra-performance] :is(.more-button:not(.more-button--non-platter), .shelf-grid-nav__arrow, .play-svg) {
   background-color: rgba(70, 70, 70, 0.9) !important;
   will-change: auto !important;
 }
@@ -34,21 +34,21 @@ html[data-sidra-performance] :is(.more-button:not(.more-button--non-platter), .s
    page in either scheme and any theme. That colour is --pageBG, except where
    Apple overrides the page (artist pages, has-theme-override), which paints
    it in the artist's --joe-color instead. */
-html[data-sidra-performance] :is([data-testid="header"], .chrome-player, .cloud-buttons--with-platter) {
+html[data-hydra-performance] :is([data-testid="header"], .chrome-player, .cloud-buttons--with-platter) {
   background-color: var(--pageBG) !important;
 }
-html[data-sidra-performance] .app-container.has-theme-override :is([data-testid="header"], .chrome-player, .cloud-buttons--with-platter) {
+html[data-hydra-performance] .app-container.has-theme-override :is([data-testid="header"], .chrome-player, .cloud-buttons--with-platter) {
   background-color: var(--joe-color, var(--pageBG)) !important;
 }
 
 /* The volume pop-up draws its own glass with no parent of its shape, so its
    glass is layered over the page colour on the element itself. */
-html[data-sidra-performance] .chrome-volume__slider {
+html[data-hydra-performance] .chrome-volume__slider {
   background:
     linear-gradient(var(--systemStandardMediumMaterialSover), var(--systemStandardMediumMaterialSover)),
     var(--pageBG) !important;
 }
-html[data-sidra-performance] .app-container.has-theme-override .chrome-volume__slider {
+html[data-hydra-performance] .app-container.has-theme-override .chrome-volume__slider {
   background:
     linear-gradient(var(--systemStandardMediumMaterialSover), var(--systemStandardMediumMaterialSover)),
     var(--joe-color, var(--pageBG)) !important;
@@ -56,39 +56,39 @@ html[data-sidra-performance] .app-container.has-theme-override .chrome-volume__s
 
 /* Panels, menus and modals that float over content were made legible by
    their blur alone: Apple's materials are 55 to 90% opaque. Each keeps its own
-   material, layered over the page colour as above. --sidra-material names the
+   material, layered over the page colour as above. --hydra-material names the
    material per surface so one rule draws them all; the context menu and the
-   bubble tip's arrow paint theirs on ::before, which inherits it. Sidra's
-   themes set --sidra-side-panel-material to their own panel colour. */
-html[data-sidra-performance] .side-panel {
-  --sidra-material: var(--sidra-side-panel-material, var(--glassMaterialBackground));
+   bubble tip's arrow paint theirs on ::before, which inherits it. Hydra's
+   themes set --hydra-side-panel-material to their own panel colour. */
+html[data-hydra-performance] .side-panel {
+  --hydra-material: var(--hydra-side-panel-material, var(--glassMaterialBackground));
 }
-html[data-sidra-performance] .mini-player {
-  --sidra-material: var(--glassMaterialBackground);
+html[data-hydra-performance] .mini-player {
+  --hydra-material: var(--glassMaterialBackground);
 }
-html[data-sidra-performance] :is(.contextual-menu, .search-suggestions, .popover-toggle__popover, .error-modal__container) {
-  --sidra-material: var(--systemStandardThickMaterialSover);
+html[data-hydra-performance] :is(.contextual-menu, .search-suggestions, .popover-toggle__popover, .error-modal__container) {
+  --hydra-material: var(--systemStandardThickMaterialSover);
 }
-html[data-sidra-performance] .action-modal {
-  --sidra-material: var(--systemStandardMediumMaterialSover);
+html[data-hydra-performance] .action-modal {
+  --hydra-material: var(--systemStandardMediumMaterialSover);
 }
-html[data-sidra-performance] .bubble-tip {
-  --sidra-material: var(--systemStandardUltrathickMaterialSover);
+html[data-hydra-performance] .bubble-tip {
+  --hydra-material: var(--systemStandardUltrathickMaterialSover);
 }
-html[data-sidra-performance] .content-scope-bar {
-  --sidra-material: var(--systemHeaderMaterialSover);
+html[data-hydra-performance] .content-scope-bar {
+  --hydra-material: var(--systemHeaderMaterialSover);
 }
-html[data-sidra-performance] :is(.side-panel, .mini-player, .search-suggestions, .popover-toggle__popover, .error-modal__container, .action-modal, .bubble-tip, .content-scope-bar),
-html[data-sidra-performance] .contextual-menu::before,
-html[data-sidra-performance] .bubble-tip--has-arrow::before {
+html[data-hydra-performance] :is(.side-panel, .mini-player, .search-suggestions, .popover-toggle__popover, .error-modal__container, .action-modal, .bubble-tip, .content-scope-bar),
+html[data-hydra-performance] .contextual-menu::before,
+html[data-hydra-performance] .bubble-tip--has-arrow::before {
   background:
-    linear-gradient(var(--sidra-material), var(--sidra-material)),
+    linear-gradient(var(--hydra-material), var(--hydra-material)),
     var(--pageBG) !important;
 }
-html[data-sidra-performance] .app-container.has-theme-override :is(.side-panel, .mini-player, .search-suggestions, .popover-toggle__popover, .error-modal__container, .action-modal, .bubble-tip, .content-scope-bar),
-html[data-sidra-performance] .app-container.has-theme-override .contextual-menu::before,
-html[data-sidra-performance] .app-container.has-theme-override .bubble-tip--has-arrow::before {
+html[data-hydra-performance] .app-container.has-theme-override :is(.side-panel, .mini-player, .search-suggestions, .popover-toggle__popover, .error-modal__container, .action-modal, .bubble-tip, .content-scope-bar),
+html[data-hydra-performance] .app-container.has-theme-override .contextual-menu::before,
+html[data-hydra-performance] .app-container.has-theme-override .bubble-tip--has-arrow::before {
   background:
-    linear-gradient(var(--sidra-material), var(--sidra-material)),
+    linear-gradient(var(--hydra-material), var(--hydra-material)),
     var(--joe-color, var(--pageBG)) !important;
 }

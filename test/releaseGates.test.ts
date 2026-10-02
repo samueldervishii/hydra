@@ -91,25 +91,25 @@ describe("release build scripts", () => {
 
     await expect(
       afterPack({
-        appOutDir: "/tmp/sidra-test",
+        appOutDir: "/tmp/hydra-test",
         electronPlatformName: "win32",
       }),
     ).resolves.toBeUndefined();
     await expect(
       afterPack({
-        appOutDir: "/tmp/sidra-test",
+        appOutDir: "/tmp/hydra-test",
         electronPlatformName: "linux",
       }),
     ).resolves.toBeUndefined();
     await expect(
       afterSign({
-        appOutDir: "/tmp/sidra-test",
+        appOutDir: "/tmp/hydra-test",
         electronPlatformName: "darwin",
       }),
     ).resolves.toBeUndefined();
     await expect(
       afterSign({
-        appOutDir: "/tmp/sidra-test",
+        appOutDir: "/tmp/hydra-test",
         electronPlatformName: "linux",
       }),
     ).resolves.toBeUndefined();
@@ -125,24 +125,24 @@ describe("release build scripts", () => {
       .mockReturnValue(Buffer.alloc(0));
 
     await afterPack({
-      appOutDir: "/tmp/sidra-macos",
+      appOutDir: "/tmp/hydra-macos",
       electronPlatformName: "darwin",
     });
     await afterSign({
-      appOutDir: "/tmp/sidra-windows",
+      appOutDir: "/tmp/hydra-windows",
       electronPlatformName: "win32",
     });
 
     expect(execFileSync).toHaveBeenNthCalledWith(
       1,
       "uvx",
-      ["--from", EVS_PACKAGE, "evs-vmp", "sign-pkg", "/tmp/sidra-macos"],
+      ["--from", EVS_PACKAGE, "evs-vmp", "sign-pkg", "/tmp/hydra-macos"],
       { stdio: "inherit" },
     );
     expect(execFileSync).toHaveBeenNthCalledWith(
       2,
       "uvx",
-      ["--from", EVS_PACKAGE, "evs-vmp", "sign-pkg", "/tmp/sidra-windows"],
+      ["--from", EVS_PACKAGE, "evs-vmp", "sign-pkg", "/tmp/hydra-windows"],
       { stdio: "inherit" },
     );
     expect(execFileSync).toHaveBeenCalledTimes(2);
@@ -157,7 +157,7 @@ describe("release build scripts", () => {
       const execFileSync = vi.spyOn(childProcess, "execFileSync");
 
       await expect(
-        hook({ appOutDir: "/tmp/sidra-test", electronPlatformName: platform }),
+        hook({ appOutDir: "/tmp/hydra-test", electronPlatformName: platform }),
       ).resolves.toBeUndefined();
       expect(execFileSync).not.toHaveBeenCalled();
     },
@@ -171,7 +171,7 @@ describe("release build scripts", () => {
       vi.stubEnv("EVS_PASSWD", "");
 
       await expect(
-        hook({ appOutDir: "/tmp/sidra-test", electronPlatformName: platform }),
+        hook({ appOutDir: "/tmp/hydra-test", electronPlatformName: platform }),
       ).rejects.toThrow(
         "EVS_ACCOUNT_NAME and EVS_PASSWD are required for tag builds",
       );
@@ -186,7 +186,7 @@ describe("release build scripts", () => {
       vi.stubEnv("EVS_PASSWD", "");
 
       await expect(
-        hook({ appOutDir: "/tmp/sidra-test", electronPlatformName: platform }),
+        hook({ appOutDir: "/tmp/hydra-test", electronPlatformName: platform }),
       ).rejects.toThrow("EVS_ACCOUNT_NAME and EVS_PASSWD must be set together");
     },
   );
@@ -202,7 +202,7 @@ describe("release build scripts", () => {
       });
 
       await expect(
-        hook({ appOutDir: "/tmp/sidra-test", electronPlatformName: platform }),
+        hook({ appOutDir: "/tmp/hydra-test", electronPlatformName: platform }),
       ).rejects.toThrow("EVS failed");
     },
   );

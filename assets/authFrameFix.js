@@ -4,7 +4,7 @@
   // loadAssets() in src/main.ts replaces AUTH_FIX_TOKEN from src/authFrame.ts with JSON.
   // executeJavaScript() cannot supply loadFile() query parameters, so the raw asset requires substitution.
   /** @type {{ css: string, containerSelectors: string[], logPrefix: string }} */
-  var CONFIG = __SIDRA_AUTH_FIX__;
+  var CONFIG = __HYDRA_AUTH_FIX__;
 
   // PASSKEY_CONTAINER_SELECTORS in src/authFrame.ts supplies CSS and ancestor matches.
   // Broad selectors stay script-only: they start at a matched button, but CSS would hide unrelated form groups.
@@ -12,7 +12,7 @@
   const SCRIPT_ONLY_CONTAINERS = ['[class*="passkey" i]', '[class*="iphone" i]', '[role="group"]', 'fieldset'];
 
   const css = CONFIG.css + '\n' + sharedContainers.join(',\n') + ' {\n  display: none !important;\n}\n';
-  const STYLE_ID = 'sidra-auth-fix';
+  const STYLE_ID = 'hydra-auth-fix';
   const TEXT_RE = /(sign in with )?iphone|passkey/i;
   const CAPTION_RE = /requires .{0,30}(ios|iphone|ipad)|(ios|ipados) ?\d+ or later/i;
   const CONTAINER_SELECTOR = sharedContainers.concat(SCRIPT_ONLY_CONTAINERS).join(', ');
@@ -100,8 +100,8 @@
 
   // The frame re-renders as the user moves through the flow, so the passes run
   // again from a MutationObserver.
-  if (!window.__sidraAuthFixInstalled) {
-    window.__sidraAuthFixInstalled = true;
+  if (!window.__hydraAuthFixInstalled) {
+    window.__hydraAuthFixInstalled = true;
     const target = document.body || document.documentElement;
     if (target && typeof MutationObserver !== 'undefined') {
       const observer = new MutationObserver(() => { runHidePasses(); });

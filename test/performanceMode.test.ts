@@ -56,10 +56,10 @@ describe("performanceMode.css", () => {
     expect(all.length).toBeGreaterThan(0);
     for (const { selectors } of all) {
       for (const selector of selectors) {
-        expect(selector).toMatch(/^html\[data-sidra-performance\] /);
+        expect(selector).toMatch(/^html\[data-hydra-performance\] /);
       }
     }
-    expect(PERFORMANCE_ATTRIBUTE).toBe("data-sidra-performance");
+    expect(PERFORMANCE_ATTRIBUTE).toBe("data-hydra-performance");
   });
 
   it("removes every backdrop blur, the player bar's included", () => {
@@ -67,9 +67,9 @@ describe("performanceMode.css", () => {
       /backdrop-filter:\s*none !important/.test(rule.body),
     );
     expect(blur?.selectors).toEqual([
-      "html[data-sidra-performance] *",
-      "html[data-sidra-performance] *::before",
-      "html[data-sidra-performance] *::after",
+      "html[data-hydra-performance] *",
+      "html[data-hydra-performance] *::before",
+      "html[data-hydra-performance] *::after",
     ]);
   });
 
@@ -82,13 +82,13 @@ describe("performanceMode.css", () => {
       all.find((rule) => rule.selectors.includes(selector))?.body ?? "";
     const surfaces =
       ':is([data-testid="header"], .chrome-player, .cloud-buttons--with-platter)';
-    expect(base(`html[data-sidra-performance] ${surfaces}`)).toMatch(
+    expect(base(`html[data-hydra-performance] ${surfaces}`)).toMatch(
       /background-color:\s*var\(--pageBG\) !important/,
     );
     expect(
-      base(`html[data-sidra-performance] .app-container.has-theme-override ${surfaces}`),
+      base(`html[data-hydra-performance] .app-container.has-theme-override ${surfaces}`),
     ).toMatch(/background-color:\s*var\(--joe-color, var\(--pageBG\)\) !important/);
-    expect(base("html[data-sidra-performance] .chrome-volume__slider")).toMatch(
+    expect(base("html[data-hydra-performance] .chrome-volume__slider")).toMatch(
       /var\(--systemStandardMediumMaterialSover\)\),\s*var\(--pageBG\) !important/,
     );
     // An opaque base, never a blur: nothing in the file sets one.
@@ -104,38 +104,38 @@ describe("performanceMode.css", () => {
       ":is(.side-panel, .mini-player, .search-suggestions, .popover-toggle__popover, .error-modal__container, .action-modal, .bubble-tip, .content-scope-bar)";
     const layered = (base: string) =>
       new RegExp(
-        `linear-gradient\\(var\\(--sidra-material\\), var\\(--sidra-material\\)\\),\\s*${base} !important`,
+        `linear-gradient\\(var\\(--hydra-material\\), var\\(--hydra-material\\)\\),\\s*${base} !important`,
       );
     const page = all.find((rule) =>
-      rule.selectors.includes(`html[data-sidra-performance] ${floating}`),
+      rule.selectors.includes(`html[data-hydra-performance] ${floating}`),
     );
     expect(page?.body).toMatch(layered("var\\(--pageBG\\)"));
     expect(page?.selectors).toEqual(
       expect.arrayContaining([
-        "html[data-sidra-performance] .contextual-menu::before",
-        "html[data-sidra-performance] .bubble-tip--has-arrow::before",
+        "html[data-hydra-performance] .contextual-menu::before",
+        "html[data-hydra-performance] .bubble-tip--has-arrow::before",
       ]),
     );
     const artist = all.find((rule) =>
       rule.selectors.includes(
-        `html[data-sidra-performance] .app-container.has-theme-override ${floating}`,
+        `html[data-hydra-performance] .app-container.has-theme-override ${floating}`,
       ),
     );
     expect(artist?.body).toMatch(layered("var\\(--joe-color, var\\(--pageBG\\)\\)"));
 
     // Every surface in the list names its material, and the side panel
-    // prefers the colour Sidra's themes hand it.
+    // prefers the colour Hydra's themes hand it.
     const material = (selector: string) =>
       all.find((rule) =>
-        rule.selectors.some((s) => s === `html[data-sidra-performance] ${selector}` ||
-          (s.startsWith("html[data-sidra-performance] :is(") && s.includes(selector))) &&
-        /--sidra-material:/.test(rule.body),
+        rule.selectors.some((s) => s === `html[data-hydra-performance] ${selector}` ||
+          (s.startsWith("html[data-hydra-performance] :is(") && s.includes(selector))) &&
+        /--hydra-material:/.test(rule.body),
       )?.body ?? "";
     for (const surface of [".side-panel", ".mini-player", ".contextual-menu", ".search-suggestions", ".popover-toggle__popover", ".error-modal__container", ".action-modal", ".bubble-tip", ".content-scope-bar"]) {
-      expect(material(surface), surface).toMatch(/--sidra-material:\s*var\(--/);
+      expect(material(surface), surface).toMatch(/--hydra-material:\s*var\(--/);
     }
     expect(material(".side-panel")).toMatch(
-      /--sidra-material:\s*var\(--sidra-side-panel-material, var\(--glassMaterialBackground\)\)/,
+      /--hydra-material:\s*var\(--hydra-side-panel-material, var\(--glassMaterialBackground\)\)/,
     );
   });
 

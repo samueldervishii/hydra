@@ -3,7 +3,7 @@ import { getPerformanceModeEnabled } from "./config";
 import { setRootAttribute } from "./rootAttribute";
 
 /** Attribute on `<html>` that gates every rule in assets/performanceMode.css. */
-export const PERFORMANCE_ATTRIBUTE = "data-sidra-performance";
+export const PERFORMANCE_ATTRIBUTE = "data-hydra-performance";
 
 /** Mirror the stored Performance mode setting onto the page. */
 export function applyPerformanceMode(

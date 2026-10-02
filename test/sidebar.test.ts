@@ -37,9 +37,9 @@ describe("sidebar.css", () => {
     const all = selectors(inner);
     expect(all.length).toBeGreaterThan(0);
     for (const selector of all) {
-      expect(selector).toMatch(/^html\[data-sidra-sidebar-collapsed\]/);
+      expect(selector).toMatch(/^html\[data-hydra-sidebar-collapsed\]/);
     }
-    expect(SIDEBAR_ATTRIBUTE).toBe("data-sidra-sidebar-collapsed");
+    expect(SIDEBAR_ATTRIBUTE).toBe("data-hydra-sidebar-collapsed");
   });
 
   it("narrows the variable, the grid column and the sidebar together", () => {
@@ -60,29 +60,29 @@ describe("sidebar.css", () => {
 
   // Classical's search field lives in the header, not in .navigation__content,
   // and spilled out of the strip over the page until it was hidden too.
-  it("hides the logo row, Classical's header search and the sidebar content, and stacks Sidra's row", () => {
+  it("hides the logo row, Classical's header search and the sidebar content, and stacks Hydra's row", () => {
     expect(stripped).toMatch(
-      /html\[data-sidra-sidebar-collapsed\] \.navigation__header \.logo,\s*html\[data-sidra-sidebar-collapsed\] \.navigation__header \.search-input-wrapper,\s*html\[data-sidra-sidebar-collapsed\] \.navigation__content \{\s*display:\s*none !important/,
+      /html\[data-hydra-sidebar-collapsed\] \.navigation__header \.logo,\s*html\[data-hydra-sidebar-collapsed\] \.navigation__header \.search-input-wrapper,\s*html\[data-hydra-sidebar-collapsed\] \.navigation__content \{\s*display:\s*none !important/,
     );
     expect(stripped).toMatch(
-      /#sidra-nav-buttons \{\s*flex-direction:\s*column !important;\s*justify-content:\s*flex-start !important/,
+      /#hydra-nav-buttons \{\s*flex-direction:\s*column !important;\s*justify-content:\s*flex-start !important/,
     );
   });
 
   // Apple Music's 8px header inset left the strip's icons 4px off centre.
   it("drops the header's inset so the strip's icons are centred", () => {
     expect(stripped).toMatch(
-      /html\[data-sidra-sidebar-collapsed\] \.navigation__header \{[^}]*margin-inline:\s*0 !important/,
+      /html\[data-hydra-sidebar-collapsed\] \.navigation__header \{[^}]*margin-inline:\s*0 !important/,
     );
   });
 
   // assets/navigationBar.js tags each button with the set it belongs to.
   it("swaps the browser controls for the page buttons", () => {
     expect(stripped).toMatch(
-      /#sidra-nav-buttons > \[data-sidra-show="expanded"\] \{\s*display:\s*none !important/,
+      /#hydra-nav-buttons > \[data-hydra-show="expanded"\] \{\s*display:\s*none !important/,
     );
     expect(stripped).toMatch(
-      /#sidra-nav-buttons > \[data-sidra-show="collapsed"\] \{\s*display:\s*flex !important/,
+      /#hydra-nav-buttons > \[data-hydra-show="collapsed"\] \{\s*display:\s*flex !important/,
     );
   });
 

@@ -10,9 +10,9 @@ const hookScript = fs
     path.join(__dirname, "..", "assets", "musicKitHook.js"),
     "utf-8",
   )
-  .replace("__SIDRA_DOCUMENT_GENERATION__", "1")
+  .replace("__HYDRA_DOCUMENT_GENERATION__", "1")
   .replace(
-    "__SIDRA_SERVICE_HOSTS__",
+    "__HYDRA_SERVICE_HOSTS__",
     JSON.stringify(allServices().map((service) => service.host)),
   );
 
@@ -193,8 +193,8 @@ function createHarness({
     addEventListener: ReturnType<typeof vi.fn>;
     navigator: unknown;
     location: { hostname: string; origin: string };
-    __sidraHookedMk?: unknown;
-    __sidra?: Record<string, (...args: unknown[]) => unknown>;
+    __hydraHookedMk?: unknown;
+    __hydra?: Record<string, (...args: unknown[]) => unknown>;
   }
   const window: HarnessWindow = {
     addEventListener: vi.fn(
@@ -367,7 +367,7 @@ describe("MusicKit OpenUri", () => {
         origin: `https://${host}`,
       });
       const uri = `https://${host}/gb/album/123`;
-      await window.__sidra!.openUri(uri);
+      await window.__hydra!.openUri(uri);
       expect(musicKit.setQueue).toHaveBeenCalledExactlyOnceWith({
         url: uri,
         startPlaying: true,
@@ -385,7 +385,7 @@ describe("MusicKit OpenUri", () => {
     "https://user@music.apple.com/album/1",
   ])("rejects an invalid or wrong-service queue URL %#", async (uri) => {
     const { window, musicKit } = createHarness();
-    await window.__sidra!.openUri(uri);
+    await window.__hydra!.openUri(uri);
     expect(musicKit.setQueue).not.toHaveBeenCalled();
     expect(musicKit.play).not.toHaveBeenCalled();
   });
@@ -397,11 +397,11 @@ describe("MusicKit OpenUri", () => {
       const uri = "https://music.apple.com/album/private?token=secret";
       musicKit.setQueue.mockRejectedValueOnce(new Error(uri));
       const queue = musicKit.queue;
-      await expect(window.__sidra!.openUri(uri)).resolves.toBeUndefined();
+      await expect(window.__hydra!.openUri(uri)).resolves.toBeUndefined();
       expect(musicKit.play).not.toHaveBeenCalled();
       expect(musicKit.queue).toBe(queue);
       expect(warn).toHaveBeenCalledExactlyOnceWith(
-        "[Sidra] failed to open requested media",
+        "[Hydra] failed to open requested media",
       );
     } finally {
       warn.mockRestore();
@@ -420,7 +420,7 @@ describe("MusicKit OpenUri", () => {
     expect(
       window.addEventListener.mock.invocationCallOrder[listenerIndex],
     ).toBeLessThan(bridgeSend.mock.invocationCallOrder[readyIndex]);
-    expect(typeof window.__sidra!.openUri).toBe("function");
+    expect(typeof window.__hydra!.openUri).toBe("function");
   });
 
   it("serialises queue replacement and drops superseded waiting requests", async () => {
@@ -431,12 +431,12 @@ describe("MusicKit OpenUri", () => {
         resolveQueue = resolve;
       }),
     );
-    const first = window.__sidra!.openUri("https://music.apple.com/album/1");
+    const first = window.__hydra!.openUri("https://music.apple.com/album/1");
     await Promise.resolve();
-    const superseded = window.__sidra!.openUri(
+    const superseded = window.__hydra!.openUri(
       "https://music.apple.com/album/2",
     );
-    const latest = window.__sidra!.openUri("https://music.apple.com/album/3");
+    const latest = window.__hydra!.openUri("https://music.apple.com/album/3");
     expect(musicKit.setQueue).toHaveBeenCalledOnce();
     resolveQueue();
     await Promise.all([first, superseded, latest]);
@@ -460,27 +460,27 @@ describe("MusicKit OpenUri", () => {
             rejectQueue = reject;
           }),
         );
-        const first = window.__sidra!.openUri(
+        const first = window.__hydra!.openUri(
           "https://music.apple.com/album/1",
         );
         await Promise.resolve();
-        const queued = window.__sidra!.openUri(
+        const queued = window.__hydra!.openUri(
           "https://music.apple.com/album/2",
         );
         runTimeouts();
         await Promise.all([first, queued]);
-        await window.__sidra!.openUri("https://music.apple.com/album/3");
+        await window.__hydra!.openUri("https://music.apple.com/album/3");
         expect(musicKit.setQueue).toHaveBeenCalledOnce();
         expect(musicKit.play).not.toHaveBeenCalled();
         expect(warn.mock.calls).toEqual(
-          Array(3).fill(["[Sidra] failed to open requested media"]),
+          Array(3).fill(["[Hydra] failed to open requested media"]),
         );
 
         if (settlement === "resolve") resolveQueue();
         else rejectQueue(new Error("private request data"));
         await new Promise<void>((resolve) => setImmediate(resolve));
         expect(musicKit.setQueue).toHaveBeenCalledOnce();
-        await window.__sidra!.openUri("https://music.apple.com/album/4");
+        await window.__hydra!.openUri("https://music.apple.com/album/4");
         expect(musicKit.setQueue.mock.calls).toEqual([
           [{ url: "https://music.apple.com/album/1", startPlaying: true }],
           [{ url: "https://music.apple.com/album/4", startPlaying: true }],
@@ -488,7 +488,7 @@ describe("MusicKit OpenUri", () => {
         expect(musicKit.play).not.toHaveBeenCalled();
         expect(
           warn.mock.calls.every(
-            ([message]) => message === "[Sidra] failed to open requested media",
+            ([message]) => message === "[Hydra] failed to open requested media",
           ),
         ).toBe(true);
       } finally {
@@ -499,9 +499,9 @@ describe("MusicKit OpenUri", () => {
 
   it("clears a completed queue timeout before another request", async () => {
     const { window, musicKit, runTimeouts } = createHarness();
-    await window.__sidra!.openUri("https://music.apple.com/album/1");
+    await window.__hydra!.openUri("https://music.apple.com/album/1");
     runTimeouts();
-    await window.__sidra!.openUri("https://music.apple.com/album/2");
+    await window.__hydra!.openUri("https://music.apple.com/album/2");
     expect(musicKit.setQueue).toHaveBeenCalledTimes(2);
   });
 
@@ -521,9 +521,9 @@ describe("MusicKit OpenUri", () => {
           resolveQueue = resolve;
         }),
       );
-      const first = window.__sidra!.openUri("https://music.apple.com/album/1");
+      const first = window.__hydra!.openUri("https://music.apple.com/album/1");
       await Promise.resolve();
-      const queued = window.__sidra!.openUri("https://music.apple.com/album/2");
+      const queued = window.__hydra!.openUri("https://music.apple.com/album/2");
       if (change === "navigation") {
         globalRegistrations
           .find(({ type }) => type === "pagehide")
@@ -568,8 +568,8 @@ describe("MusicKit Stop", () => {
       const { window, bridgeSend, musicKit, resolveSeek, engineStop } =
         pendingSeekHarness();
       const queue = musicKit.queue;
-      const stopping = window.__sidra!.stop(1);
-      const playing = window.__sidra![command]();
+      const stopping = window.__hydra!.stop(1);
+      const playing = window.__hydra![command]();
       await Promise.resolve();
       expect(musicKit.pause).toHaveBeenCalledOnce();
       expect(musicKit.seekToTime).toHaveBeenCalledExactlyOnceWith(0);
@@ -598,12 +598,12 @@ describe("MusicKit Stop", () => {
 
   it("coalesces repeated Stop calls and does not rewind an already stopped item", async () => {
     const { window, musicKit, resolveSeek } = pendingSeekHarness();
-    const stopping = window.__sidra!.stop(1);
-    expect(window.__sidra!.stop(1)).toBe(stopping);
+    const stopping = window.__hydra!.stop(1);
+    expect(window.__hydra!.stop(1)).toBe(stopping);
     await Promise.resolve();
     resolveSeek();
     await stopping;
-    await window.__sidra!.stop(2);
+    await window.__hydra!.stop(2);
     expect(musicKit.pause).toHaveBeenCalledOnce();
     expect(musicKit.seekToTime).toHaveBeenCalledOnce();
   });
@@ -613,10 +613,10 @@ describe("MusicKit Stop", () => {
     async (command) => {
       const { window, bridgeSend, musicKit, resolveSeek } =
         pendingSeekHarness();
-      const stopping = window.__sidra!.stop(1);
-      const playing = window.__sidra![command]();
+      const stopping = window.__hydra!.stop(1);
+      const playing = window.__hydra![command]();
       await Promise.resolve();
-      window.__sidra!.pause();
+      window.__hydra!.pause();
       resolveSeek();
       await Promise.all([stopping, playing]);
       expect(musicKit.play).not.toHaveBeenCalled();
@@ -625,9 +625,9 @@ describe("MusicKit Stop", () => {
         { requestId: 1, success: true },
         1,
       );
-      await window.__sidra!.stop(2);
+      await window.__hydra!.stop(2);
       expect(musicKit.seekToTime).toHaveBeenCalledOnce();
-      await window.__sidra!.play();
+      await window.__hydra!.play();
       expect(musicKit.play).toHaveBeenCalledOnce();
     },
   );
@@ -642,7 +642,7 @@ describe("MusicKit Stop", () => {
         globalRegistrations,
         resolveSeek,
       } = pendingSeekHarness();
-      const stopping = window.__sidra!.stop(1);
+      const stopping = window.__hydra!.stop(1);
       resolveSeek();
       await stopping;
       if (change === "item")
@@ -659,7 +659,7 @@ describe("MusicKit Stop", () => {
           .find(({ type }) => type === "pageshow")
           ?.listener({});
       }
-      await window.__sidra!.stop(2);
+      await window.__hydra!.stop(2);
       expect(musicKit.pause).toHaveBeenCalledTimes(2);
       expect(musicKit.seekToTime).toHaveBeenCalledTimes(2);
     },
@@ -667,8 +667,8 @@ describe("MusicKit Stop", () => {
 
   it("reports seek failure and releases a waiting Play", async () => {
     const { window, bridgeSend, musicKit, rejectSeek } = pendingSeekHarness();
-    const stopping = window.__sidra!.stop(1);
-    const playing = window.__sidra!.play();
+    const stopping = window.__hydra!.stop(1);
+    const playing = window.__hydra!.play();
     await Promise.resolve();
     rejectSeek(new Error("seek failed"));
     await Promise.all([stopping, playing]);
@@ -683,8 +683,8 @@ describe("MusicKit Stop", () => {
   it("releases a waiting Play when the seek never settles and ignores late completion", async () => {
     const { window, bridgeSend, musicKit, runTimeouts, resolveSeek } =
       pendingSeekHarness();
-    const stopping = window.__sidra!.stop(1);
-    const playing = window.__sidra!.play();
+    const stopping = window.__hydra!.stop(1);
+    const playing = window.__hydra!.play();
     await Promise.resolve();
     runTimeouts();
     await Promise.all([stopping, playing]);
@@ -713,8 +713,8 @@ describe("MusicKit Stop", () => {
         runMonitorCycles,
         resolveSeek,
       } = pendingSeekHarness();
-      const stopping = window.__sidra!.stop(1);
-      const playing = window.__sidra!.play();
+      const stopping = window.__hydra!.stop(1);
+      const playing = window.__hydra!.play();
       await Promise.resolve();
       if (change === "item") {
         musicKitListeners.get("nowPlayingItemDidChange")?.({
@@ -753,7 +753,7 @@ describe("MusicKit Stop", () => {
           currentPlaybackDuration: duration,
         },
       });
-      await window.__sidra!.stop(1);
+      await window.__hydra!.stop(1);
       expect(musicKit.pause).toHaveBeenCalledOnce();
       expect(musicKit.seekToTime).not.toHaveBeenCalled();
       expect(bridgeSend).toHaveBeenCalledWith(
@@ -766,8 +766,8 @@ describe("MusicKit Stop", () => {
 
   it("keeps the position for ordinary Pause followed by Play", async () => {
     const { window, musicKit } = createHarness();
-    window.__sidra!.pause();
-    await window.__sidra!.play();
+    window.__hydra!.pause();
+    await window.__hydra!.play();
     expect(musicKit.pause).toHaveBeenCalledOnce();
     expect(musicKit.play).toHaveBeenCalledOnce();
     expect(musicKit.seekToTime).not.toHaveBeenCalled();
@@ -1177,7 +1177,7 @@ describe("musicKitHook", () => {
     });
 
     const event = {
-      data: { type: "sidra:command", channel: "player:next", args: [] },
+      data: { type: "hydra:command", channel: "player:next", args: [] },
       source: window,
     };
     for (const listener of messageListeners) listener(event);
@@ -1201,14 +1201,14 @@ describe("musicKitHook", () => {
 
   it("keeps polling and attaches after getInstance() throws on the first poll", () => {
     // window.MusicKit exists at the first poll, but getInstance() still throws.
-    // The poll must survive that lookup, because __sidraHookInjected blocks
+    // The poll must survive that lookup, because __hydraHookInjected blocks
     // re-injection and a cleared poll would leave native controls dead.
     const { bridgeSend, musicKit, musicKitListeners, window } = createHarness({
       musicKitThrowsAtFirstPoll: true,
     });
 
     expect(musicKitListeners.has("playbackStateDidChange")).toBe(true);
-    expect(window.__sidraHookedMk).toBe(musicKit);
+    expect(window.__hydraHookedMk).toBe(musicKit);
     expect(bridgeSend).toHaveBeenCalledWith("hookReady", 1, 1);
   });
 
@@ -1222,7 +1222,7 @@ describe("musicKitHook", () => {
     expect(messageListeners).toHaveLength(1);
   });
 
-  // Claim __sidraHookedMk before attachment can throw.
+  // Claim __hydraHookedMk before attachment can throw.
   // Otherwise the 5-second monitor sees a stale marker and adds another set of listeners on every cycle.
   it("attaches each MusicKit listener once when the IPC bridge is missing", () => {
     const { musicKit, runMonitorCycles } = createHarness({
@@ -1249,19 +1249,19 @@ describe("musicKitHook", () => {
   it("marks the instance as hooked even when the attach throws part way", () => {
     const { musicKit, window } = createHarness({ volumeThrows: true });
 
-    expect(window.__sidraHookedMk).toBe(musicKit);
+    expect(window.__hydraHookedMk).toBe(musicKit);
   });
 
   it("drops a player command quietly when the initial attach threw", () => {
     // attachSafely() contains the failure and installs the message listener
-    // anyway, so the listener is live with no window.__sidra behind it. An
+    // anyway, so the listener is live with no window.__hydra behind it. An
     // unguarded index on undefined throws a TypeError out of the listener.
     const { messageListeners, window } = createHarness({ volumeThrows: true });
 
-    expect(window.__sidra).toBeUndefined();
+    expect(window.__hydra).toBeUndefined();
 
     const event = {
-      data: { type: "sidra:command", channel: "player:next", args: [] },
+      data: { type: "hydra:command", channel: "player:next", args: [] },
       source: window,
     };
 

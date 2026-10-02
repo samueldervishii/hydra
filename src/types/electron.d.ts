@@ -7,13 +7,13 @@ declare namespace Electron {
  interface App {
   /**
    * Sets the XDG desktop filename on Linux. CastLabs maps the name to
-   * `CHROME_DESKTOP`, which gives Sidra's PulseAudio stream its own name and icon.
+   * `CHROME_DESKTOP`, which gives Hydra's PulseAudio stream its own name and icon.
    */
   setDesktopName(name: string): void;
 
   /**
    * Accepts `cache`, which the runtime supports but the CastLabs union omits.
-   * Sidra uses this path for the artwork cache.
+   * Hydra uses this path for the artwork cache.
    */
   getPath(name: "cache"): string;
  }

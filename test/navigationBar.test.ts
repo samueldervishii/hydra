@@ -114,9 +114,9 @@ class StubElement {
   }
 
   querySelectorAll(selector: string): StubElement[] {
-    if (selector !== 'button[data-sidra-page]') throw new Error(`unexpected selector ${selector}`);
+    if (selector !== 'button[data-hydra-page]') throw new Error(`unexpected selector ${selector}`);
     return this.descendants().filter(
-      (element) => element.tagName === 'button' && element.getAttribute('data-sidra-page'),
+      (element) => element.tagName === 'button' && element.getAttribute('data-hydra-page'),
     );
   }
 
@@ -216,7 +216,7 @@ function createHarness({
     history,
     dispatchEvent,
     bar: (): StubElement | null =>
-      root.descendants().find((element) => element.id === 'sidra-nav-buttons') ?? null,
+      root.descendants().find((element) => element.id === 'hydra-nav-buttons') ?? null,
     buttons,
     button: (label: string): StubElement =>
       buttons().find((element) => element.getAttribute('aria-label') === label)!,
@@ -269,7 +269,7 @@ describe('navigationBar', () => {
       expect(svg?.getAttribute('height')).toBe('20');
       const [, , w, h] = (svg?.getAttribute('viewBox') ?? '').split(' ').map(Number);
       expect(w).toBe(h);
-      // Sidra's own glyphs are 14 to 20 units on their longer side.
+      // Hydra's own glyphs are 14 to 20 units on their longer side.
       expect(w).toBeGreaterThanOrEqual(14 * 1.25);
       expect(w).toBeLessThanOrEqual(20 * 1.25);
       for (const shape of svg?.children ?? []) {
@@ -295,7 +295,7 @@ describe('navigationBar', () => {
       LABELS.search,
       LABELS.allPlaylists,
     ]);
-    expect(buttons().map((b) => b.getAttribute('data-sidra-show'))).toEqual([
+    expect(buttons().map((b) => b.getAttribute('data-hydra-show'))).toEqual([
       'both', 'both', 'expanded', 'expanded', 'expanded', 'collapsed', 'collapsed', 'collapsed',
     ]);
     for (const button of buttons()) {
@@ -311,7 +311,7 @@ describe('navigationBar', () => {
     run();
 
     for (const button of buttons()) {
-      const display = button.getAttribute('data-sidra-show') === 'collapsed' ? 'none' : 'flex';
+      const display = button.getAttribute('data-hydra-show') === 'collapsed' ? 'none' : 'flex';
       expect(button.getAttribute('style')).toMatch(new RegExp(`^display: ${display}; `));
     }
   });
@@ -330,7 +330,7 @@ describe('navigationBar', () => {
 
     run();
 
-    expect(warn).toHaveBeenCalledWith(`Sidra: ${ANCHOR_SELECTOR} not found`);
+    expect(warn).toHaveBeenCalledWith(`Hydra: ${ANCHOR_SELECTOR} not found`);
   });
 
   it('appends no duplicate buttons when the script runs again', () => {
@@ -432,7 +432,7 @@ describe('navigationBar', () => {
     const h = createHarness();
 
     h.run();
-    expect(h.button(LABELS.home).getAttribute('data-sidra-icon')).toBeNull();
+    expect(h.button(LABELS.home).getAttribute('data-hydra-icon')).toBeNull();
 
     const link = Object.assign(new StubElement('a'), { href: 'https://music.apple.com/gb/home' });
     const source = link.appendChild(new StubElement('svg'));
@@ -446,7 +446,7 @@ describe('navigationBar', () => {
     expect(icon?.getAttribute('width')).toBe('20');
     expect(icon?.getAttribute('viewBox')).toBe('2 2 20 20');
     expect(icon?.styles.get('fill')).toBe('currentColor');
-    expect(h.button(LABELS.home).getAttribute('data-sidra-icon')).toBe('apple');
+    expect(h.button(LABELS.home).getAttribute('data-hydra-icon')).toBe('apple');
 
     // Rendered sidebar: the real glyph is measured and the same icon refitted.
     source.bbox = { x: 5, y: 4.6, width: 13.8, height: 13.9 };
@@ -454,6 +454,6 @@ describe('navigationBar', () => {
     expect(h.button(LABELS.home).querySelector('svg')).toBe(icon);
     const [, , side] = (icon?.getAttribute('viewBox') ?? '').split(' ').map(Number);
     expect(side).toBeCloseTo(13.9 * 1.25);
-    expect(h.button(LABELS.home).getAttribute('data-sidra-icon')).toBe('apple-measured');
+    expect(h.button(LABELS.home).getAttribute('data-hydra-icon')).toBe('apple-measured');
   });
 });

@@ -119,7 +119,7 @@ sidra/
 │   ├── shortcuts.ts               - Ctrl+B, Alt+Left/Right, Ctrl+R and F5 on the main window
 │   ├── types/
 │   │   ├── electron.d.ts          - module augmentations for CastLabs type gaps
-│   │   └── hook.d.ts              - hook-preload contract: SidraHook, AMWrapperBridge, SendChannel, ReceiveChannel, SidraCommandMessage, Window augmentations
+│   │   └── hook.d.ts              - hook-preload contract: HydraHook, AMWrapperBridge, SendChannel, ReceiveChannel, HydraCommandMessage, Window augmentations
 │   ├── theme.ts                   - theme lifecycle: ThemeName, resolveTheme(), getThemeCss(), applyTheme(), injectThemeCss(), initThemeCSS()
 │   ├── palettes.ts                - bundled theme registry (BUNDLED_THEMES), BundledThemeName, themeLabel()
 │   ├── customTheme.ts             - validates the custom JSON colour palette
@@ -148,10 +148,10 @@ sidra/
 │   ├── navigationBar.js           - Injected post-load; adds the sidebar toggle, Back, Forward, Reload
 │   │                                 and Settings row above the logo, and the Home, Search and All
 │   │                                 Playlists buttons the collapsed strip shows.
-│   │                                 Its `__SIDRA_NAV_LABELS__` placeholder is replaced with the
+│   │                                 Its `__HYDRA_NAV_LABELS__` placeholder is replaced with the
 │   │                                 localised aria-labels when src/main.ts reads the file
 │   ├── authFrameFix.js            - Injected into Apple's sign-in iframe; hides the passkey and
-│   │                                 "Sign in with iPhone" options. Its `__SIDRA_AUTH_FIX__`
+│   │                                 "Sign in with iPhone" options. Its `__HYDRA_AUTH_FIX__`
 │   │                                 placeholder is replaced with the stylesheet and container
 │   │                                 selectors when src/main.ts reads the file. Must be listed
 │   │                                 in electron-builder's `asarUnpack`
@@ -163,8 +163,8 @@ sidra/
 │   │                                 their CSP. Must be listed in `asarUnpack`
 │   ├── hydra-logo.png             - Product logo used in About window
 │   ├── hydra-splash.png           - Artwork shown on the splash screen
-│   ├── performanceMode.css        - Performance mode; every rule gated on html[data-sidra-performance]
-│   ├── sidebar.css                - Collapsed sidebar; every rule gated on html[data-sidra-sidebar-collapsed]
+│   ├── performanceMode.css        - Performance mode; every rule gated on html[data-hydra-performance]
+│   ├── sidebar.css                - Collapsed sidebar; every rule gated on html[data-hydra-sidebar-collapsed]
 │   ├── locales/
 │   │   ├── loading.json           - 1 translation record: LOADING_TEXT
 │   │   ├── tray.json              - 35 translation records: tray menu, dock, Windows taskbar
@@ -299,8 +299,8 @@ Integrations send commands to the renderer via a two-stage bridge:
 
 1. Main process calls `webContents.send(channel, ...args)` for each command channel
 2. Preload script receives via `ipcRenderer.on(channel)` for each channel in `RECEIVE_CHANNELS`
-3. Preload forwards to the main world via `window.postMessage({ type: 'sidra:command', channel, args }, window.location.origin)`
-4. `musicKitHook.js` listens for `sidra:command` messages and dispatches to `window.__sidra` methods
+3. Preload forwards to the main world via `window.postMessage({ type: 'hydra:command', channel, args }, window.location.origin)`
+4. `musicKitHook.js` listens for `hydra:command` messages and dispatches to `window.__hydra` methods
 
 The `window.location.origin` target keeps the bridge service-agnostic: it passes the sandbox same-origin check on both `music.apple.com` and `classical.music.apple.com` without a hardcoded origin.
 
@@ -310,17 +310,17 @@ The MPRIS and wedge dispatch sites log command provenance without command argume
 
 | Control | Method | Triggered by |
 |---|---|---|
-| Play | `window.__sidra.play()` | MPRIS `Play()` |
-| Pause | `window.__sidra.pause()` | MPRIS `Pause()` |
-| Stop | `window.__sidra.stop(requestId)` | MPRIS `Stop()` |
-| Play/Pause toggle | `window.__sidra.playPause()` | MPRIS `PlayPause()` |
-| Next track | `window.__sidra.next()` | MPRIS `Next()` |
-| Previous track | `window.__sidra.previous()` | MPRIS `Previous()` |
-| Seek | `window.__sidra.seek(seconds)` | MPRIS `Seek()`, `SetPosition()` |
-| Set volume | `window.__sidra.setVolume(float)` | MPRIS volume property |
-| Set repeat mode | `window.__sidra.setRepeat(mode)` | MPRIS `LoopStatus` |
-| Set shuffle mode | `window.__sidra.setShuffle(mode)` | MPRIS `Shuffle` |
-| Open media URL | `window.__sidra.openUri(url)` | MPRIS `OpenUri()` |
+| Play | `window.__hydra.play()` | MPRIS `Play()` |
+| Pause | `window.__hydra.pause()` | MPRIS `Pause()` |
+| Stop | `window.__hydra.stop(requestId)` | MPRIS `Stop()` |
+| Play/Pause toggle | `window.__hydra.playPause()` | MPRIS `PlayPause()` |
+| Next track | `window.__hydra.next()` | MPRIS `Next()` |
+| Previous track | `window.__hydra.previous()` | MPRIS `Previous()` |
+| Seek | `window.__hydra.seek(seconds)` | MPRIS `Seek()`, `SetPosition()` |
+| Set volume | `window.__hydra.setVolume(float)` | MPRIS volume property |
+| Set repeat mode | `window.__hydra.setRepeat(mode)` | MPRIS `LoopStatus` |
+| Set shuffle mode | `window.__hydra.setShuffle(mode)` | MPRIS `Shuffle` |
+| Open media URL | `window.__hydra.openUri(url)` | MPRIS `OpenUri()` |
 
 ---
 
@@ -363,7 +363,7 @@ The sandboxed preload must compile as one runtime file. Its only runtime `requir
 
 ## MusicKit Hook Script
 
-Injected into `music.apple.com` and `classical.music.apple.com` after page load via `webContents.executeJavaScript()`. Polls for `MusicKit` availability, hooks events, and exposes the `window.__sidra` control object. `isAllowedNavigationUrl()` gates both injection sites, so the hook never reaches a third host.
+Injected into `music.apple.com` and `classical.music.apple.com` after page load via `webContents.executeJavaScript()`. Polls for `MusicKit` availability, hooks events, and exposes the `window.__hydra` control object. `isAllowedNavigationUrl()` gates both injection sites, so the hook never reaches a third host.
 
 `assets/musicKitHook.js` is read with `fs.readFileSync` at runtime in the main process. It must be listed in the `asarUnpack` array in `electron-builder` configuration; without it, AppImage builds will crash on startup because the file is inaccessible inside the packed asar archive.
 
@@ -374,16 +374,16 @@ Injected into `music.apple.com` and `classical.music.apple.com` after page load 
 (function () {
   // Injection guard: set synchronously at IIFE top level and never cleared.
   // Re-running the IIFE would install duplicate message listeners (#154, #153).
-  if (window.__sidraHookInjected) return;
-  window.__sidraHookInjected = true;
+  if (window.__hydraHookInjected) return;
+  window.__hydraHookInjected = true;
 
   function attachToInstance(mk) {
     // Per-instance marker, read by the 5-second monitor below. It is not an
-    // injection guard: __sidraHookInjected is. The assignment is the first
+    // injection guard: __hydraHookInjected is. The assignment is the first
     // statement, before anything that can throw. A marker assigned last went
     // stale on a throw, so the monitor re-attached on every cycle and added
     // a duplicate set of listeners each time.
-    window.__sidraHookedMk = mk;
+    window.__hydraHookedMk = mk;
 
     // Then, in this order: stopVolumePoll(), attachPlaybackListeners(mk),
     // attachVolume(mk). The stop runs first so a throw in either attach
@@ -405,7 +405,7 @@ Injected into `music.apple.com` and `classical.music.apple.com` after page load 
     // Volume polling: stores lastVolume, sends initial volume on attach,
     // polls mk.volume at 250ms intervals, sends IPC only on change
 
-    // window.__sidra control object, assigned last:
+    // window.__hydra control object, assigned last:
     //   play, pause, stop, playPause, next, previous, openUri,
     //   seek, setVolume, setRepeat, setShuffle
   }
@@ -421,11 +421,11 @@ Injected into `music.apple.com` and `classical.music.apple.com` after page load 
     if (!window.MusicKit) return;
     clearInterval(waitForMK);
 
-    // sidra:command message listener for preload bridge:
+    // hydra:command message listener for preload bridge:
     //   window.addEventListener('message', ...) dispatches
-    //   incoming { type: 'sidra:command', channel, args } messages
-    //   to the matching window.__sidra method via a COMMANDS allowlist.
-    //   It indexes window.__sidra?.[method], because a failed attach
+    //   incoming { type: 'hydra:command', channel, args } messages
+    //   to the matching window.__hydra method via a COMMANDS allowlist.
+    //   It indexes window.__hydra?.[method], because a failed attach
     //   leaves no hook object while the listener still runs.
 
     attachSafely(MusicKit.getInstance());
@@ -436,7 +436,7 @@ Injected into `music.apple.com` and `classical.music.apple.com` after page load 
     // to the current control. The handler steps the live instance volume by 5%.
 
     // 5-second monitor: compares MusicKit.getInstance() against
-    // window.__sidraHookedMk and calls attachSafely() when the singleton
+    // window.__hydraHookedMk and calls attachSafely() when the singleton
     // is replaced.
     setInterval(() => { /* ... */ }, 5000);
   }, 500);
@@ -628,7 +628,7 @@ The IPC channel is still named `volumeDidChange`. That is Sidra's own channel na
 
 ### Scroll to Change Volume
 
-Pointing at the player bar volume control and scrolling changes the volume in 5% steps, up on wheel-up. A passive `pointerover` listener on `window` finds the current control with `event.target.closest('.chrome-volume')`. `bindVolumeWheel()` removes the `wheel` listener from the previous control, then adds a non-passive listener to the current control. The handler writes `window.__sidraHookedMk.volume`, so the value reaches the tray and MPRIS through the existing `volumeDidChange` route. No `sidra:command` channel was added.
+Pointing at the player bar volume control and scrolling changes the volume in 5% steps, up on wheel-up. A passive `pointerover` listener on `window` finds the current control with `event.target.closest('.chrome-volume')`. `bindVolumeWheel()` removes the `wheel` listener from the previous control, then adds a non-passive listener to the current control. The handler writes `window.__hydraHookedMk.volume`, so the value reaches the tray and MPRIS through the existing `volumeDidChange` route. No `hydra:command` channel was added.
 
 The selector matches the `chrome-volume` class token. The two services differ in the element that carries it:
 
@@ -645,9 +645,9 @@ Handler behaviour:
 - `preventDefault()` fires for each non-zoom event that reaches the bound control, so the page never scrolls under the control. Nothing calls `stopPropagation()`, so Apple's own handlers still see the event.
 - `deltaY` accumulates and each 100 pixels applies one step, carrying the remainder. 100 is Chromium's default `deltaY` for one wheel notch, so a mouse gets exactly one step per notch and a touchpad accumulates smoothly. A direction reversal resets the accumulator. The step is never scaled by `deltaY` magnitude: Chromium reports a wheel and a touchpad identically as `DOM_DELTA_PIXEL`, so magnitude would give a wheel a full-range jump and a touchpad an invisible nudge.
 - The value is clamped to 0 and 1 and rounded to two decimal places, because MusicKit throws on an out-of-range value and `0.7 - 0.05` is `0.6499999999999999` in binary floating point.
-- The base value is read from `window.__sidraHookedMk.volume` on every event, never from a cached local or captured instance, so a dropped MusicKit write self-corrects on the next notch and a replaced instance is used at once.
+- The base value is read from `window.__hydraHookedMk.volume` on every event, never from a cached local or captured instance, so a dropped MusicKit write self-corrects on the next notch and a replaced instance is used at once.
 
-The non-passive listener stays on the volume control. Putting it on `window` or `document` marks the whole document as a non-fast-scrollable region and makes every wheel event wait for the main thread. The volume control does not exist when the hook runs and is replaced on navigation and service switches, so the passive `pointerover` listener resolves it lazily. It is installed beside the `message` listener in the `waitForMK` callback, where the `__sidraHookInjected` guard covers it once. A `MutationObserver` is not used because one in this file previously cost 180 MiB/s (#153).
+The non-passive listener stays on the volume control. Putting it on `window` or `document` marks the whole document as a non-fast-scrollable region and makes every wheel event wait for the main thread. The volume control does not exist when the hook runs and is replaced on navigation and service switches, so the passive `pointerover` listener resolves it lazily. It is installed beside the `message` listener in the `waitForMK` callback, where the `__hydraHookInjected` guard covers it once. A `MutationObserver` is not used because one in this file previously cost 180 MiB/s (#153).
 
 ---
 
@@ -770,7 +770,7 @@ Implementation:
 - `assets/authStyleFix.css` hides known passkey, iPhone, and cross-device button/container variants using attribute selectors that survive Apple's obfuscated class names.
 - `setupAuthFrameInjection()` listens for `did-frame-finish-load`, filters subframes to `auth.music.apple.com` and `idmsa.apple.com`, then injects the CSS and fallback script with `webFrameMain.executeJavaScript()`.
 - The fallback scans button text and standalone captions, hides only bounded containers, and installs a `MutationObserver` so Apple auth re-renders are handled.
-- Iframe console messages prefixed with `[sidra] auth-frame hide:` are forwarded to the `auth-frame` log scope.
+- Iframe console messages prefixed with `[hydra] auth-frame hide:` are forwarded to the `auth-frame` log scope.
 - `assets/authStyleFix.css` must stay listed in `asarUnpack`; packaged builds read it from disk at runtime.
 
 ### Window close behaviour
@@ -846,7 +846,7 @@ The window is a local `BrowserWindow` that loads `assets/settings.html` over `fi
 
 ### Private IPC
 
-Three channels are private to the Settings preload and appear on no other allowlist: `settings:get` and `settings:apply` (invoked from the renderer) and `settings:state` (pushed from main). The preload exposes them as `window.sidraSettings` with `getState()`, `apply(action)` and `onState(listener)`, checked against the `SettingsBridge` interface with `satisfies`.
+Three channels are private to the Settings preload and appear on no other allowlist: `settings:get` and `settings:apply` (invoked from the renderer) and `settings:state` (pushed from main). The preload exposes them as `window.hydraSettings` with `getState()`, `apply(action)` and `onState(listener)`, checked against the `SettingsBridge` interface with `satisfies`.
 
 ### Sender checks
 
@@ -1003,7 +1003,7 @@ When `getShareUrl()` returns `undefined`, the Share item is omitted from the men
 
 | Context | Menu |
 |---------|------|
-| `SIDRA_DEVTOOLS=1` | View menu with "Toggle Developer Tools" |
+| `HYDRA_DEVTOOLS=1` | View menu with "Toggle Developer Tools" |
 | macOS (normal) | Single app-name menu: "About Hydra" + separator + "Quit Hydra" (Cmd+Q via `role: 'quit'`) |
 | Linux / Windows | `Menu.setApplicationMenu(null)` - no menu bar |
 
@@ -1055,7 +1055,7 @@ The top-level `productName: "Hydra"` in `package.json` is the single source for 
 | Splash screen | `assets/splash.html` | Localised loading text via `loading.json` |
 | Content readiness polling | `CONTENT_READY_SELECTOR` in `src/contentReady.ts`: `[data-testid="app-container"] amp-playback-controls-play[hydrated]` | Waits for the UI to hydrate before removing splash; both services share the selector |
 | About window | Frameless `BrowserWindow` + `assets/about.html` | Localised labels via `about.json` |
-| Navigation bar | `assets/navigationBar.js` injected post-load | Back/forward/reload buttons in sidebar; localised aria-labels substituted for `__SIDRA_NAV_LABELS__` at read time |
+| Navigation bar | `assets/navigationBar.js` injected post-load | Back/forward/reload buttons in sidebar; localised aria-labels substituted for `__HYDRA_NAV_LABELS__` at read time |
 | Auth iframe filtering | `authStyleFix.css` + `webFrameMain.executeJavaScript()` | Hides unsupported passkey and "Sign in with iPhone" desktop flows |
 | Zoom factor preference | `zoomFactor` in `electron-conf` | 1.0x to 2.0x via tray submenu |
 | Wedge detector | `src/wedgeDetector.ts` | Auto-skip on playback stall. Each attempt logs at `warn` with `source=wedge channel=player:next reason=playback-stalled attempt=<current>/3 result=sent|dropped` |

@@ -136,7 +136,7 @@ function createHarness(bodyChildren: StubElement[] = []) {
     querySelectorAll: (selector: string): StubElement[] =>
       all().filter((element) => element.matches(selector)),
   };
-  const window: { __sidraAuthFixInstalled?: boolean } = {};
+  const window: { __hydraAuthFixInstalled?: boolean } = {};
   const context = vm.createContext({
     console: { info },
     document,
@@ -175,7 +175,7 @@ describe('authFrameFix', () => {
     run();
 
     const [style] = styles();
-    expect(style?.id).toBe('sidra-auth-fix');
+    expect(style?.id).toBe('hydra-auth-fix');
     expect(style?.textContent).toContain(CONFIG.css);
     for (const selector of PASSKEY_CONTAINER_SELECTORS) {
       expect(style?.textContent).toContain(selector);

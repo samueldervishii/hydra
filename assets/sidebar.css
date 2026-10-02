@@ -1,40 +1,40 @@
-/* Collapsed sidebar. Every rule is gated on html[data-sidra-sidebar-collapsed],
+/* Collapsed sidebar. Every rule is gated on html[data-hydra-sidebar-collapsed],
    which src/sidebar.ts sets from Settings, the navigation bar button and
    Ctrl+B. Below 484px Apple swaps the sidebar for a top bar, so the strip
    applies only to the desktop layout. */
 @media (min-width: 484px) {
   /* Apple declares this on :root only, and the content padding, the floating
      player and the full-width shelves all read it, so they follow the strip. */
-  html[data-sidra-sidebar-collapsed] {
+  html[data-hydra-sidebar-collapsed] {
     --web-navigation-width: 56px !important;
   }
 
   /* The grid column and the sidebar width are fixed lengths in Apple's CSS,
      not the variable. [data-testid="header"] is the sidebar: a bare .header
      also matches every section header on the page. */
-  html[data-sidra-sidebar-collapsed] .app-container {
+  html[data-hydra-sidebar-collapsed] .app-container {
     grid-template-columns: var(--web-navigation-width) minmax(0, 1fr) !important;
   }
-  html[data-sidra-sidebar-collapsed] [data-testid="header"] {
+  html[data-hydra-sidebar-collapsed] [data-testid="header"] {
     width: var(--web-navigation-width) !important;
   }
 
-  /* Keep only Sidra's row: the logo, search, links and account menu return
+  /* Keep only Hydra's row: the logo, search, links and account menu return
      when the sidebar is expanded. The row is its own grid row above the logo.
      Classical puts its search field in the header beside the logo, where it
      would otherwise spill out of the strip over the page. */
-  html[data-sidra-sidebar-collapsed] .navigation__header .logo,
-  html[data-sidra-sidebar-collapsed] .navigation__header .search-input-wrapper,
-  html[data-sidra-sidebar-collapsed] .navigation__content {
+  html[data-hydra-sidebar-collapsed] .navigation__header .logo,
+  html[data-hydra-sidebar-collapsed] .navigation__header .search-input-wrapper,
+  html[data-hydra-sidebar-collapsed] .navigation__content {
     display: none !important;
   }
   /* Apple Music insets the header 8px on one side, which pushed the strip's
      icons off its centre; Classical has no inset. */
-  html[data-sidra-sidebar-collapsed] .navigation__header {
+  html[data-hydra-sidebar-collapsed] .navigation__header {
     grid-template-columns: 100% !important;
     margin-inline: 0 !important;
   }
-  html[data-sidra-sidebar-collapsed] #sidra-nav-buttons {
+  html[data-hydra-sidebar-collapsed] #hydra-nav-buttons {
     flex-direction: column !important;
     justify-content: flex-start !important;
     gap: 4px !important;
@@ -45,10 +45,10 @@
      Settings, which keep their keyboard shortcuts, for Home, Search and All
      Playlists. assets/navigationBar.js
      gives each button its default display without !important, so these win. */
-  html[data-sidra-sidebar-collapsed] #sidra-nav-buttons > [data-sidra-show="expanded"] {
+  html[data-hydra-sidebar-collapsed] #hydra-nav-buttons > [data-hydra-show="expanded"] {
     display: none !important;
   }
-  html[data-sidra-sidebar-collapsed] #sidra-nav-buttons > [data-sidra-show="collapsed"] {
+  html[data-hydra-sidebar-collapsed] #hydra-nav-buttons > [data-hydra-show="collapsed"] {
     display: flex !important;
   }
 }

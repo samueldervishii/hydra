@@ -83,7 +83,7 @@ function logCommand(
 }
 
 /**
- * The `org.mpris.MediaPlayer2` root interface: how Sidra identifies itself to
+ * The `org.mpris.MediaPlayer2` root interface: how Hydra identifies itself to
  * media clients, and the window controls the spec puts here.
  */
 class MediaPlayer2 extends Interface {
@@ -105,12 +105,12 @@ class MediaPlayer2 extends Interface {
     return INTERNAL_NAME;
   }
 
-  /** Reports that clients can quit Sidra. */
+  /** Reports that clients can quit Hydra. */
   get CanQuit(): boolean {
     return true;
   }
 
-  /** Reports that clients can bring Sidra to the foreground. */
+  /** Reports that clients can bring Hydra to the foreground. */
   get CanRaise(): boolean {
     return true;
   }
@@ -137,7 +137,7 @@ class MediaPlayer2 extends Interface {
     return true;
   }
 
-  /** Reports that Sidra exposes no MPRIS TrackList interface. */
+  /** Reports that Hydra exposes no MPRIS TrackList interface. */
   get HasTrackList(): boolean {
     return false;
   }

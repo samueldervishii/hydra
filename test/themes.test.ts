@@ -248,7 +248,7 @@ describe('buildThemeCss emitted structure', () => {
     for (const body of panels) {
       const colour = /background-color: ([^;]+) !important;/.exec(body)?.[1];
       expect(colour).toBeDefined();
-      expect(body).toContain(`--sidra-side-panel-material: ${colour};`);
+      expect(body).toContain(`--hydra-side-panel-material: ${colour};`);
     }
   });
   const darkCss = mediaBlock(css, 'prefers-color-scheme: dark');

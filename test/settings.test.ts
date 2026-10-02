@@ -73,10 +73,10 @@ describe('settings actions', () => {
     const state = applySettingsAction({ type: 'performanceMode', value: false });
     expect(state.performanceMode).toBe(false);
     expect(contents.executeJavaScript).toHaveBeenCalledExactlyOnceWith(
-      expect.stringContaining('toggleAttribute("data-sidra-performance", false)'));
+      expect.stringContaining('toggleAttribute("data-hydra-performance", false)'));
     applySettingsAction({ type: 'performanceMode', value: true });
     expect(contents.executeJavaScript).toHaveBeenLastCalledWith(
-      expect.stringContaining('toggleAttribute("data-sidra-performance", true)'));
+      expect.stringContaining('toggleAttribute("data-hydra-performance", true)'));
     expect(refreshTray).toHaveBeenCalledTimes(2);
   });
 
@@ -87,7 +87,7 @@ describe('settings actions', () => {
     });
     expect(applySettingsAction({ type: 'sidebarCollapsed', value: true }).sidebarCollapsed).toBe(true);
     expect(contents.executeJavaScript).toHaveBeenCalledExactlyOnceWith(
-      expect.stringContaining('toggleAttribute("data-sidra-sidebar-collapsed", true)'));
+      expect.stringContaining('toggleAttribute("data-hydra-sidebar-collapsed", true)'));
   });
 
   it('toggles the sidebar through the Settings action, so Settings follows the button and shortcut', () => {
@@ -99,7 +99,7 @@ describe('settings actions', () => {
     toggleSidebarCollapsed();
     expect(config.getSidebarCollapsed()).toBe(false);
     expect(contents.executeJavaScript).toHaveBeenLastCalledWith(
-      expect.stringContaining('toggleAttribute("data-sidra-sidebar-collapsed", false)'));
+      expect.stringContaining('toggleAttribute("data-hydra-sidebar-collapsed", false)'));
     expect(refreshTray).toHaveBeenCalledTimes(2);
   });
 

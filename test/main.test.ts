@@ -117,11 +117,11 @@ const bootstrap = vi.hoisted(() => {
 
 vi.mock("electron", () => ({
   app: {
-    name: "Sidra",
+    name: "Hydra",
     isPackaged: false,
     getName: vi.fn(() => "Test Player"),
     getVersion: vi.fn(() => "0.3.0"),
-    getPath: vi.fn((name: string) => `/tmp/sidra-test/${name}`),
+    getPath: vi.fn((name: string) => `/tmp/hydra-test/${name}`),
     whenReady: vi.fn(() => Promise.resolve()),
     on: bootstrap.appOn,
     quit: bootstrap.appQuit,
@@ -179,7 +179,7 @@ vi.mock("../src/config", () => ({
 vi.mock("../src/i18n", () => ({
   getLoadingText: vi.fn(() => ({ text: "Loading...", lang: "en" })),
   getNavigationStrings: vi.fn(() => ({})),
-  getTrayStrings: vi.fn(() => ({ about: "À propos de Sidra" })),
+  getTrayStrings: vi.fn(() => ({ about: "À propos de Hydra" })),
   NAV_LABELS_TOKEN: "__NAV_LABELS__",
 }));
 
@@ -347,7 +347,7 @@ describe("main bootstrap", () => {
     expect(Menu.buildFromTemplate).toHaveBeenCalledWith([
       expect.objectContaining({
         submenu: expect.arrayContaining([
-          expect.objectContaining({ label: "À propos de Sidra" }),
+          expect.objectContaining({ label: "À propos de Hydra" }),
         ]),
       }),
     ]);
