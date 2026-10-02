@@ -13,7 +13,11 @@ sha256sum -c SHA256SUMS
 sudo apt install ./<file>.deb
 ```
 
-Only Linux amd64 is built. The package is still called `sidra`, so it upgrades an existing Sidra install, and your sign-in and settings in `~/.config/Sidra` carry over.
+Only Linux amd64 is built.
+
+### Upgrading from 1.x
+
+Up to 1.1.2-hydra.10 the package was called `sidra`. From 2.0.0 it is `hydra`, and installing it removes the `sidra` package for you. Hydra now keeps its data in `~/.config/Hydra`: on the first start it copies your settings across from `~/.config/Sidra`, but not the sign-in, so sign in to Apple Music once more. `~/.config/Sidra` is left as it was; delete it when you no longer need it. Re-pin Hydra in your dock if you had pinned the old entry.
 
 ## Build from source
 

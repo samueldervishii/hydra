@@ -1,6 +1,6 @@
-# Sidra - Specification
+# Hydra - Specification
 
-A minimal Apple Music desktop client. CastLabs Electron wraps `music.apple.com` and `classical.music.apple.com` directly, injecting a lightweight hook script to bridge MusicKit.js events to native platform media controls. `src/musicService.ts` holds the registry of both services. Apple maintains the UI; Sidra maintains the bridge.
+A minimal Apple Music desktop client. CastLabs Electron wraps `music.apple.com` and `classical.music.apple.com` directly, injecting a lightweight hook script to bridge MusicKit.js events to native platform media controls. `src/musicService.ts` holds the registry of both services. Apple maintains the UI; Hydra maintains the bridge.
 
 The codebase is tightly focused and as lean as possible. Five runtime dependencies.
 
@@ -96,7 +96,7 @@ The sandboxed isolated preload owns standard Gamepad polling for both services. 
 ## Source Structure
 
 ```
-sidra/
+hydra/
 ├── src/
 │   ├── main.ts                    - bootstrap, Widevine wait, window, IPC hub
 │   ├── preload.ts                 - contextBridge exposure plus isolated standard Gamepad polling
@@ -111,8 +111,8 @@ sidra/
 │   ├── serviceSwitch.ts           - switchService() and routeToMusicService(); the one service-switch sequence
 │   ├── contentReady.ts            - CONTENT_READY_SELECTOR and contentReadyProbeScript()
 │   ├── itms.ts                    - pure itms:// URL parser and argv extraction
-│   ├── identity.ts                - INTERNAL_NAME ("sidra"), the userData folder name and the About credits
-│   ├── userDataPath.ts            - pins userData to ~/.config/Sidra; first import in main.ts
+│   ├── identity.ts                - INTERNAL_NAME ("hydra"), the legacy Sidra folder name and the About credits
+│   ├── settingsMigration.ts       - copies settings once from ~/.config/Sidra; first import in main.ts
 │   ├── rootAttribute.ts           - setRootAttribute(): toggles a gating attribute on the page's <html>
 │   ├── performanceMode.ts         - applyPerformanceMode(): mirrors the setting onto <html>
 │   ├── sidebar.ts                 - applySidebar(): mirrors the collapsed-sidebar setting onto <html>
@@ -195,7 +195,7 @@ sidra/
 
 ## Dependencies
 
-Sidra keeps runtime dependencies narrow and purpose-driven. Each package must provide a platform integration or maintenance function that Electron, Node.js, or the standard library does not already cover.
+Hydra keeps runtime dependencies narrow and purpose-driven. Each package must provide a platform integration or maintenance function that Electron, Node.js, or the standard library does not already cover.
 
 `package.json` is the source of truth for direct dependency names and version ranges. `package-lock.json` is the source of truth for resolved packages.
 
@@ -306,7 +306,7 @@ The `window.location.origin` target keeps the bridge service-agnostic: it passes
 
 The command bridge uses the `RECEIVE_CHANNELS` allowlist in `src/preload.ts` and the `COMMANDS` allowlist in `assets/musicKitHook.js`, which must stay in sync. `src/types/hook.d.ts` declares `SendChannel` and `ReceiveChannel` union types used by `src/preload.ts` (`Set<SendChannel>`, `Set<ReceiveChannel>`), enforcing channel sync at compile time. Contract tests in `test/player.test.ts` verify alignment via `expectTypeOf`.
 
-The MPRIS and wedge dispatch sites log command provenance without command arguments. `result=sent` means that Sidra invoked the local action. `result=dropped` means that the required main window was unavailable. The result does not confirm that the renderer completed the command.
+The MPRIS and wedge dispatch sites log command provenance without command arguments. `result=sent` means that Hydra invoked the local action. `result=dropped` means that the required main window was unavailable. The result does not confirm that the renderer completed the command.
 
 | Control | Method | Triggered by |
 |---|---|---|
@@ -464,7 +464,7 @@ The correct approach differs by platform. Conflating them is what goes wrong.
 
 ### Linux: Explicit MPRIS via dbus-next
 
-**Service name**: `org.mpris.MediaPlayer2.sidra`
+**Service name**: `org.mpris.MediaPlayer2.hydra`
 
 Chromium has a built-in MPRIS bridge (via `navigator.mediaSession`) that must be disabled to avoid conflicts. It registers as `org.mpris.MediaPlayer2.chromium.instance{PID}`, which is useless for app identity. Both Cider and apple-music-wrapper disable it and implement their own D-Bus service.
 
@@ -473,11 +473,11 @@ Chromium has a built-in MPRIS bridge (via `navigator.mediaSession`) that must be
 if (process.platform === 'linux') {
   app.commandLine.appendSwitch('enable-features', 'UseOzonePlatform,WaylandWindowDecorations');
   app.commandLine.appendSwitch('disable-features', 'MediaSessionService,WaylandWpColorManagerV1,AudioServiceOutOfProcess');
-  app.setDesktopName('sidra.desktop');
+  app.setDesktopName('hydra.desktop');
 }
 ```
 
-**PulseAudio stream identity**: Chromium hard-codes `application.name = "Chromium"` and `application.icon_name = "chromium-browser"` on PulseAudio/PipeWire streams via explicit API calls; `PULSE_PROP_*` environment variables are ineffective. Sidra fixes this by disabling `AudioServiceOutOfProcess` (moves audio in-process so `SetGlobalAppName` reaches PulseAudio) and calling `app.setDesktopName('sidra.desktop')` (sets `CHROME_DESKTOP` for `GetXdgAppId()`). See [electron/electron#27581](https://github.com/electron/electron/issues/27581).
+**PulseAudio stream identity**: Chromium hard-codes `application.name = "Chromium"` and `application.icon_name = "chromium-browser"` on PulseAudio/PipeWire streams via explicit API calls; `PULSE_PROP_*` environment variables are ineffective. Hydra fixes this by disabling `AudioServiceOutOfProcess` (moves audio in-process so `SetGlobalAppName` reaches PulseAudio) and calling `app.setDesktopName('hydra.desktop')` (sets `CHROME_DESKTOP` for `GetXdgAppId()`). See [electron/electron#27581](https://github.com/electron/electron/issues/27581).
 
 ### macOS: Chromium's Built-in mediaSession Bridge
 
@@ -496,7 +496,7 @@ Chromium maps `navigator.mediaSession` to Global System Media Transport Controls
 ```typescript
 // main.ts - must run before app.whenReady()
 if (process.platform === 'win32') {
-  app.setAppUserModelId('com.wimpysworld.sidra');
+  app.setAppUserModelId('io.github.samueldervishii.hydra');
 }
 ```
 
@@ -522,7 +522,7 @@ The `org.mpris.MediaPlayer2.Player` interface exposes the following properties a
 
 ### Properties
 
-| Property | Access | Sidra approach |
+| Property | Access | Hydra approach |
 |---|---|---|
 | `PlaybackStatus` | Read | From `playbackStateDidChange` |
 | `LoopStatus` | Read/Write | Bidirectional via `repeatModeDidChange` |
@@ -542,7 +542,7 @@ The `org.mpris.MediaPlayer2.Player` interface exposes the following properties a
 
 ### Methods
 
-| Method | Sidra approach |
+| Method | Hydra approach |
 |---|---|
 | `Next()` | `mk.skipToNextItem()` |
 | `Previous()` | `mk.skipToPreviousItem()` |
@@ -580,7 +580,7 @@ MPRIS command provenance uses `source=mpris method=<method> [channel=<channel>] 
 
 | MPRIS property | MusicKit source |
 |---|---|
-| `mpris:trackid` | `/org/sidra/track/{item.id}` |
+| `mpris:trackid` | `/org/hydra/track/{item.id}` |
 | `mpris:length` | Effective finite playback duration in microseconds, with item duration as fallback |
 | `mpris:artUrl` | `artwork.url` (512x512) |
 | `xesam:title` | `attributes.name` |
@@ -589,7 +589,7 @@ MPRIS command provenance uses `source=mpris method=<method> [channel=<channel>] 
 | `xesam:genre` | `attributes.genreNames` |
 | `xesam:url` | `getShareUrl()` (`attributes.url` → `/song/{catalogId}` → `/song/{globalId}`) |
 
-Library items without `attributes.url` use a catalogue ID to reconstruct `/song/{id}`. Without a URL or catalogue ID, Sidra omits `xesam:url`.
+Library items without `attributes.url` use a catalogue ID to reconstruct `/song/{id}`. Without a URL or catalogue ID, Hydra omits `xesam:url`.
 Timed radio metadata updates title, artist, album and share URL while retaining the station track ID, artwork, duration and position.
 Missing song fields clear the previous song's fields. A missing song URL falls back to the station URL when available.
 
@@ -597,7 +597,7 @@ Missing song fields clear the previous song's fields. A missing song URL falls b
 
 ## Volume Sync
 
-Cider's MPRIS volume sync is one-directional (MPRIS to MusicKit only, no reliable MusicKit to MPRIS), with a feedback loop on `volumeDidChange`. Sidra fixes this with an ordered queue of pending echoes:
+Cider's MPRIS volume sync is one-directional (MPRIS to MusicKit only, no reliable MusicKit to MPRIS), with a feedback loop on `volumeDidChange`. Hydra fixes this with an ordered queue of pending echoes:
 
 ```
 MPRIS sets Volume
@@ -620,11 +620,11 @@ A 2000ms safety timeout (`_volumeSafetyMs`) drops the whole queue when no echo a
 
 ### Volume Event Reporting
 
-`assets/musicKitHook.js` binds `playbackVolumeDidChange`. A CDP session against a running Sidra confirmed that a `mk.volume` write fires that event once and never fires `volumeDidChange`. The hook was bound to `volumeDidChange` until then, so the listener never fired and the 250ms poll was the only reporting path.
+`assets/musicKitHook.js` binds `playbackVolumeDidChange`. A CDP session against a running Hydra confirmed that a `mk.volume` write fires that event once and never fires `volumeDidChange`. The hook was bound to `volumeDidChange` until then, so the listener never fired and the 250ms poll was the only reporting path.
 
 The 250ms poll stays as a fallback: nothing has confirmed what the player bar volume control writes. That control is Svelte light DOM with no range input, and `mk._targetElement` is not exposed on the public instance, so its write path could not be observed. The poll sends IPC only when the value differs from the last one sent.
 
-The IPC channel is still named `volumeDidChange`. That is Sidra's own channel name, not the MusicKit event name, and the two differ on purpose.
+The IPC channel is still named `volumeDidChange`. That is Hydra's own channel name, not the MusicKit event name, and the two differ on purpose.
 
 ### Scroll to Change Volume
 
@@ -681,7 +681,7 @@ Apple Music storefront codes are ISO 3166-1 alpha-2 codes lowercased (e.g. `gb`,
 
 ## Apple Music Classical
 
-Sidra loads two Apple web apps from one shell. `src/musicService.ts` holds the registry that describes them. It imports nothing from `electron`, `electron-log`, or `config`, so `src/itms.ts` and the tests can import it without loading Electron.
+Hydra loads two Apple web apps from one shell. `src/musicService.ts` holds the registry that describes them. It imports nothing from `electron`, `electron-log`, or `config`, so `src/itms.ts` and the tests can import it without loading Electron.
 
 ### Service registry
 
@@ -755,7 +755,7 @@ Themes are service-agnostic. `resolveTheme()` does not branch on the active serv
 
 ## Authentication
 
-Non-issue by design. Cider's auth breaks because it uses MusicKit.js with a developer token it controls and the OAuth user-token flow. Sidra loads `music.apple.com` - Apple handles authentication entirely. Identical to opening Chrome and navigating to `music.apple.com`.
+Non-issue by design. Cider's auth breaks because it uses MusicKit.js with a developer token it controls and the OAuth user-token flow. Hydra loads `music.apple.com` - Apple handles authentication entirely. Identical to opening Chrome and navigating to `music.apple.com`.
 
 The only implementation requirement: use a named persistent partition so cookies and localStorage survive between launches.
 
@@ -763,7 +763,7 @@ The only implementation requirement: use a named persistent partition so cookies
 
 Apple's sign-in page can offer passkey and "Sign in with iPhone" options inside auth iframes served from `auth.music.apple.com` and `idmsa.apple.com`. These flows rely on WebAuthn's cross-device hybrid transport (`caBLE`) and expect Chromium's `//chrome` product layer to render the QR-code modal. Electron only ships Chromium's `//content` layer, so the modal never appears and `navigator.credentials.get()` can hang behind a spinner. No command-line switch enables this missing UI; see [electron/electron#24573](https://github.com/electron/electron/issues/24573).
 
-Sidra treats these options as unsupported desktop auth paths and hides them before users can enter the dead-end flow. Password sign-in remains Apple's own web flow.
+Hydra treats these options as unsupported desktop auth paths and hides them before users can enter the dead-end flow. Password sign-in remains Apple's own web flow.
 
 Implementation:
 
@@ -840,7 +840,7 @@ Each queued operation captures `documentGeneration`. A main-frame `did-navigate`
 
 ## Settings Window
 
-Sidra has two settings surfaces: the tray menu and a Settings window. `src/settingsWindow.ts` owns the window. `src/settings.ts` owns the state and the validated `SettingsAction` union that Settings and the tray controls share.
+Hydra has two settings surfaces: the tray menu and a Settings window. `src/settingsWindow.ts` owns the window. `src/settings.ts` owns the state and the validated `SettingsAction` union that Settings and the tray controls share.
 
 The window is a local `BrowserWindow` that loads `assets/settings.html` over `file:` with `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true` and its own preload, `src/settingsPreload.ts`. It opens from the gear button beside Back, Forward and Reload, and from Ctrl+, (Cmd+, on macOS), captured by a `before-input-event` listener on the main window. `will-navigate`, `will-frame-navigate` and `will-redirect` are all prevented, and `setWindowOpenHandler` denies every new window.
 
@@ -1009,7 +1009,7 @@ When `getShareUrl()` returns `undefined`, the Share item is omitted from the men
 
 The About item uses `getMenuIcon('about')`, which resolves to the `info.circle` SF Symbol on macOS Tahoe or later (undefined on earlier versions, in which case the icon property is omitted entirely).
 
-The top-level `productName: "Hydra"` in `package.json` is the single source for the product display name. electron-builder inherits this field without a `build.productName` override. Runtime labels use `app.getName()` directly or through `getProductInfo().productName`. Technical identifiers, URLs and storage names remain `sidra`: they come from `INTERNAL_NAME` in `src/identity.ts`, and `src/userDataPath.ts` keeps userData at `~/.config/Sidra`.
+The top-level `productName: "Hydra"` in `package.json` is the single source for the product display name. electron-builder inherits this field without a `build.productName` override. Runtime labels use `app.getName()` directly or through `getProductInfo().productName`. Technical identifiers and storage names are `hydra`: they come from `INTERNAL_NAME` in `src/identity.ts`, and userData is `~/.config/Hydra`, named after `productName`. On the first start `src/settingsMigration.ts` copies the settings, not the sign-in, from the `~/.config/Sidra` folder Hydra 1.x used, and the `.deb` declares `Conflicts`, `Replaces` and `Provides: sidra` so it replaces the `sidra` package 1.x shipped as.
 
 `showAboutWindow()` is exported from `src/aboutWindow.ts` and imported by `src/main.ts` for use in the app menu. Both the About window and the splash window set `fullscreenable: false` and `fullscreen: false` to prevent them entering full-screen mode.
 
@@ -1023,7 +1023,7 @@ The top-level `productName: "Hydra"` in `package.json` is the single source for 
 |---|---|---|
 | Apple Music web app (DRM) | CastLabs Electron + `music.apple.com` | Widevine CDM auto-installs |
 | Auth | Apple's own web flow | Persistent partition; no developer tokens |
-| MPRIS (Linux) | `dbus-next` D-Bus service | `org.mpris.MediaPlayer2.sidra` |
+| MPRIS (Linux) | `dbus-next` D-Bus service | `org.mpris.MediaPlayer2.hydra` |
 | MPRIS primitives | play/pause/next/prev/seek/stop/OpenUri | Typed IPC with capability updates, bounded seeking and ordered Stop |
 | MPRIS metadata | title/artist/album/artwork/duration/trackId | Queue-item metadata, effective duration and timed radio songs |
 | MPRIS volume | Two-way with pending-echo queue | musicKitHook.js + main MPRIS plugin |
@@ -1039,7 +1039,7 @@ The top-level `productName: "Hydra"` in `package.json` is the single source for 
 | Feature | Implementation | Notes |
 |---|---|---|
 | macOS Now Playing | Chromium mediaSession → MPNowPlayingInfoCenter | Bundle name "Hydra" from productName |
-| Windows GSMTC | Chromium mediaSession → GSMTC | `app.setAppUserModelId('com.wimpysworld.sidra')` |
+| Windows GSMTC | Chromium mediaSession → GSMTC | `app.setAppUserModelId('io.github.samueldervishii.hydra')` |
 | Explicit `navigator.mediaSession` updates | musicKitHook.js | Supplement Apple's own updates |
 | System tray | Electron `Tray` | Prev/play-pause/next + show/hide |
 | macOS `.app` build | electron-builder | DMG |
@@ -1061,7 +1061,7 @@ The top-level `productName: "Hydra"` in `package.json` is the single source for 
 | Wedge detector | `src/wedgeDetector.ts` | Auto-skip on playback stall. Each attempt logs at `warn` with `source=wedge channel=player:next reason=playback-stalled attempt=<current>/3 result=sent|dropped` |
 | Artwork cache | `src/artwork.ts` | UUID-based filenames, 7-day expiry, atomic writes |
 | Pause timer utility | `src/pauseTimer.ts` | `createPauseTimer()` shared by tray and dock |
-| Service worker cache clearing | `clearData()` on the `persist:sidra` partition in `initSession()` | Clears service workers and cache for the service origins on startup |
+| Service worker cache clearing | `clearData()` on the `persist:hydra` partition in `initSession()` | Clears service workers and cache for the service origins on startup |
 | Controller navigation | Gamepad API in `preload.ts` + `controllerIPC.ts` | Standard mapping; D-pad, Select, and guarded Back in both services |
 
 #### Tray Menu Implementation Notes
