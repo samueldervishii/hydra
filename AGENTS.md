@@ -27,6 +27,8 @@ source .tools/env.sh && npm version X.Y.Z --no-git-tag-version
 git commit -am "chore(release): set version to X.Y.Z" && git push origin main
 ```
 
+Each release is also a flat apt repository. After packaging, the workflow runs `scripts/build-apt-repo.sh`, which writes `Packages`, `Packages.gz` and `Release` with `apt-ftparchive` beside the `.deb` (with `Filename` relative to the folder) and signs `InRelease` and `Release.gpg` with the `HYDRA_GPG_PRIVATE_KEY` secret, then checks both signatures against `packaging/hydra.gpg`, the public key users install. Those files and `hydra.gpg` are uploaded with the `.deb`, and every release is created with `--latest`, never as a pre-release, because users' sources point at `releases/latest/download/`. The secret is the workflow's only one and reaches the signing step only; the release-gate tests pin that.
+
 `.github/workflows/release-linux.yml` runs on every push to `main` that changes `package.json`. Its `check` job stops when a tag or a GitHub release named after the version already exists, so a dependency-only edit releases nothing. Otherwise it runs `npm ci`, `just test` and `just build`, packages the `.deb`, writes `SHA256SUMS`, creates the annotated tag on the pushed commit and publishes the release. Do not push the tag yourself: the workflow creates it, and an existing tag makes it skip the release. The macOS, Windows, snap, rpm and AppImage configuration left in `package.json` and `build/` is unused by this release process. The flake provides only the development shell; there is no Nix package.
 
 ## User-Agent

@@ -4,7 +4,22 @@
 
 An Apple Music desktop client for Linux, a fork of [Sidra](https://github.com/wimpysworld/sidra).
 
-## Install
+## Install via apt
+
+Add the signing key and the repository once, then install. Updates arrive through `apt upgrade` and the Software Updater like any other package:
+
+```bash
+sudo wget -qO /usr/share/keyrings/hydra.gpg https://github.com/samueldervishii/hydra/releases/latest/download/hydra.gpg
+gpg --show-keys /usr/share/keyrings/hydra.gpg   # fingerprint 3620 EBD1 BECC 5DA8 21BE  A555 085D 4BC4 8EFD 3C56
+echo "deb [signed-by=/usr/share/keyrings/hydra.gpg] https://github.com/samueldervishii/hydra/releases/latest/download/ ./" \
+  | sudo tee /etc/apt/sources.list.d/hydra.list
+sudo apt update
+sudo apt install hydra-music
+```
+
+If you have Hydra 2.0.0 or 2.0.1 installed, finish with `sudo apt install hydra-music hydra-` instead, so apt removes the old `hydra` package rather than replacing it with THC-Hydra.
+
+## Install the .deb by hand
 
 Download the `.deb` and `SHA256SUMS` from the [releases page](https://github.com/samueldervishii/hydra/releases), then check and install it from the folder you saved them in:
 
