@@ -226,3 +226,19 @@ it("registers the platform VMP hooks without disabling Windows executable edits"
   expect(packageJson.build.afterSign).toBe("build/afterSign.cjs");
   expect(packageJson.build.win?.signAndEditExecutable).not.toBe(false);
 });
+
+// Hydra 1.x shipped as the sidra package. The hydra .deb must take over from
+// it on install, files under /opt/Hydra included, or dpkg refuses the overlap.
+describe("deb package swap", () => {
+  it("declares Conflicts, Replaces and Provides on sidra", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
+      name: string;
+      build: { deb: { fpm?: string[] } };
+    };
+    expect(pkg.name).toBe("hydra");
+    const fpm = pkg.build.deb.fpm ?? [];
+    for (const field of ["--conflicts", "--replaces", "--provides"]) {
+      expect(fpm[fpm.indexOf(field) + 1], field).toBe("sidra");
+    }
+  });
+});

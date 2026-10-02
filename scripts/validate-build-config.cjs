@@ -117,6 +117,20 @@ function main() {
     throw new Error("package.json 'author' field is missing.");
   }
 
+  // Hydra 1.x shipped as the sidra package. Conflicts plus Replaces lets dpkg
+  // swap the two, the files under /opt/Hydra they both ship included, and
+  // removes sidra; Provides satisfies anything that depended on it.
+  const fpm = Array.isArray(config.deb?.fpm) ? config.deb.fpm : [];
+  for (const field of ["conflicts", "replaces", "provides"]) {
+    const at = fpm.indexOf(`--${field}`);
+    if (at === -1 || fpm[at + 1] !== "sidra") {
+      throw new Error(
+        `build.deb.fpm must pass --${field} sidra, so installing the hydra .deb replaces the sidra package`,
+      );
+    }
+  }
+  console.log("  \u2713 .deb replaces the sidra package: Conflicts, Replaces, Provides");
+
   // Pin the D-Bus commands for launcher controls, not their labels.
   // Match the MPRIS integration, which names its bus after INTERNAL_NAME in
   // src/identity.ts, the package name, so a display rename leaves it alone.

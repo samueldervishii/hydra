@@ -131,7 +131,15 @@
     },
     "deb": {
       "maintainer": "samueldervishii (https://github.com/samueldervishii)",
-      "priority": "optional"
+      "priority": "optional",
+      "fpm": [
+        "--conflicts",
+        "sidra",
+        "--replaces",
+        "sidra",
+        "--provides",
+        "sidra"
+      ]
     },
     "rpm": {
       "vendor": "samueldervishii"
