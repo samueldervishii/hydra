@@ -262,6 +262,25 @@ it("publishes a signed apt repository on a Latest release", () => {
   );
 });
 
+// npm ci runs every dependency's install scripts, and a process they start
+// can outlive its step within the job, so the job that installs and builds
+// holds no secret, and the job with the signing key runs no third-party code.
+it("keeps the build away from the signing key", () => {
+  const job = (name: string) => {
+    const start = releaseWorkflow.indexOf(`\n  ${name}:\n`);
+    const next = releaseWorkflow.slice(start + 1).search(/\n  [a-z-]+:\n/);
+    return next === -1 ? releaseWorkflow.slice(start) : releaseWorkflow.slice(start, start + 1 + next);
+  };
+  const build = job("build");
+  const publish = job("publish");
+  expect(build).toContain("run: npm ci");
+  expect(build).not.toMatch(/secrets\.|environment:/);
+  expect(publish).toContain("    environment: Release\n");
+  expect(publish).toContain("secrets.HYDRA_GPG_PRIVATE_KEY");
+  expect(publish).not.toMatch(/npm |npx |just |setup-node/);
+  expect(job("check")).not.toMatch(/secrets\.|environment:/);
+});
+
 it("keeps Filename in Packages relative and checks the signatures", () => {
   const script = readFileSync("scripts/build-apt-repo.sh", "utf8");
   expect(script).toContain("apt-ftparchive packages . > Packages");

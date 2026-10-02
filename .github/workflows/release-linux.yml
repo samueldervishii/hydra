@@ -3,10 +3,11 @@ name: Release (Linux)
 # Releases this fork whenever main carries a version that has not been
 # released. Only a push to main that changes package.json starts it: there is
 # no manual trigger, and every job also checks github.ref, so no other branch,
-# tag, fork or pull request can run it. "check" reads package.json's version and stops there
-# when a tag or a GitHub release with that exact name already exists.
-# Otherwise "release" builds the Linux amd64 .deb, turns the release folder
-# into a flat apt repository signed with the HYDRA_GPG_PRIVATE_KEY secret,
+# tag, fork or pull request can run it. "check" reads package.json's version
+# and stops there when a tag or a GitHub release with that exact name already
+# exists. Otherwise "build" makes the Linux amd64 .deb with no secret, and
+# "publish", in the Release environment, turns it into a
+# flat apt repository signed with that environment's HYDRA_GPG_PRIVATE_KEY,
 # tags the pushed commit with an annotated <version> tag and publishes the
 # .deb, SHA256SUMS, the repository files and the public key. Every release is
 # marked Latest, because apt reads the repository from releases/latest/download/.
@@ -85,14 +86,16 @@ jobs:
           [[ "$release" == true ]] && echo "Releasing ${VERSION} from ${GITHUB_SHA}."
           exit 0
 
-  release:
-    name: Build and release the .deb
+  # Builds the .deb from the pushed commit. npm ci runs every dependency's
+  # install scripts here, so this job holds no secret and no write token: a
+  # process started by those scripts can outlive its step and read a later
+  # step's environment, but only within this job.
+  build:
+    name: Build the .deb
     needs: check
     if: github.ref == 'refs/heads/main' && needs.check.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      VERSION: ${{ needs.check.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -105,10 +108,10 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
-      - name: Install just and the apt repository tools
+      - name: Install just
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends just apt-utils gnupg
+          sudo apt-get install -y --no-install-recommends just
           just --version
 
       - name: Install dependencies
@@ -122,6 +125,45 @@ jobs:
 
       - name: Package the amd64 .deb
         run: npx electron-builder --linux deb --x64 --publish never
+
+      - name: Upload the .deb
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deb
+          path: release/*.deb
+          if-no-files-found: error
+          retention-days: 1
+
+  # Signs and publishes. It runs in the Release environment, whose secret
+  # HYDRA_GPG_PRIVATE_KEY is available to main only, and it runs no
+  # third-party code: it checks out this commit for the signing script and
+  # the public key, takes the .deb the build job made, and installs only
+  # Ubuntu's apt-utils and gnupg.
+  publish:
+    name: Sign and publish the release
+    needs: [check, build]
+    if: github.ref == 'refs/heads/main' && needs.check.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: Release
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the .deb
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: deb
+          path: release
+
+      - name: Install the apt repository tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends apt-utils gnupg
 
       - name: Generate SHA256SUMS
         working-directory: release
