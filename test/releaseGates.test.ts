@@ -212,7 +212,7 @@ describe("release build scripts", () => {
 
 it("releases the fork from main with the apt signing key as its only secret", () => {
   expect(releaseWorkflow).toMatch(
-    /on:\n  push:\n    branches: \[main\]\n    paths: \["package.json"\]\n  workflow_dispatch:\n\n/,
+    /on:\n  push:\n    branches: \[main\]\n    paths: \["package.json"\]\n\n/,
   );
   expect(releaseWorkflow).toContain("run: just build");
   expect(releaseWorkflow.match(/secrets\.[A-Z_]+/g)).toEqual(["secrets.HYDRA_GPG_PRIVATE_KEY"]);
@@ -221,6 +221,17 @@ it("releases the fork from main with the apt signing key as its only secret", ()
 
 // apt reads the repository from releases/latest/download/, so every release
 // must carry it and be Latest; a pre-release would leave apt on the old one.
+// Only a push to main may release: no manual or pull-request trigger, and
+// every job checks the ref as well.
+it("runs only for pushes to main", () => {
+  expect(releaseWorkflow).not.toMatch(/workflow_dispatch|pull_request|workflow_run|repository_dispatch|schedule:/);
+  const jobs = releaseWorkflow.slice(releaseWorkflow.indexOf("\njobs:"));
+  const jobCount = (jobs.match(/^  [a-z-]+:\n/gm) ?? []).length;
+  const refChecks = (jobs.match(/^    if: github\.ref == 'refs\/heads\/main'/gm) ?? []).length;
+  expect(jobCount).toBeGreaterThan(0);
+  expect(refChecks).toBe(jobCount);
+});
+
 it("publishes a signed apt repository on a Latest release", () => {
   const step = releaseWorkflow.slice(
     releaseWorkflow.indexOf("- name: Build and sign the apt repository"),

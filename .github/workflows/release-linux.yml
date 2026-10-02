@@ -1,8 +1,9 @@
 name: Release (Linux)
 
 # Releases this fork whenever main carries a version that has not been
-# released. A push to main that changes package.json starts it, and so can a
-# manual run from main. "check" reads package.json's version and stops there
+# released. Only a push to main that changes package.json starts it: there is
+# no manual trigger, and every job also checks github.ref, so no other branch,
+# tag, fork or pull request can run it. "check" reads package.json's version and stops there
 # when a tag or a GitHub release with that exact name already exists.
 # Otherwise "release" builds the Linux amd64 .deb, turns the release folder
 # into a flat apt repository signed with the HYDRA_GPG_PRIVATE_KEY secret,
@@ -17,7 +18,6 @@ on:
   push:
     branches: [main]
     paths: ["package.json"]
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -34,6 +34,7 @@ concurrency:
 jobs:
   check:
     name: Check for a new version
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -87,7 +88,7 @@ jobs:
   release:
     name: Build and release the .deb
     needs: check
-    if: needs.check.outputs.release == 'true'
+    if: github.ref == 'refs/heads/main' && needs.check.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
