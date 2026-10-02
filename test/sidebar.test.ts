@@ -69,6 +69,13 @@ describe("sidebar.css", () => {
     );
   });
 
+  // Apple Music's 8px header inset left the strip's icons 4px off centre.
+  it("drops the header's inset so the strip's icons are centred", () => {
+    expect(stripped).toMatch(
+      /html\[data-sidra-sidebar-collapsed\] \.navigation__header \{[^}]*margin-inline:\s*0 !important/,
+    );
+  });
+
   // assets/navigationBar.js tags each button with the set it belongs to.
   it("swaps the browser controls for the page buttons", () => {
     expect(stripped).toMatch(

@@ -28,8 +28,11 @@
   html[data-sidra-sidebar-collapsed] .navigation__content {
     display: none !important;
   }
+  /* Apple Music insets the header 8px on one side, which pushed the strip's
+     icons off its centre; Classical has no inset. */
   html[data-sidra-sidebar-collapsed] .navigation__header {
     grid-template-columns: 100% !important;
+    margin-inline: 0 !important;
   }
   html[data-sidra-sidebar-collapsed] #sidra-nav-buttons {
     flex-direction: column !important;
