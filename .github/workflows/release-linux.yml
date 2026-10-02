@@ -18,7 +18,10 @@ permissions:
   contents: write
 
 # One release run at a time, never cancelled midway. A queued run starts after
-# the one ahead of it has tagged, so its check sees the tag and stops.
+# the one ahead of it has tagged, so its check sees the tag and stops. GitHub
+# keeps only one pending run per group, though: a newer push cancels the run
+# still waiting, so two version bumps pushed while a release is in progress
+# release only the later one. Push one version bump at a time.
 concurrency:
   group: release-linux
   cancel-in-progress: false
