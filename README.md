@@ -15,9 +15,20 @@ sudo apt install ./<file>.deb
 
 Only Linux amd64 is built.
 
+### Upgrading from 2.0.0 or 2.0.1
+
+Those releases were packaged as `hydra`, a name Ubuntu and Debian already use for THC-Hydra, a network security tool, so the Software Updater offers that tool as an "upgrade". From 2.0.2 the package is `hydra-music` and the command `hydra-music`. Install it with `hydra-` at the end, which removes the old package in the same step; without it apt would replace the old package with THC-Hydra instead:
+
+```bash
+sudo apt-mark unhold hydra   # only if you held it
+sudo apt install ./Hydra-2.0.2-linux-amd64.deb hydra-
+```
+
+Your settings and sign-in stay, because the app still uses `~/.config/Hydra`.
+
 ### Upgrading from 1.x
 
-Up to 1.1.2-hydra.10 the package was called `sidra`. From 2.0.0 it is `hydra`, and installing it removes the `sidra` package for you. Hydra now keeps its data in `~/.config/Hydra`: on the first start it copies your settings across from `~/.config/Sidra`, but not the sign-in, so sign in to Apple Music once more. `~/.config/Sidra` is left as it was; delete it when you no longer need it. Re-pin Hydra in your dock if you had pinned the old entry.
+Up to 1.1.2-hydra.10 the package was called `sidra`. From 2.0.2 it is `hydra-music`, and installing it removes the `sidra` package for you. Hydra now keeps its data in `~/.config/Hydra`: on the first start it copies your settings across from `~/.config/Sidra`, but not the sign-in, so sign in to Apple Music once more. `~/.config/Sidra` is left as it was; delete it when you no longer need it. Re-pin Hydra in your dock if you had pinned the old entry.
 
 ## Build from source
 
