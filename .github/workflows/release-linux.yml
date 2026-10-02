@@ -4,9 +4,12 @@ name: Release (Linux)
 # released. A push to main that changes package.json starts it, and so can a
 # manual run from main. "check" reads package.json's version and stops there
 # when a tag or a GitHub release with that exact name already exists.
-# Otherwise "release" builds the Linux amd64 .deb, tags the pushed commit with
-# an annotated <version> tag and publishes the .deb with SHA256SUMS. No
-# EVS/VMP signing, secrets or other targets are involved. From 2.0.0 versions
+# Otherwise "release" builds the Linux amd64 .deb, turns the release folder
+# into a flat apt repository signed with the HYDRA_GPG_PRIVATE_KEY secret,
+# tags the pushed commit with an annotated <version> tag and publishes the
+# .deb, SHA256SUMS, the repository files and the public key. Every release is
+# marked Latest, because apt reads the repository from releases/latest/download/.
+# No EVS/VMP signing or other targets are involved. From 2.0.0 versions
 # are plain MAJOR.MINOR.PATCH, and the check refuses anything else; the
 # 1.1.2-hydra.N tags and releases from before stay as they are.
 
@@ -101,10 +104,10 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
-      - name: Install just
+      - name: Install just and the apt repository tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends just
+          sudo apt-get install -y --no-install-recommends just apt-utils gnupg
           just --version
 
       - name: Install dependencies
@@ -131,6 +134,21 @@ jobs:
           sha256sum "${debs[0]}" > SHA256SUMS
           cat SHA256SUMS
 
+      # The secret reaches this step only. It is imported into a keyring that
+      # lives for the step, and the key that signs is the one whose public half
+      # users install: packaging/hydra.gpg. The script checks both signatures
+      # against that file, so a mismatched secret fails here, before tagging.
+      - name: Build and sign the apt repository
+        env:
+          HYDRA_GPG_PRIVATE_KEY: ${{ secrets.HYDRA_GPG_PRIVATE_KEY }}
+        run: |
+          GNUPGHOME=$(mktemp -d)
+          export GNUPGHOME
+          printf '%s\n' "$HYDRA_GPG_PRIVATE_KEY" | gpg --batch --quiet --import
+          key=$(gpg --with-colons --show-keys packaging/hydra.gpg | awk -F: '/^fpr/ {print $10; exit}')
+          scripts/build-apt-repo.sh release "$key" packaging/hydra.gpg
+          rm -rf "$GNUPGHOME"
+
       # The tag is created only after the build succeeded, and removed again if
       # the release cannot be published, so a failed run leaves nothing behind
       # and a re-run starts from a clean check.
@@ -149,10 +167,15 @@ jobs:
             -f ref="refs/tags/${VERSION}" \
             -f sha="$tag_object" > /dev/null
           echo "Tagged ${GITHUB_SHA} as ${VERSION}."
+          # --latest: apt reads releases/latest/download/, so a release that is
+          # not Latest would leave apt users on the previous one.
           if ! gh release create "$VERSION" release/*.deb release/SHA256SUMS \
+            release/Packages release/Packages.gz release/Release \
+            release/Release.gpg release/InRelease packaging/hydra.gpg \
             --verify-tag \
+            --latest \
             --title "$VERSION" \
-            --notes "Linux amd64 .deb built from ${GITHUB_SHA}. Verify the download with: sha256sum -c SHA256SUMS"; then
+            --notes "Linux amd64 .deb built from ${GITHUB_SHA}. Verify the download with: sha256sum -c SHA256SUMS. Install through apt as described in the README."; then
             echo "::error::Publishing the release failed, so the ${VERSION} tag is being removed." >&2
             gh api -X DELETE "repos/${GH_REPO}/git/refs/tags/${VERSION}" || true
             exit 1

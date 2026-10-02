@@ -210,12 +210,52 @@ describe("release build scripts", () => {
 
 });
 
-it("releases the fork from main without secrets", () => {
+it("releases the fork from main with the apt signing key as its only secret", () => {
   expect(releaseWorkflow).toMatch(
     /on:\n  push:\n    branches: \[main\]\n    paths: \["package.json"\]\n  workflow_dispatch:\n\n/,
   );
   expect(releaseWorkflow).toContain("run: just build");
-  expect(releaseWorkflow).not.toMatch(/secrets\.|SIDRA_LASTFM|EVS_|GITHUB_REF_TYPE/);
+  expect(releaseWorkflow.match(/secrets\.[A-Z_]+/g)).toEqual(["secrets.HYDRA_GPG_PRIVATE_KEY"]);
+  expect(releaseWorkflow).not.toMatch(/SIDRA_LASTFM|EVS_|GITHUB_REF_TYPE/);
+});
+
+// apt reads the repository from releases/latest/download/, so every release
+// must carry it and be Latest; a pre-release would leave apt on the old one.
+it("publishes a signed apt repository on a Latest release", () => {
+  const step = releaseWorkflow.slice(
+    releaseWorkflow.indexOf("- name: Build and sign the apt repository"),
+    releaseWorkflow.indexOf("- name: Tag the commit and publish the release"),
+  );
+  expect(step).toContain("HYDRA_GPG_PRIVATE_KEY: ${{ secrets.HYDRA_GPG_PRIVATE_KEY }}");
+  expect(step).toContain("scripts/build-apt-repo.sh release \"$key\" packaging/hydra.gpg");
+  const publish = releaseWorkflow.slice(
+    releaseWorkflow.indexOf("gh release create"),
+  );
+  for (const asset of [
+    "release/*.deb",
+    "release/SHA256SUMS",
+    "release/Packages",
+    "release/Packages.gz",
+    "release/Release",
+    "release/Release.gpg",
+    "release/InRelease",
+    "packaging/hydra.gpg",
+  ]) {
+    expect(publish, asset).toContain(asset);
+  }
+  expect(publish).toContain("--latest");
+  expect(releaseWorkflow).not.toContain("--prerelease");
+  // The secret reaches the signing step only.
+  expect(releaseWorkflow.indexOf("secrets.HYDRA_GPG_PRIVATE_KEY")).toBeGreaterThan(
+    releaseWorkflow.indexOf("- name: Build and sign the apt repository"),
+  );
+});
+
+it("keeps Filename in Packages relative and checks the signatures", () => {
+  const script = readFileSync("scripts/build-apt-repo.sh", "utf8");
+  expect(script).toContain("apt-ftparchive packages . > Packages");
+  expect(script).toContain('gpgv --keyring "$keyring" InRelease');
+  expect(script).toContain('gpgv --keyring "$keyring" Release.gpg Release');
 });
 
 // From 2.0.0 versions are plain MAJOR.MINOR.PATCH, so a pre-release suffix
