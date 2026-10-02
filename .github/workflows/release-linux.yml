@@ -5,8 +5,8 @@ name: Release (Linux)
 # no manual trigger, and every job also checks github.ref, so no other branch,
 # tag, fork or pull request can run it. "check" reads package.json's version
 # and stops there when a tag or a GitHub release with that exact name already
-# exists. Otherwise "build" makes the Linux amd64 .deb with no secret, and
-# "publish", in the Release environment, turns it into a
+# exists. Otherwise "build" makes the Linux amd64 .deb with no secret and a
+# read-only token, and "publish", in the Release environment, turns it into a
 # flat apt repository signed with that environment's HYDRA_GPG_PRIVATE_KEY,
 # tags the pushed commit with an annotated <version> tag and publishes the
 # .deb, SHA256SUMS, the repository files and the public key. Every release is
@@ -20,8 +20,10 @@ on:
     branches: [main]
     paths: ["package.json"]
 
+# Read-only by default; only the publish job, which tags and creates the
+# release, gets contents: write.
 permissions:
-  contents: write
+  contents: read
 
 # One release run at a time, never cancelled midway. A queued run starts after
 # the one ahead of it has tagged, so its check sees the tag and stops. GitHub
@@ -38,6 +40,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
       release: ${{ steps.version.outputs.release }}
@@ -96,6 +100,8 @@ jobs:
     if: github.ref == 'refs/heads/main' && needs.check.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -146,6 +152,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: Release
+    permissions:
+      contents: write
     env:
       VERSION: ${{ needs.check.outputs.version }}
     steps:

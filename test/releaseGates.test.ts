@@ -281,6 +281,20 @@ it("keeps the build away from the signing key", () => {
   expect(job("check")).not.toMatch(/secrets\.|environment:/);
 });
 
+it("grants contents: write to the publish job only", () => {
+  const top = releaseWorkflow.slice(0, releaseWorkflow.indexOf("\njobs:"));
+  expect(top).toMatch(/^permissions:\n  contents: read\n/m);
+  // The only write grant in the file, on the publish job.
+  expect(releaseWorkflow.match(/^ +[a-z-]+: write$/gm)).toEqual(["      contents: write"]);
+  expect(releaseWorkflow).not.toContain("write-all");
+  for (const name of ["check", "build", "publish"]) {
+    const start = releaseWorkflow.indexOf(`\n  ${name}:\n`);
+    const header = releaseWorkflow.slice(start, releaseWorkflow.indexOf("    steps:", start));
+    const want = name === "publish" ? "write" : "read";
+    expect(header, name).toMatch(new RegExp(`^    permissions:\\n      contents: ${want}$`, "m"));
+  }
+});
+
 it("keeps Filename in Packages relative and checks the signatures", () => {
   const script = readFileSync("scripts/build-apt-repo.sh", "utf8");
   expect(script).toContain("apt-ftparchive packages . > Packages");
