@@ -58,9 +58,11 @@ describe("sidebar.css", () => {
     expect(selectors(stripped).filter((s) => /\.header\b/.test(s))).toEqual([]);
   });
 
-  it("hides the logo row and the sidebar content, and stacks Sidra's row", () => {
+  // Classical's search field lives in the header, not in .navigation__content,
+  // and spilled out of the strip over the page until it was hidden too.
+  it("hides the logo row, Classical's header search and the sidebar content, and stacks Sidra's row", () => {
     expect(stripped).toMatch(
-      /html\[data-sidra-sidebar-collapsed\] \.navigation__header \.logo,\s*html\[data-sidra-sidebar-collapsed\] \.navigation__content \{\s*display:\s*none !important/,
+      /html\[data-sidra-sidebar-collapsed\] \.navigation__header \.logo,\s*html\[data-sidra-sidebar-collapsed\] \.navigation__header \.search-input-wrapper,\s*html\[data-sidra-sidebar-collapsed\] \.navigation__content \{\s*display:\s*none !important/,
     );
     expect(stripped).toMatch(
       /#sidra-nav-buttons \{\s*flex-direction:\s*column !important;\s*justify-content:\s*flex-start !important/,

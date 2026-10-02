@@ -20,8 +20,11 @@
   }
 
   /* Keep only Sidra's row: the logo, search, links and account menu return
-     when the sidebar is expanded. The row is its own grid row above the logo. */
+     when the sidebar is expanded. The row is its own grid row above the logo.
+     Classical puts its search field in the header beside the logo, where it
+     would otherwise spill out of the strip over the page. */
   html[data-sidra-sidebar-collapsed] .navigation__header .logo,
+  html[data-sidra-sidebar-collapsed] .navigation__header .search-input-wrapper,
   html[data-sidra-sidebar-collapsed] .navigation__content {
     display: none !important;
   }
