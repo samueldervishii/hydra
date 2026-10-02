@@ -1,12 +1,12 @@
 // Pure constants: no imports from electron, so any module and test can use them.
 
 /**
- * The name the system knows the app by, which a display rename must not
- * move: the package and executable name, the sidra.desktop entry, the MPRIS
- * bus name (org.mpris.MediaPlayer2.sidra) and the cache folder. What users see is package.json's productName,
- * read through app.getName().
+ * The name the system knows the app by: the package and executable name, the
+ * hydra.desktop entry, the MPRIS bus name (org.mpris.MediaPlayer2.hydra), the
+ * track paths and the cache folder. What users see is package.json's
+ * productName, read through app.getName().
  */
-export const INTERNAL_NAME = "sidra";
+export const INTERNAL_NAME = "hydra";
 
 // Both copyright notices the About window shows. Constants, not read from
 // package.json: electron-builder drops the build key, and build.copyright with

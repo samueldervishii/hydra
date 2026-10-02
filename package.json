@@ -1,5 +1,5 @@
 {
-  "name": "sidra",
+  "name": "hydra",
   "productName": "Hydra",
   "version": "1.1.2-hydra.10",
   "description": "Apple Music desktop client for Linux",
@@ -39,7 +39,7 @@
     "undici": "7.29.1"
   },
   "build": {
-    "appId": "world.wimpys.sidra",
+    "appId": "io.github.samueldervishii.hydra",
     "copyright": "© 2026 Samuel Dervishi. Based on Sidra © Martin Wimpress.",
     "publish": null,
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
@@ -87,33 +87,33 @@
         "snap"
       ],
       "category": "Audio",
-      "executableName": "sidra",
+      "executableName": "hydra",
       "desktop": {
         "entry": {
           "Actions": "PlayPause;Next;Previous;Stop;",
-          "StartupWMClass": "sidra",
+          "StartupWMClass": "hydra",
           "MimeType": "x-scheme-handler/itms;"
         },
         "desktopActions": {
           "PlayPause": {
             "Name": "Play-Pause",
             "Name[de]": "Abspielen-Pausieren",
-            "Exec": "dbus-send --print-reply --dest=org.mpris.MediaPlayer2.sidra /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.PlayPause"
+            "Exec": "dbus-send --print-reply --dest=org.mpris.MediaPlayer2.hydra /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.PlayPause"
           },
           "Next": {
             "Name": "Next",
             "Name[de]": "Nächstes",
-            "Exec": "dbus-send --print-reply --dest=org.mpris.MediaPlayer2.sidra /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Next"
+            "Exec": "dbus-send --print-reply --dest=org.mpris.MediaPlayer2.hydra /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Next"
           },
           "Previous": {
             "Name": "Previous",
             "Name[de]": "Vorheriges",
-            "Exec": "dbus-send --print-reply --dest=org.mpris.MediaPlayer2.sidra /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Previous"
+            "Exec": "dbus-send --print-reply --dest=org.mpris.MediaPlayer2.hydra /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Previous"
           },
           "Stop": {
             "Name": "Stop",
             "Name[de]": "Stop",
-            "Exec": "dbus-send --print-reply --dest=org.mpris.MediaPlayer2.sidra /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Stop"
+            "Exec": "dbus-send --print-reply --dest=org.mpris.MediaPlayer2.hydra /org/mpris/MediaPlayer2 org.mpris.MediaPlayer2.Player.Stop"
           }
         }
       }
@@ -150,7 +150,7 @@
         "slots": [
           {
             "mpris": {
-              "name": "sidra"
+              "name": "hydra"
             }
           }
         ],

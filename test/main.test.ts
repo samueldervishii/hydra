@@ -413,7 +413,7 @@ describe("main bootstrap", () => {
         title: "Test Player",
         show: false,
         webPreferences: expect.objectContaining({
-          partition: "persist:sidra",
+          partition: "persist:hydra",
           nodeIntegration: false,
           contextIsolation: true,
           spellcheck: false,
@@ -882,7 +882,7 @@ describe("main bootstrap", () => {
 
   it("logs process lifecycle events without private event data", async () => {
     const privatePath =
-      "/home/alice/.config/sidra/access-token-secret/preload.js";
+      "/home/alice/.config/hydra/access-token-secret/preload.js";
     const privateUrl =
       "https://music.apple.com/gb/album/private?token=secret-token";
     const privateStack = `Error: secret-token\n    at ${privatePath}:1:1`;

@@ -144,7 +144,7 @@ app.on("child-process-gone", (_event, details) => {
 // --- App identity: must be set before app.whenReady() on Windows, or the
 // GSMTC media identity does not attach to Sidra ---
 if (process.platform === "win32") {
-  app.setAppUserModelId("com.wimpysworld.sidra");
+  app.setAppUserModelId("io.github.samueldervishii.hydra");
 }
 
 // --- Platform switches: must run before app.whenReady() ---
@@ -161,11 +161,11 @@ if (process.platform === "linux") {
     "disable-features",
     "MediaSessionService,WaylandWpColorManagerV1,AudioServiceOutOfProcess",
   );
-  // Set the XDG desktop name so GetXdgAppId() returns 'sidra' and
-  // GetPossiblyOverriddenApplicationName() can read Name= from sidra.desktop.
+  // Set the XDG desktop name so GetXdgAppId() returns 'hydra' and
+  // GetPossiblyOverriddenApplicationName() can read Name= from hydra.desktop.
   // Pairs with the AudioServiceOutOfProcess switch above: without both, the
   // PulseAudio stream is labelled "Chromium" and no PULSE_PROP_* override helps.
-  app.setDesktopName("sidra.desktop");
+  app.setDesktopName("hydra.desktop");
   mainLog.info("Linux platform switches applied");
 }
 
@@ -420,7 +420,7 @@ function initPlayerIPC(): Player {
 async function initSession(): Promise<Electron.Session> {
   // Clear stale service worker and cache data while Widevine initialises.
   // Both operations are independent, and navigation has not started.
-  const ses = session.fromPartition("persist:sidra");
+  const ses = session.fromPartition("persist:hydra");
   await Promise.all([
     components.whenReady(),
     ses.clearData({
@@ -506,7 +506,7 @@ function createMainWindow(ses: Electron.Session): {
     autoHideMenuBar: true,
     backgroundColor: "#000000",
     webPreferences: {
-      partition: "persist:sidra",
+      partition: "persist:hydra",
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: false,
       contextIsolation: true,
@@ -578,7 +578,7 @@ function setupSplashTransition(
 }
 
 function setupSessionHeaders(ses: Electron.Session): void {
-  // Set UA on the persist:sidra session used by the window
+  // Set UA on the persist:hydra session used by the window
   ses.setUserAgent(UA);
 
   // Strip Electron and app name tokens from outgoing request headers
