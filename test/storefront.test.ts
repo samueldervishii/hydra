@@ -198,6 +198,23 @@ describe("buildAppleMusicURL - music service", () => {
     expect(url).toBe("https://music.apple.com/us/new");
   });
 
+  // Earlier builds recorded the subscribe iframe's in-page navigations, so a
+  // stored last page can be an embedded endpoint rather than a page.
+  it.each([
+    "includes/commerce/navigator?product=music&devToken=abc",
+    "includes/commerce/offer/contextual?contentId=1&contentType=song",
+  ])("falls back to new when the stored last page is the embedded endpoint %s", (stored) => {
+    mockedGetStartPage.mockReturnValue("last");
+    mockedGetLastPageUrl.mockReturnValue(stored);
+    expect(buildAppleMusicURL()).toBe("https://music.apple.com/us/new");
+  });
+
+  it("keeps a stored page whose path merely starts with the same letters", () => {
+    mockedGetStartPage.mockReturnValue("last");
+    mockedGetLastPageUrl.mockReturnValue("includes-playlist/foo/123");
+    expect(buildAppleMusicURL()).toBe("https://music.apple.com/us/includes-playlist/foo/123");
+  });
+
   it("rebuilds last URL with its query intact", () => {
     mockedGetStartPage.mockReturnValue("last");
     mockedGetLastPageUrl.mockReturnValue("search?term=jazz");

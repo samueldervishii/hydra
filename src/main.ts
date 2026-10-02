@@ -840,7 +840,12 @@ function setupContentHandlers(
 
   let initialized = false;
   let integrationsReady = false;
-  win.webContents.on("did-navigate-in-page", async (_event, url) => {
+  win.webContents.on("did-navigate-in-page", async (_event, url, isMainFrame) => {
+    // Apple's subscribe flow runs in a same-host iframe whose in-page
+    // navigations arrive here too. Only the main frame is the page: the
+    // iframe's includes/commerce/... addresses were recorded as the last page,
+    // one of them carrying Apple's developer token into the config and the log.
+    if (!isMainFrame) return;
     handleStorefrontNavigation(url);
     handleLastPageNavigation(url);
     if (integrationsReady)

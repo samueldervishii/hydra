@@ -621,7 +621,7 @@ describe("main bootstrap", () => {
     const navigate = bootstrap.mainWebListeners.get("did-navigate-in-page");
     const finish = bootstrap.mainWebListeners.get("did-finish-load");
 
-    await navigate?.({}, "https://music.apple.com/gb/home");
+    await navigate?.({}, "https://music.apple.com/gb/home", true);
     expect(handleStorefrontNavigation).toHaveBeenCalledWith(
       "https://music.apple.com/gb/home",
     );
@@ -638,10 +638,36 @@ describe("main bootstrap", () => {
       );
     }
 
-    await navigate?.({}, "https://music.apple.com/gb/new");
+    await navigate?.({}, "https://music.apple.com/gb/new", true);
     expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(4);
     for (const initialise of Object.values(bootstrap.integrations))
       expect(initialise).toHaveBeenCalledOnce();
+  });
+
+  // Apple's subscribe flow runs in a same-host iframe whose in-page
+  // navigations also reach this handler; recording them stored iframe
+  // addresses, one with a developer token, as the last page.
+  it("ignores in-page navigations from subframes", async () => {
+    const { handleStorefrontNavigation, handleLastPageNavigation } =
+      await import("../src/storefront");
+    await startMain();
+    await bootstrap.mainWebListeners.get("did-finish-load")?.();
+    bootstrap.webContents.executeJavaScript.mockClear();
+    const navigate = bootstrap.mainWebListeners.get("did-navigate-in-page");
+
+    await navigate?.(
+      {},
+      "https://music.apple.com/includes/commerce/navigator?devToken=abc",
+      false,
+    );
+    expect(handleStorefrontNavigation).not.toHaveBeenCalled();
+    expect(handleLastPageNavigation).not.toHaveBeenCalled();
+    expect(bootstrap.webContents.executeJavaScript).not.toHaveBeenCalled();
+
+    await navigate?.({}, "https://music.apple.com/gb/album/example", true);
+    expect(handleLastPageNavigation).toHaveBeenCalledExactlyOnceWith(
+      "https://music.apple.com/gb/album/example",
+    );
   });
 
   it("permits later SPA injection after initial integration and hook failures", async () => {
@@ -653,7 +679,7 @@ describe("main bootstrap", () => {
     );
     await startMain();
     const navigate = bootstrap.mainWebListeners.get("did-navigate-in-page");
-    await navigate?.({}, "https://music.apple.com/gb/home");
+    await navigate?.({}, "https://music.apple.com/gb/home", true);
     await expect(
       Promise.resolve(bootstrap.mainWebListeners.get("did-finish-load")?.()),
     ).resolves.toBeUndefined();
@@ -668,7 +694,7 @@ describe("main bootstrap", () => {
     );
     expect(bootstrap.integrations.trayState).toHaveBeenCalledOnce();
     expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(2);
-    await navigate?.({}, "https://music.apple.com/gb/new");
+    await navigate?.({}, "https://music.apple.com/gb/new", true);
     expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(4);
     expect(bootstrap.integrations.dock).toHaveBeenCalledOnce();
   });
@@ -841,7 +867,7 @@ describe("main bootstrap", () => {
       isSameDocument: false,
       isMainFrame: true,
     });
-    await didNavigateInPage?.({}, "https://music.apple.com/gb/new#dialog");
+    await didNavigateInPage?.({}, "https://music.apple.com/gb/new#dialog", true);
     expect(bootstrap.resetForDocumentReplacement).not.toHaveBeenCalled();
 
     didNavigate?.({}, "https://music.apple.com/gb/album/example");

@@ -11,6 +11,14 @@ export type { ItmsRouteToken } from './itms';
 
 const storefrontLog = log.scope('storefront');
 
+/**
+ * Apple's embedded endpoints, such as the includes/commerce/... subscribe
+ * flow, which are iframe addresses and never a page to open the app on.
+ */
+function isEmbeddedEndpoint(path: string): boolean {
+  return path === 'includes' || path.startsWith('includes/') || path.startsWith('includes?');
+}
+
 const ITMS_ROUTE_PATHS: Record<ItmsRouteToken, string> = {
   library: 'library',
   browse: 'browse',
@@ -60,8 +68,10 @@ export function buildAppleMusicURL(): string {
     const lastPath = getLastPageUrlFor(serviceId);
     // Classical's Home is stored as the empty root path, possibly carrying a
     // query, so only an absent value falls through. Neither form takes the
-    // separator slash: the root must not gain a trailing one.
-    if (lastPath !== undefined) {
+    // separator slash: the root must not gain a trailing one. An embedded
+    // endpoint, which earlier builds recorded from Apple's subscribe iframe,
+    // falls through to the service default too.
+    if (lastPath !== undefined && !isEmbeddedEndpoint(lastPath)) {
       const separator = lastPath === '' || lastPath.startsWith('?') ? '' : '/';
       return appendLanguage(`${service.origin}/${storefront}${separator}${lastPath}`, language);
     }
