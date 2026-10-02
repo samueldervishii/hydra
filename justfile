@@ -97,9 +97,9 @@ run-cdp-fast PORT="9222":
 watch:
     npx tsc --watch
 
-# Run static checks
+# Run static checks; the workflow check is skipped, with a warning, where actionlint is not installed
 lint:
-    @actionlint
+    @if command -v actionlint >/dev/null 2>&1; then actionlint; else echo "warning: actionlint not found, skipping the workflow check" >&2; fi
     npx tsc --noEmit
     npx tsc -p tsconfig.test.json --noEmit
 
