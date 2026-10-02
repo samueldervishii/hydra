@@ -7,6 +7,8 @@ const bootstrap = vi.hoisted(() => {
   const mainWebListeners = new Map<string, Listener>();
   const mainWebOnceListeners = new Map<string, Listener>();
   const appListeners = new Map<string, Listener>();
+  const mainWindowOnceListeners = new Map<string, Listener>();
+  const splashOnceListeners = new Map<string, Listener>();
 
   const webContents = {
     mainFrame: { url: "https://music.apple.com/gb/new" },
@@ -42,7 +44,9 @@ const bootstrap = vi.hoisted(() => {
     },
     loadURL: vi.fn(() => Promise.reject(new Error("offline"))),
     on: vi.fn((_event: string, _listener: Listener) => {}),
-    once: vi.fn(),
+    once: vi.fn((event: string, listener: Listener) => {
+      mainWindowOnceListeners.set(event, listener);
+    }),
     show: vi.fn(),
     hide: vi.fn(),
     close: vi.fn(),
@@ -61,6 +65,10 @@ const bootstrap = vi.hoisted(() => {
       setZoomFactor: vi.fn(),
     },
     loadFile: vi.fn(() => Promise.resolve()),
+    once: vi.fn((event: string, listener: Listener) => {
+      splashOnceListeners.set(event, listener);
+    }),
+    isDestroyed: vi.fn(() => false),
     show: vi.fn(),
     close: vi.fn(),
   };
@@ -77,6 +85,8 @@ const bootstrap = vi.hoisted(() => {
     mainWebListeners,
     mainWebOnceListeners,
     appListeners,
+    mainWindowOnceListeners,
+    splashOnceListeners,
     webContents,
     mainWindow,
     splashWindow,
@@ -292,6 +302,8 @@ describe("main bootstrap", () => {
     bootstrap.mainWebListeners.clear();
     bootstrap.mainWebOnceListeners.clear();
     bootstrap.appListeners.clear();
+    bootstrap.mainWindowOnceListeners.clear();
+    bootstrap.splashOnceListeners.clear();
     bootstrap.mainWindow.isDestroyed.mockReturnValue(false);
     bootstrap.browserWindow
       .mockImplementationOnce(function () {
@@ -337,6 +349,49 @@ describe("main bootstrap", () => {
         ]),
       }),
     ]);
+  });
+
+  // On X11 a window shown before Chromium's first frame shows another app's
+  // pixels, which the splash did with the NVIDIA driver.
+  it("shows the splash and the main window only once each has painted", async () => {
+    await startMain();
+    expect(bootstrap.splashWindow.show).not.toHaveBeenCalled();
+    // setZoomFactor() before the first frame stops a hidden window painting,
+    // so the splash sets its zoom only once ready-to-show has fired.
+    expect(bootstrap.splashWindow.webContents.setZoomFactor).not.toHaveBeenCalled();
+    expect(bootstrap.splashWindow.webContents.on).not.toHaveBeenCalledWith(
+      "did-finish-load",
+      expect.any(Function),
+    );
+    bootstrap.splashOnceListeners.get("ready-to-show")?.();
+    expect(bootstrap.splashWindow.webContents.setZoomFactor).toHaveBeenCalledWith(1);
+    expect(bootstrap.splashWindow.show).toHaveBeenCalledOnce();
+
+    await bootstrap.mainWebListeners.get("did-finish-load")?.();
+    await vi.advanceTimersByTimeAsync(3500);
+    expect(bootstrap.mainWindow.show).not.toHaveBeenCalled();
+    expect(bootstrap.splashWindow.close).not.toHaveBeenCalled();
+
+    bootstrap.mainWindowOnceListeners.get("ready-to-show")?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(bootstrap.mainWindow.show).toHaveBeenCalledOnce();
+    expect(bootstrap.splashWindow.close).toHaveBeenCalledOnce();
+  });
+
+  it("shows the main window without a first frame once the paint wait times out", async () => {
+    await startMain();
+    await bootstrap.mainWebListeners.get("did-finish-load")?.();
+    await vi.advanceTimersByTimeAsync(9999);
+    expect(bootstrap.mainWindow.show).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(bootstrap.mainWindow.show).toHaveBeenCalledOnce();
+  });
+
+  it("does not show a splash that closed before it painted", async () => {
+    await startMain();
+    bootstrap.splashWindow.isDestroyed.mockReturnValueOnce(true);
+    bootstrap.splashOnceListeners.get("ready-to-show")?.();
+    expect(bootstrap.splashWindow.show).not.toHaveBeenCalled();
   });
 
   it("creates a locked-down window, wires integrations, and contains first navigation failure", async () => {

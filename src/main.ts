@@ -81,6 +81,9 @@ const SPLASH_MIN_DISPLAY_MS = 500;
 const CONTENT_READY_POLL_MS = 100;
 const CONTENT_READY_TIMEOUT_MS = 3500;
 const CSS_READY_TIMEOUT_MS = 10000;
+// Bounds the main window's wait for its first frame, so a renderer that never
+// paints delays the window instead of keeping it hidden.
+const FIRST_PAINT_TIMEOUT_MS = 10000;
 const SPLASH_WIDTH_PX = 300;
 const SPLASH_HEIGHT_PX = 350;
 const MAIN_WINDOW_WIDTH_PX = 1280;
@@ -276,10 +279,17 @@ function createSplash(): {
   splash.loadFile(getAssetPath("assets", "splash.html"), {
     query: { text: loadingText, lang: loadingLang },
   });
-  splash.show();
-  splashLog.info("splash shown");
-  splash.webContents.on("did-finish-load", () => {
+  // Shown once Chromium has painted its first frame. On X11 a window mapped
+  // before then shows whatever was on screen beneath it, which flashed another
+  // app's pixels inside the splash with the NVIDIA driver. The zoom is set
+  // here, as the About window does, and not on did-finish-load: setZoomFactor()
+  // on a hidden window before its first frame stops it painting, so
+  // ready-to-show never fired and the splash never appeared.
+  splash.once("ready-to-show", () => {
+    if (splash.isDestroyed()) return;
     splash.webContents.setZoomFactor(getZoomFactor());
+    splash.show();
+    splashLog.info("splash shown");
   });
   let resolveMinDisplay!: () => void;
   const minDisplay = new Promise<void>((resolve) => {
@@ -512,7 +522,7 @@ function createMainWindow(ses: Electron.Session): {
   // SPA takes over rendering, and a timeout shows the window regardless so a
   // selector Apple has renamed delays the launch instead of blocking it.
   let pollCancelled = false;
-  const winReady = Promise.race([
+  const contentReady = Promise.race([
     new Promise<void>((resolve) => {
       win.webContents.once("did-navigate-in-page", () => {
         const poll = () => {
@@ -539,9 +549,16 @@ function createMainWindow(ses: Electron.Session): {
       setTimeout(resolve, CONTENT_READY_TIMEOUT_MS),
     ),
   ]);
-  winReady.then(() => {
+  contentReady.then(() => {
     pollCancelled = true;
   });
+  // The probe's timeout can fire before Chromium has painted a frame, and a
+  // window shown then on X11 holds another app's pixels, as the splash did.
+  const firstPaint = Promise.race([
+    new Promise<void>((resolve) => win.once("ready-to-show", () => resolve())),
+    new Promise<void>((resolve) => setTimeout(resolve, FIRST_PAINT_TIMEOUT_MS)),
+  ]);
+  const winReady = Promise.all([contentReady, firstPaint]).then(() => {});
 
   return { win, winReady };
 }
