@@ -296,7 +296,12 @@ describe("theme helpers", () => {
 
     function fakeContents() {
       const insertCSS = vi.fn().mockResolvedValue("key");
-      return { insertCSS, contents: { insertCSS } as unknown as WebContents };
+      const removeInsertedCSS = vi.fn().mockResolvedValue(undefined);
+      return {
+        insertCSS,
+        removeInsertedCSS,
+        contents: { insertCSS, removeInsertedCSS } as unknown as WebContents,
+      };
     }
 
     // A WebContents whose insertCSS stays pending until release() is called, so
@@ -358,11 +363,13 @@ describe("theme helpers", () => {
       const harness = watcherHarness();
       harness.start();
       await trackKey(harness, "stale-key");
+      harness.navigate();
       vi.mocked(getTheme).mockReturnValue("apple-music");
-      const { insertCSS, contents } = fakeContents();
+      const { insertCSS, removeInsertedCSS, contents } = fakeContents();
 
       await injectThemeCss(contents);
       expect(insertCSS).not.toHaveBeenCalled();
+      expect(removeInsertedCSS).not.toHaveBeenCalled();
 
       // The next theme change must reach its insert, with no removal attempted.
       applyTheme("catppuccin");
@@ -456,10 +463,56 @@ describe("theme helpers", () => {
       expect(harness.removeInsertedCSS).not.toHaveBeenCalled();
       expect(harness.insertCSS).toHaveBeenCalledTimes(1);
 
-      // The queue still runs work queued after the navigation.
+      // The queue still runs work queued after the navigation. The theme
+      // change above inserted into this document, so the load removes that
+      // sheet before inserting its own.
       const fresh = fakeContents();
       await injectThemeCss(fresh.contents);
+      expect(fresh.removeInsertedCSS).toHaveBeenCalledWith("unused");
       expect(fresh.insertCSS).toHaveBeenCalledTimes(1);
+    });
+
+    it("removes a sheet a theme change inserted while the page was loading", async () => {
+      // did-navigate commits the new document seconds before did-finish-load.
+      // A theme change in that gap inserts into the new document; the load's
+      // own injection must not leave that sheet behind untracked, or it
+      // outlives every later theme change, including Apple Music.
+      const harness = watcherHarness();
+      harness.start();
+      vi.mocked(getTheme).mockReturnValue("apple-music");
+      notifyDocumentReplacing();
+      harness.navigate();
+
+      vi.mocked(getTheme).mockReturnValue("nord");
+      harness.insertCSS.mockResolvedValue("during-load-key");
+      applyTheme("nord");
+      await flushCssQueue();
+      expect(harness.insertCSS).toHaveBeenCalledTimes(1);
+
+      harness.insertCSS.mockResolvedValue("load-key");
+      await injectThemeCss(harness.win.webContents);
+      expect(harness.removeInsertedCSS).toHaveBeenCalledWith("during-load-key");
+
+      // Back to Apple Music: the one sheet on the page is the one removed.
+      harness.removeInsertedCSS.mockClear();
+      vi.mocked(getTheme).mockReturnValue("apple-music");
+      applyTheme("apple-music");
+      await flushCssQueue();
+      expect(harness.removeInsertedCSS).toHaveBeenCalledTimes(1);
+      expect(harness.removeInsertedCSS).toHaveBeenCalledWith("load-key");
+    });
+
+    it("drops a key from the previous document without removing it", async () => {
+      const harness = watcherHarness();
+      harness.start();
+      await trackKey(harness, "old-document-key");
+      harness.navigate();
+      vi.mocked(getTheme).mockReturnValue("catppuccin");
+
+      applyTheme("nord");
+      await flushCssQueue();
+      expect(harness.removeInsertedCSS).not.toHaveBeenCalled();
+      expect(harness.insertCSS).toHaveBeenCalledTimes(1);
     });
   });
 

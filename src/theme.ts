@@ -33,6 +33,9 @@ let customThemeCacheEnabled = true;
 // The insertCSS key of the sheet currently on the page, which is what a later
 // removeInsertedCSS needs. Null means no sheet is tracked.
 let themeCssKey: string | null = null;
+// The document generation the key was recorded in. A key from an older
+// document is dropped, never removed: removeInsertedCSS rejects on it.
+let themeCssKeyGeneration = 0;
 
 // Every mutation of themeCssKey runs on this one chain, so a theme change and a
 // post-load injection cannot interleave and strand a stylesheet on the page.
@@ -66,6 +69,10 @@ function enqueueThemeCssOp(
         themeLog.debug("Theme CSS operation skipped: document replaced");
         return;
       }
+      // A navigation committed since the key was recorded, and its sheet went
+      // with the old document.
+      if (themeCssKey !== null && themeCssKeyGeneration !== generation)
+        themeCssKey = null;
       return work(generation);
     })
     // Catch after then() so a failed operation cannot reject the shared chain
@@ -90,6 +97,7 @@ async function insertAndTrack(
   const key = await contents.insertCSS(css);
   if (documentReplaced(generation)) return;
   themeCssKey = key;
+  themeCssKeyGeneration = generation;
   themeLog.debug(appliedMessage);
 }
 
@@ -197,16 +205,21 @@ export function getThemeCss(name: ThemeName): string | null {
 
 /**
  * Inject the resolved theme CSS after a page load. main.ts calls this on every
- * load. The load replaced the document, so nothing is removed here: any key held
- * belongs to the old document and removeInsertedCSS would reject on it.
+ * load. A key from the previous document has been dropped by the time this
+ * runs. A key still held belongs to this document: a theme change made between
+ * the navigation committing and the load finishing inserted it, so it is
+ * removed first, or its sheet would stay on the page with nothing tracking it.
  */
 export function injectThemeCss(contents: WebContents): Promise<void> {
   return enqueueThemeCssOp(async (generation) => {
-    const theme = resolveTheme();
-    if (theme === "apple-music") {
+    const previousKey = themeCssKey;
+    if (previousKey !== null) {
+      await contents.removeInsertedCSS(previousKey);
       themeCssKey = null;
-      return;
+      if (documentReplaced(generation)) return;
     }
+    const theme = resolveTheme();
+    if (theme === "apple-music") return;
     const css = getThemeCss(theme);
     if (css === null) {
       themeLog.warn(`Theme CSS unavailable: ${theme}`);
