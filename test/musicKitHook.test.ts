@@ -156,6 +156,7 @@ function createHarness({
   musicKitOverrides = {},
   musicKitThrowsAtFirstPoll = false,
   musicKitThrowsAtInjection = false,
+  musicKitUnconfiguredAtFirstPoll = false,
   navigatorOverrides,
   repeatInjection = false,
   volumeThrows = false,
@@ -164,6 +165,7 @@ function createHarness({
   musicKitOverrides?: Record<string, unknown>;
   musicKitThrowsAtFirstPoll?: boolean;
   musicKitThrowsAtInjection?: boolean;
+  musicKitUnconfiguredAtFirstPoll?: boolean;
   navigatorOverrides?: Record<string, unknown>;
   repeatInjection?: boolean;
   volumeThrows?: boolean;
@@ -249,14 +251,21 @@ function createHarness({
   // Held in a variable so replaceInstance() can swap what getInstance() hands
   // back, which is what the 5-second monitor watches for.
   let liveInstance = musicKit;
+  // Before configure() runs, getInstance() hands back nothing rather than throwing.
+  let getInstanceEmpty = musicKitUnconfiguredAtFirstPoll;
   const musicKitApi = {
     getInstance: () => {
       if (getInstanceThrows) throw new Error("MusicKit is re-initialising");
+      if (getInstanceEmpty) return undefined;
       return liveInstance;
     },
     PlaybackStates: { playing: 2 },
   };
-  if (musicKitThrowsAtInjection || musicKitThrowsAtFirstPoll) {
+  if (
+    musicKitThrowsAtInjection ||
+    musicKitThrowsAtFirstPoll ||
+    musicKitUnconfiguredAtFirstPoll
+  ) {
     Object.assign(context, { MusicKit: musicKitApi });
     Object.assign(window, { MusicKit: musicKitApi });
   }
@@ -266,11 +275,12 @@ function createHarness({
 
   // Fire the first 500ms poll while getInstance() still throws.
   // The hook must leave the poll running so a later poll can attach.
-  if (musicKitThrowsAtFirstPoll) {
+  if (musicKitThrowsAtFirstPoll || musicKitUnconfiguredAtFirstPoll) {
     for (const { callback } of [...intervals.values()]) callback();
   }
 
   getInstanceThrows = false;
+  getInstanceEmpty = false;
   Object.assign(context, { MusicKit: musicKitApi });
   Object.assign(window, { MusicKit: musicKitApi });
   for (const { callback } of [...intervals.values()]) callback();
@@ -1210,6 +1220,25 @@ describe("musicKitHook", () => {
     expect(musicKitListeners.has("playbackStateDidChange")).toBe(true);
     expect(window.__hydraHookedMk).toBe(musicKit);
     expect(bridgeSend).toHaveBeenCalledWith("hookReady", 1, 1);
+  });
+
+  // An unconfigured MusicKit returns no instance. Attaching to it threw inside
+  // attachSafely(), left window.__hydra unset and dropped every command until
+  // the 5-second monitor attached the real instance.
+  it("keeps polling when getInstance() returns no instance on the first poll", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { bridgeSend, musicKit, musicKitListeners, window } = createHarness(
+        { musicKitUnconfiguredAtFirstPoll: true },
+      );
+
+      expect(error).not.toHaveBeenCalled();
+      expect(musicKitListeners.has("playbackStateDidChange")).toBe(true);
+      expect(window.__hydraHookedMk).toBe(musicKit);
+      expect(bridgeSend).toHaveBeenCalledWith("hookReady", 1, 1);
+    } finally {
+      error.mockRestore();
+    }
   });
 
   it("installs no second message listener when the script is injected again", () => {

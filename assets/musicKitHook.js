@@ -9,15 +9,17 @@
   const waitForMK = setInterval(() => {
     if (!window.MusicKit) return;
     // MusicKit can be present while getInstance() still throws during its own
-    // initialisation. Resolve the instance before clearing the poll: a throw
-    // after the clear would end setup for the document lifetime, because
-    // __hydraHookInjected blocks re-injection.
+    // initialisation, or returns nothing before configure() has run. Resolve a
+    // usable instance before clearing the poll: a failure after the clear
+    // would end setup for the document lifetime, because __hydraHookInjected
+    // blocks re-injection. The 5-second monitor applies the same test.
     let mk;
     try {
       mk = MusicKit.getInstance();
     } catch (_) {
       return;
     }
+    if (typeof mk?.addEventListener !== "function") return;
     clearInterval(waitForMK);
 
     /** @type {number | null} Timer ID for the volume polling fallback. */
