@@ -8,6 +8,7 @@ const bootstrap = vi.hoisted(() => {
   const mainWebOnceListeners = new Map<string, Listener>();
   const appListeners = new Map<string, Listener>();
   const mainWindowOnceListeners = new Map<string, Listener>();
+  const mainWindowListeners = new Map<string, Listener>();
   const splashOnceListeners = new Map<string, Listener>();
 
   const webContents = {
@@ -43,7 +44,9 @@ const bootstrap = vi.hoisted(() => {
       return webContents;
     },
     loadURL: vi.fn(() => Promise.reject(new Error("offline"))),
-    on: vi.fn((_event: string, _listener: Listener) => {}),
+    on: vi.fn((event: string, listener: Listener) => {
+      mainWindowListeners.set(event, listener);
+    }),
     once: vi.fn((event: string, listener: Listener) => {
       mainWindowOnceListeners.set(event, listener);
     }),
@@ -52,7 +55,12 @@ const bootstrap = vi.hoisted(() => {
     close: vi.fn(),
     focus: vi.fn(),
     restore: vi.fn(),
-    isVisible: vi.fn(() => true),
+    // Native window methods throw once the window has been destroyed.
+    isVisible: vi.fn(() => {
+      if (mainWindow.isDestroyed())
+        throw new TypeError("Object has been destroyed");
+      return true;
+    }),
     isMinimized: vi.fn(() => false),
     setMinimumSize: vi.fn(),
     getSize: vi.fn(() => [1280, 800]),
@@ -86,6 +94,7 @@ const bootstrap = vi.hoisted(() => {
     mainWebOnceListeners,
     appListeners,
     mainWindowOnceListeners,
+    mainWindowListeners,
     splashOnceListeners,
     webContents,
     mainWindow,
@@ -248,7 +257,10 @@ vi.mock("../src/controllerIPC", () => ({
   initControllerIPC: vi.fn(),
   goBackIfPossible: vi.fn(),
 }));
-vi.mock("../src/aboutWindow", () => ({ showAboutWindow: vi.fn() }));
+vi.mock("../src/aboutWindow", () => ({
+  closeAboutWindow: vi.fn(),
+  showAboutWindow: vi.fn(),
+}));
 vi.mock("../src/performanceMode", () => ({
   applyPerformanceMode: bootstrap.applyPerformanceMode,
 }));
@@ -305,6 +317,7 @@ describe("main bootstrap", () => {
     bootstrap.mainWebOnceListeners.clear();
     bootstrap.appListeners.clear();
     bootstrap.mainWindowOnceListeners.clear();
+    bootstrap.mainWindowListeners.clear();
     bootstrap.splashOnceListeners.clear();
     bootstrap.mainWindow.isDestroyed.mockReturnValue(false);
     bootstrap.browserWindow
@@ -387,6 +400,22 @@ describe("main bootstrap", () => {
     expect(bootstrap.mainWindow.show).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(bootstrap.mainWindow.show).toHaveBeenCalledOnce();
+  });
+
+  // About is a separate top-level window, so while it stays open the main
+  // window closing does not reach window-all-closed and Hydra keeps running.
+  it("closes About and forgets the main window once it closes", async () => {
+    await startMain();
+    const { closeAboutWindow } = await import("../src/aboutWindow");
+    bootstrap.mainWindow.isDestroyed.mockReturnValue(true);
+    bootstrap.mainWindowListeners.get("closed")?.();
+    expect(closeAboutWindow).toHaveBeenCalledOnce();
+
+    // A relaunch reaches this instance through second-instance.
+    expect(() =>
+      bootstrap.appListeners.get("second-instance")?.({}, []),
+    ).not.toThrow();
+    expect(bootstrap.mainWindow.isVisible).not.toHaveBeenCalled();
   });
 
   it("does not show a splash that closed before it painted", async () => {

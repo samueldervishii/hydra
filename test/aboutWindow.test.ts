@@ -24,7 +24,11 @@ vi.mock("../src/paths", () => ({
 }));
 
 import { BrowserWindow, app, shell } from "electron";
-import { isAboutLinkAllowed, showAboutWindow } from "../src/aboutWindow";
+import {
+  closeAboutWindow,
+  isAboutLinkAllowed,
+  showAboutWindow,
+} from "../src/aboutWindow";
 import { getZoomFactor } from "../src/config";
 
 // Stored event handlers let tests drive the window lifecycle.
@@ -39,6 +43,8 @@ interface MockBrowserWindowInstance {
   on: ReturnType<typeof vi.fn>;
   focus: ReturnType<typeof vi.fn>;
   show: ReturnType<typeof vi.fn>;
+  close: ReturnType<typeof vi.fn>;
+  isDestroyed: ReturnType<typeof vi.fn>;
   loadFile: ReturnType<typeof vi.fn>;
   webContents: MockWebContents;
   _listeners: Record<string, ((...args: unknown[]) => void)[]>;
@@ -58,6 +64,8 @@ function createMockBrowserWindow(): MockBrowserWindowInstance {
     }),
     focus: vi.fn(),
     show: vi.fn(),
+    close: vi.fn(),
+    isDestroyed: vi.fn(() => false),
     loadFile: vi.fn(),
     webContents: {
       setZoomFactor: vi.fn(),
@@ -228,6 +236,19 @@ describe("showAboutWindow", () => {
 
     showAboutWindow();
     expect(BrowserWindow).toHaveBeenCalledOnce();
+  });
+
+  it("closes an open window and does nothing once it has gone", () => {
+    closeAboutWindow();
+    expect(latestMockInstance.close).not.toHaveBeenCalled();
+
+    showAboutWindow();
+    closeAboutWindow();
+    expect(latestMockInstance.close).toHaveBeenCalledOnce();
+
+    latestMockInstance.isDestroyed.mockReturnValue(true);
+    closeAboutWindow();
+    expect(latestMockInstance.close).toHaveBeenCalledOnce();
   });
 
   it("shows window and sets zoom on ready-to-show", () => {

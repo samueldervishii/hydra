@@ -42,6 +42,15 @@ function openAboutLink(url: string): void {
   openExternalUrl(url, aboutLog);
 }
 
+/**
+ * Close the About window if it is open. main.ts calls this when the main window
+ * closes: About is a separate top-level window, and left open it would keep
+ * window-all-closed from firing and Hydra running with no main window.
+ */
+export function closeAboutWindow(): void {
+  if (aboutWindow && !aboutWindow.isDestroyed()) aboutWindow.close();
+}
+
 /** Show the About window, or focus the one already open. */
 export function showAboutWindow(): void {
   if (aboutWindow) {

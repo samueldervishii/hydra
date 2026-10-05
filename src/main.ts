@@ -60,7 +60,7 @@ import { handleSettingsNavigation, initSettingsWindow } from "./settingsWindow";
 import { initCommandBridge } from "./commandBridge";
 import { initControllerIPC, goBackIfPossible } from "./controllerIPC";
 import { CONTROLLER_RESET_CHANNEL } from "./controller";
-import { showAboutWindow } from "./aboutWindow";
+import { closeAboutWindow, showAboutWindow } from "./aboutWindow";
 import {
   getService,
   allServices,
@@ -936,6 +936,12 @@ if (gotLock) {
       const assets = loadAssets();
       const created = createMainWindow(ses);
       win = created.win;
+      // Every later read of win, from the tray, second-instance and the
+      // service switch, would otherwise reach a destroyed window and throw.
+      created.win.on("closed", () => {
+        win = null;
+        closeAboutWindow();
+      });
       const winReady = created.winReady;
       initCommandBridge((channel, ...args) => {
         const contents = liveWebContents(win);
