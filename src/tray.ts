@@ -712,13 +712,21 @@ export function createTray(): Tray {
  */
 export function initTrayStateManager(player: Player, tray: Tray): () => void {
   const TRAY_PAUSE_TIMEOUT_MS = 30_000;
-  // Reject artwork for superseded tracks before committing it with metadata.
+  // The latest item, so artwork for a superseded track is dropped.
   let pendingPayload: NowPlayingPayload | null = null;
+  // The item the player holds, with its artwork once downloaded. A sustained
+  // pause or a terminal state hides it from the tray without forgetting it, so
+  // resuming the same item shows it again; only an item change replaces it.
+  let current: {
+    payload: NowPlayingPayload;
+    artworkPath: string | null;
+  } | null = null;
+  let showing = false;
 
   // Volume is left as it stands: it belongs to the player, not to the track
   // that has just gone.
-  const clearNowPlaying = (): void => {
-    pendingPayload = null;
+  const hideNowPlaying = (): void => {
+    showing = false;
     updateTrayTooltip(tray, null);
     updateNowPlayingState({
       payload: null,
@@ -728,9 +736,20 @@ export function initTrayStateManager(player: Player, tray: Tray): () => void {
     scheduleTrayRebuild(tray);
   };
 
+  // Show the held item, unless a newer one is still waiting for its artwork:
+  // its own handler shows it when the download settles.
+  const showNowPlaying = (): void => {
+    showing = true;
+    if (!current || current.payload !== pendingPayload) return;
+    updateTrayTooltip(tray, current.payload);
+    const { isPlaying } = player.playbackSnapshot();
+    updateNowPlayingState({ ...current, isPlaying });
+    scheduleTrayRebuild(tray);
+  };
+
   const trayPauseTimer = createPauseEdgeTimer(TRAY_PAUSE_TIMEOUT_MS, () => {
     trayLog.debug("tray pause timeout reached, clearing Now Playing");
-    clearNowPlaying();
+    hideNowPlaying();
   });
 
   const onNowPlayingItemDidChange = async (
@@ -741,7 +760,9 @@ export function initTrayStateManager(player: Player, tray: Tray): () => void {
       trayLog.debug(
         "nowPlayingItemDidChange (tray handler): null payload, clearing state",
       );
-      clearNowPlaying();
+      pendingPayload = null;
+      current = null;
+      hideNowPlaying();
       return;
     }
     trayLog.debug(
@@ -749,15 +770,16 @@ export function initTrayStateManager(player: Player, tray: Tray): () => void {
       `"${payload.name}"`,
     );
     pendingPayload = payload;
+    showing = true;
     updateTrayTooltip(tray, payload);
     let artworkPath: string | null = null;
     if (payload.artworkUrl) {
       artworkPath = await downloadArtwork(payload.artworkUrl);
       if (pendingPayload !== payload) return;
     }
-    const { isPlaying } = player.playbackSnapshot();
-    updateNowPlayingState({ payload, artworkPath, isPlaying });
-    scheduleTrayRebuild(tray);
+    current = { payload, artworkPath };
+    // A terminal state or the pause expiry during the download hid the tray.
+    if (showing) showNowPlaying();
   };
 
   const onPlaybackStateDidChange = (
@@ -766,13 +788,17 @@ export function initTrayStateManager(player: Player, tray: Tray): () => void {
     const state = payload?.state ?? 0;
     if (isTerminalPlaybackState(state)) {
       trayPauseTimer.cancel();
-      clearNowPlaying();
+      hideNowPlaying();
       return;
     }
     const { isPlaying } = player.playbackSnapshot();
 
     trayPauseTimer.report(isPlaying);
 
+    if (isPlaying && !showing && current) {
+      showNowPlaying();
+      return;
+    }
     updateNowPlayingState({ isPlaying });
     scheduleTrayRebuild(tray);
   };

@@ -2128,6 +2128,121 @@ describe("initTrayStateManager", () => {
       expect(setToolTipFn).not.toHaveBeenCalled();
     });
 
+    // The expiry hides the track, it does not end it: MusicKit sends no item
+    // change on resume, so the tray must bring the same track back itself.
+    it("shows the track again when playback resumes after the timeout", async () => {
+      initTrayStateManager(player, mockTray);
+      vi.mocked(downloadArtwork).mockResolvedValue(null);
+      player.setPlaybackState(PlaybackState.Playing);
+      await handlerFor("nowPlayingItemDidChange")({
+        name: "Kept Track",
+        artistName: "Kept Artist",
+      });
+      handlerFor("playbackStateDidChange")({
+        status: true,
+        state: PlaybackState.Playing,
+      });
+      player.setPlaybackState(PlaybackState.Paused);
+      handlerFor("playbackStateDidChange")({
+        status: true,
+        state: PlaybackState.Paused,
+      });
+      vi.advanceTimersByTime(31_000);
+      expect(getLastTemplate().map((item) => item.label)).not.toContain(
+        "Kept Track",
+      );
+
+      const setToolTipFn = mockTray.setToolTip as ReturnType<typeof vi.fn>;
+      setToolTipFn.mockClear();
+      player.setPlaybackState(PlaybackState.Playing);
+      handlerFor("playbackStateDidChange")({
+        status: true,
+        state: PlaybackState.Playing,
+      });
+      vi.advanceTimersByTime(COALESCE_MS);
+
+      const labels = getLastTemplate().map((item) => item.label);
+      expect(labels).toContain("Kept Track");
+      expect(labels).toContain(mockTrayStrings.pause);
+      expect(setToolTipFn).toHaveBeenLastCalledWith("Kept Track - Kept Artist");
+    });
+
+    it("shows the track again when it plays after a stop", async () => {
+      initTrayStateManager(player, mockTray);
+      vi.mocked(downloadArtwork).mockResolvedValue(null);
+      player.setPlaybackState(PlaybackState.Playing);
+      await handlerFor("nowPlayingItemDidChange")({ name: "Stopped Track" });
+      handlerFor("playbackStateDidChange")({
+        status: true,
+        state: PlaybackState.Stopped,
+      });
+      vi.advanceTimersByTime(COALESCE_MS);
+      expect(getLastTemplate().map((item) => item.label)).not.toContain(
+        "Stopped Track",
+      );
+
+      handlerFor("playbackStateDidChange")({
+        status: true,
+        state: PlaybackState.Playing,
+      });
+      vi.advanceTimersByTime(COALESCE_MS);
+      expect(getLastTemplate().map((item) => item.label)).toContain(
+        "Stopped Track",
+      );
+    });
+
+    it("keeps a track whose artwork lands after a stop and shows it on resume", async () => {
+      initTrayStateManager(player, mockTray);
+      let resolveArtwork: (value: string | null) => void;
+      vi.mocked(downloadArtwork).mockReturnValueOnce(
+        new Promise<string | null>((resolve) => {
+          resolveArtwork = resolve;
+        }),
+      );
+      player.setPlaybackState(PlaybackState.Playing);
+      const change = handlerFor("nowPlayingItemDidChange")({
+        name: "Late Art Track",
+        artworkUrl: "https://example.com/late.jpg",
+      }) as Promise<void>;
+      handlerFor("playbackStateDidChange")({
+        status: true,
+        state: PlaybackState.Stopped,
+      });
+      resolveArtwork!(null);
+      await change;
+      vi.advanceTimersByTime(COALESCE_MS);
+      expect(getLastTemplate().map((item) => item.label)).not.toContain(
+        "Late Art Track",
+      );
+
+      handlerFor("playbackStateDidChange")({
+        status: true,
+        state: PlaybackState.Playing,
+      });
+      vi.advanceTimersByTime(COALESCE_MS);
+      expect(getLastTemplate().map((item) => item.label)).toContain(
+        "Late Art Track",
+      );
+    });
+
+    it("does not bring back a track the replaced document dropped", async () => {
+      initTrayStateManager(player, mockTray);
+      vi.mocked(downloadArtwork).mockResolvedValue(null);
+      player.setPlaybackState(PlaybackState.Playing);
+      await handlerFor("nowPlayingItemDidChange")({ name: "Gone Track" });
+      player.resetForDocumentReplacement();
+
+      player.setPlaybackState(PlaybackState.Playing);
+      handlerFor("playbackStateDidChange")({
+        status: true,
+        state: PlaybackState.Playing,
+      });
+      vi.advanceTimersByTime(COALESCE_MS);
+      expect(getLastTemplate().map((item) => item.label)).not.toContain(
+        "Gone Track",
+      );
+    });
+
     it("cancels the pause timer on track change", async () => {
       initTrayStateManager(player, mockTray);
 
