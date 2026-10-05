@@ -444,6 +444,27 @@ describe('Player handle* payload validation', () => {
     expect(listener).toHaveBeenCalledWith(validField);
   });
 
+  it('drops undefined metadata fields without logging them as invalid', async () => {
+    const log = (await import('electron-log/main')).default.scope('player');
+    vi.mocked(log.warn).mockClear();
+    const player = new Player();
+    const listener = vi.fn();
+    player.on('nowPlayingItemDidChange', listener);
+
+    player.handleNowPlayingItemDidChange({
+      name: 'Track',
+      composerName: undefined,
+      url: undefined,
+    });
+
+    expect(listener).toHaveBeenCalledWith({ name: 'Track' });
+    // The test logger shares one mock across levels, so match the message.
+    expect(log.warn).not.toHaveBeenCalledWith(
+      'nowPlayingItemDidChange: dropping invalid metadata field',
+      expect.anything(),
+    );
+  });
+
   it('drops unknown metadata fields and emits known fields', () => {
     const player = new Player();
     const listener = vi.fn();

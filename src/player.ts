@@ -195,8 +195,12 @@ function sanitiseNowPlayingPayload(value: unknown): NowPlayingPayload | null {
   const fields = Object.entries(value).filter(([field, fieldValue]) => {
     // Object.hasOwn() first: a prototype-named key such as __proto__ or
     // constructor would otherwise resolve a member on the validators prototype.
-    if (Object.hasOwn(validators, field) && validators[field](fieldValue))
-      return true;
+    const known = Object.hasOwn(validators, field);
+    // The hook sends every field, and MusicKit leaves undefined the ones Apple
+    // does not have, such as composerName and url on a library track. That is
+    // an absent value, not an invalid one, so it is dropped without a warning.
+    if (known && fieldValue === undefined) return false;
+    if (known && validators[field](fieldValue)) return true;
     playerLog.warn(
       "nowPlayingItemDidChange: dropping invalid metadata field",
       field,
