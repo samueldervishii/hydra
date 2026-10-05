@@ -75,6 +75,22 @@ describe("wedgeDetector", () => {
     expect(mockWin.webContents.send).toHaveBeenCalledWith("player:next");
   });
 
+  // A suspend stops the monotonic clock and the check interval together, but
+  // the wall clock jumps by the whole sleep. Measured on the wall clock, the
+  // first check after resume saw a stall as long as the sleep.
+  it("does not count a wall-clock jump from a suspend as a stall", () => {
+    player.handlePlaybackStateDidChange({
+      status: true,
+      state: PlaybackState.Playing,
+    });
+    vi.advanceTimersByTime(1000);
+
+    vi.setSystemTime(Date.now() + 60 * 60 * 1000);
+    vi.advanceTimersByTime(1000);
+
+    expect(mockWin.webContents.send).not.toHaveBeenCalled();
+  });
+
   it("does not fire skip before stall threshold", () => {
     player.handlePlaybackStateDidChange({
       status: true,

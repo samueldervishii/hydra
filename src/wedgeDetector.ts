@@ -22,6 +22,12 @@ const END_SAFETY_MARGIN_MS = 10000;
 const CHECK_INTERVAL_MS = 1000;
 const MAX_SKIP_ATTEMPTS = 3;
 
+// Stall time is measured on the monotonic clock the check interval runs on.
+// Linux suspends both, while the wall clock jumps by the whole sleep, so a
+// Date.now() reading made the first check after resume see a stall as long as
+// the sleep and skip the track before playback had a chance to restart.
+const now = (): number => performance.now();
+
 let playerRef: Player | null = null;
 let lastAdvanceTime = 0;
 let durationMs = 0;
@@ -43,14 +49,14 @@ function stopTimer(): void {
 
 function checkForWedge(getWin: () => BrowserWindow | null): void {
   if (!playerRef?.playbackSnapshot().isPlaying) return;
-  if (Date.now() - lastAdvanceTime < STALL_THRESHOLD_MS) return;
+  if (now() - lastAdvanceTime < STALL_THRESHOLD_MS) return;
   const positionUs = playerRef.playbackSnapshot().positionUs;
   if (durationMs > 0 && durationMs - positionUs / 1000 < END_SAFETY_MARGIN_MS)
     return;
   if (skipAttempts >= MAX_SKIP_ATTEMPTS) return;
 
   skipAttempts++;
-  lastAdvanceTime = Date.now();
+  lastAdvanceTime = now();
   const contents = liveWebContents(getWin());
   const result = contents ? "sent" : "dropped";
   wedgeLog.warn(
@@ -89,7 +95,7 @@ export function init(ctx: IntegrationContext): void {
   // Named references let will-quit remove the same listeners.
   const onPlaybackStateDidChange = (payload: PlaybackStatePayload): void => {
     const nowPlaying = payload?.state === PlaybackState.Playing;
-    lastAdvanceTime = Date.now();
+    lastAdvanceTime = now();
     skipAttempts = 0;
 
     if (nowPlaying) {
@@ -103,14 +109,14 @@ export function init(ctx: IntegrationContext): void {
     payload: NowPlayingPayload | null,
   ): void => {
     durationMs = payload?.durationInMillis ?? 0;
-    lastAdvanceTime = Date.now();
+    lastAdvanceTime = now();
     skipAttempts = 0;
   };
 
   const onPlaybackTimeDidChange = (payload: number): void => {
     if (payload !== lastSeenPositionUs) {
       lastSeenPositionUs = payload;
-      lastAdvanceTime = Date.now();
+      lastAdvanceTime = now();
     }
   };
 
