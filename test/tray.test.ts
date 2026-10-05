@@ -999,6 +999,28 @@ describe("createTray - menu template inspection", () => {
       expect(tickedLabels()).toEqual(["Custom Theme"]);
     });
 
+    // The Style submenu is built once and only the custom-theme watcher
+    // rebuilds it. With the watcher down, Custom can outlive its file, and the
+    // click must not reach Electron as a throw, which shows an error dialog.
+    it("rebuilds the menu instead of throwing when a stale Custom entry is clicked", () => {
+      vi.mocked(resolveTheme).mockReturnValue("apple-music");
+      vi.mocked(hasCustomTheme).mockReturnValue(true);
+      createTray();
+      const submenu = findItem(getLastTemplate(), "Style")!
+        .submenu as Electron.MenuItemConstructorOptions[];
+      const customItem = submenu.find((item) => item.label === "Custom Theme");
+      expect(customItem).toBeDefined();
+
+      vi.mocked(hasCustomTheme).mockReturnValue(false);
+      vi.mocked(Menu.buildFromTemplate).mockClear();
+      expect(() => (customItem!.click as Function)()).not.toThrow();
+      expect(vi.mocked(applyTheme)).not.toHaveBeenCalledWith("custom");
+
+      const rebuilt = findItem(getLastTemplate(), "Style")!
+        .submenu as Electron.MenuItemConstructorOptions[];
+      expect(rebuilt.some((item) => item.label === "Custom Theme")).toBe(false);
+    });
+
     it("offers no Custom entry and ticks Apple Music when custom-theme.json is gone", () => {
       // resolveTheme() reduces a stored 'custom' to 'apple-music' once the file
       // is unreadable, so a Custom entry here would tick nothing at all.

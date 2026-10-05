@@ -256,12 +256,26 @@ interface SubmenuContext {
   refresh: () => void;
 }
 
+// A menu built earlier can offer a choice that is no longer valid, such as
+// Custom after custom-theme.json became invalid while its watcher was down.
+// applySettingsAction() throws on it, and a throw from a menu click raises the
+// main-process error dialog, so log it and rebuild the menu instead.
+function applyFromTray(action: unknown, ctx: SubmenuContext): void {
+  try {
+    applySettingsAction(action);
+  } catch {
+    trayLog.warn("source=tray reason=stale-choice result=refused");
+    ctx.refresh();
+  }
+}
+
 function buildChoiceSubmenu(
   label: string,
   iconKey: MenuIconKey,
   selected: string | number,
   options: { value: string | number; label: string }[],
   action: (value: string | number) => unknown,
+  ctx: SubmenuContext,
 ): Electron.MenuItemConstructorOptions {
   const icon = getMenuIcon(iconKey);
   const selectedLabel =
@@ -275,7 +289,7 @@ function buildChoiceSubmenu(
       type: "radio" as const,
       checked: selected === option.value,
       click: () => {
-        applySettingsAction(action(option.value));
+        applyFromTray(action(option.value), ctx);
       },
     })),
   };
@@ -291,6 +305,7 @@ function buildPlayerSubmenu(
     state.musicService,
     state.options.musicService,
     (value) => ({ type: "musicService", value }),
+    ctx,
   );
 }
 
@@ -304,6 +319,7 @@ function buildStartPageSubmenu(
     state.startPage,
     state.options.startPage,
     (value) => ({ type: "startPage", serviceId: state.musicService, value }),
+    ctx,
   );
 }
 
@@ -325,7 +341,7 @@ function buildToggleSubmenu(
         type: "radio" as const,
         checked: enabled === value,
         click: () => {
-          applySettingsAction({ type, value });
+          applyFromTray({ type, value }, ctx);
         },
       })),
       ...extraItems,
@@ -355,6 +371,7 @@ function buildStyleSubmenu(
     state.theme,
     state.options.theme,
     (value) => ({ type: "theme", value }),
+    ctx,
   );
 }
 
@@ -368,6 +385,7 @@ function buildZoomSubmenu(
     state.zoomFactor,
     state.options.zoomFactor,
     (value) => ({ type: "zoomFactor", value }),
+    ctx,
   );
 }
 
