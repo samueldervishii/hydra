@@ -87,7 +87,15 @@ async function fetchArtwork(url: string): Promise<string | null> {
     return filepath;
   }
 
-  fs.mkdirSync(ARTWORK_CACHE_DIR, { recursive: true });
+  // Callers await this without a catch, the tray among them, so a cache folder
+  // that cannot be created resolves null like any other failure instead of
+  // rejecting on every track.
+  try {
+    fs.mkdirSync(ARTWORK_CACHE_DIR, { recursive: true });
+  } catch (error: unknown) {
+    artworkLog.warn("cache directory unavailable:", errorMessage(error));
+    return null;
+  }
 
   // Download to a temporary file and rename it, so a cache hit is always complete.
   const tmpPath = filepath + "." + Date.now() + ".tmp";

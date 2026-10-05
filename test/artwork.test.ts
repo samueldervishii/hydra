@@ -157,6 +157,21 @@ describe("downloadArtwork", () => {
     expect(fs.createWriteStream).not.toHaveBeenCalled();
   });
 
+  it("resolves null without fetching when the cache folder cannot be created", async () => {
+    vi.mocked(fs.mkdirSync).mockImplementationOnce(() => {
+      throw Object.assign(new Error("EACCES: permission denied"), {
+        code: "EACCES",
+      });
+    });
+
+    vi.mocked(net.fetch).mockClear();
+
+    await expect(
+      downloadArtwork("https://example.com/unwritable.jpg"),
+    ).resolves.toBeNull();
+    expect(net.fetch).not.toHaveBeenCalled();
+  });
+
   it("resolves null on network error", async () => {
     const url = "https://example.com/error.jpg";
 
