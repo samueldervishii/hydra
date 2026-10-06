@@ -358,3 +358,39 @@ export function getAboutStrings(): {
     versionPrefix: getLocalizedString(VERSION_PREFIX, langs),
   };
 }
+
+/**
+ * Placeholder for JSON labels in assets/songSearch.js, substituted by
+ * loadAssets() as NAV_LABELS_TOKEN is.
+ */
+export const SEARCH_LABELS_TOKEN = '__HYDRA_SEARCH_LABELS__';
+
+// English only until translated. Not exported, because
+// test/i18n-consistency.test.ts treats every exported object as a record that
+// must carry every language.
+const SEARCH_SONGS_TEXT: Record<string, string> = { en: 'Search songs' };
+const SEARCHING_TEXT: Record<string, string> = { en: 'Searching…' };
+const NO_SONGS_FOUND_TEXT: Record<string, string> = { en: 'No songs found' };
+const SEARCH_FAILED_TEXT: Record<string, string> = { en: 'Search failed' };
+const ALL_RESULTS_TEXT: Record<string, string> = { en: 'All results in Apple Music' };
+const EXPLICIT_TEXT: Record<string, string> = { en: 'Explicit' };
+
+/** Resolve the labels for the injected song search panel. */
+export function getSearchStrings(): {
+  search: string;
+  searching: string;
+  noResults: string;
+  failed: string;
+  allResults: string;
+  explicit: string;
+} {
+  const langs = getSystemLanguages();
+  return {
+    search: getLocalizedString(SEARCH_SONGS_TEXT, langs),
+    searching: getLocalizedString(SEARCHING_TEXT, langs),
+    noResults: getLocalizedString(NO_SONGS_FOUND_TEXT, langs),
+    failed: getLocalizedString(SEARCH_FAILED_TEXT, langs),
+    allResults: getLocalizedString(ALL_RESULTS_TEXT, langs),
+    explicit: getLocalizedString(EXPLICIT_TEXT, langs),
+  };
+}
