@@ -70,7 +70,8 @@ just run
 ## What this fork adds
 
 - **Performance mode:** removes Apple's heavy blur layers, which make dragging the window lag. On by default; toggle it in Settings.
-- **Collapsible sidebar:** shrinks the sidebar to a narrow strip with Back, Home, Search and All Playlists. Use the button at the top of the sidebar, Ctrl+B or Settings.
+- **Top bar:** replaces Apple's sidebar with a slim bar holding Back, Home, Search and All Playlists, once you are signed in. Ctrl+B or Settings switches back to Apple's sidebar for Library, Radio and Pins.
+- **Songs-first search:** Ctrl+K or the bar's Search button opens a search that lists songs only, with the artist's own songs first; click one to play it and queue the rest. "All results in Apple Music" opens Apple's full search.
 - **No update checks:** the app never contacts upstream for updates and never replaces itself.
 
 ## Credits

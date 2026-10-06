@@ -115,8 +115,9 @@ hydra/
 │   ├── settingsMigration.ts       - copies settings once from ~/.config/Sidra; first import in main.ts
 │   ├── rootAttribute.ts           - setRootAttribute(): toggles a gating attribute on the page's <html>
 │   ├── performanceMode.ts         - applyPerformanceMode(): mirrors the setting onto <html>
-│   ├── sidebar.ts                 - applySidebar(): mirrors the collapsed-sidebar setting onto <html>
-│   ├── shortcuts.ts               - Ctrl+B, Alt+Left/Right, Ctrl+R and F5 on the main window
+│   ├── navigation.ts              - applyNavigation(): requests the top bar on <html> and asks it to re-evaluate
+│   ├── shortcuts.ts               - Ctrl+B (top bar or Apple sidebar), Ctrl+K (song search), Alt+Left/Right,
+│   │                                 Ctrl+R and F5 on the main window
 │   ├── types/
 │   │   ├── electron.d.ts          - module augmentations for CastLabs type gaps
 │   │   └── hook.d.ts              - hook-preload contract: HydraHook, AMWrapperBridge, SendChannel, ReceiveChannel, HydraCommandMessage, Window augmentations
@@ -145,11 +146,17 @@ hydra/
 │   │                                 electron-builder's `asarUnpack`: it is read with
 │   │                                 readFileSync at runtime and will crash AppImage
 │   │                                 builds if packed inside the asar archive
-│   ├── navigationBar.js           - Injected post-load; adds the sidebar toggle, Back, Forward, Reload
-│   │                                 and Settings row above the logo, and the Home, Search and All
-│   │                                 Playlists buttons the collapsed strip shows.
+│   ├── navigationBar.js           - Injected post-load; adds the Back, Forward, Reload and Settings
+│   │                                 row above the logo in Apple's sidebar.
 │   │                                 Its `__HYDRA_NAV_LABELS__` placeholder is replaced with the
 │   │                                 localised aria-labels when src/main.ts reads the file
+│   ├── topBar.js                  - Injected post-load on music.apple.com; Hydra's top bar (Back,
+│   │                                 Home, Search, All Playlists) in place of Apple's sidebar, shown
+│   │                                 only when requested, signed in and the layout checks out.
+│   │                                 `__HYDRA_TOP_BAR_LABELS__` carries its labels. In `asarUnpack`
+│   ├── songSearch.js              - Injected post-load on music.apple.com; the songs-first search
+│   │                                 panel built on the MusicKit API. `__HYDRA_SEARCH_LABELS__`
+│   │                                 carries its labels. In `asarUnpack`
 │   ├── authFrameFix.js            - Injected into Apple's sign-in iframe; hides the passkey and
 │   │                                 "Sign in with iPhone" options. Its `__HYDRA_AUTH_FIX__`
 │   │                                 placeholder is replaced with the stylesheet and container
@@ -164,11 +171,11 @@ hydra/
 │   ├── hydra-logo.png             - Product logo used in About window
 │   ├── hydra-splash.png           - Artwork shown on the splash screen
 │   ├── performanceMode.css        - Performance mode; every rule gated on html[data-hydra-performance]
-│   ├── sidebar.css                - Collapsed sidebar; every rule gated on html[data-hydra-sidebar-collapsed]
+│   ├── topBar.css                 - Top bar layout; every rule gated on html[data-hydra-top-bar]
 │   ├── locales/
 │   │   ├── loading.json           - 1 translation record: LOADING_TEXT
-│   │   ├── tray.json              - 35 translation records: tray menu, dock, Windows taskbar
-│   │   │                             and navigation bar labels
+│   │   ├── tray.json              - 42 translation records: tray menu, dock, Windows taskbar,
+│   │   │                             Settings, navigation row and song search labels
 │   │   └── about.json             - 3 translation records: about window labels
 │   ├── styleFix.css               - CSS overrides injected via webContents.insertCSS()
 │   │                                 Hides "Get the app" and "Open in Music" banners
