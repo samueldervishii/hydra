@@ -106,6 +106,12 @@ export const SETTINGS_TEXT: Record<string, string> = trayData.SETTINGS_TEXT;
 export const APP_TEXT: Record<string, string> = trayData.APP_TEXT;
 /** Translations for settings error, keyed by BCP 47 language tag. */
 export const SETTINGS_ERROR_TEXT: Record<string, string> = trayData.SETTINGS_ERROR_TEXT;
+/** Translations for the Navigation setting, keyed by BCP 47 language tag. */
+export const NAVIGATION_TEXT: Record<string, string> = trayData.NAVIGATION_TEXT;
+/** Translations for the top bar navigation choice, keyed by BCP 47 language tag. */
+export const NAVIGATION_TOP_BAR_TEXT: Record<string, string> = trayData.NAVIGATION_TOP_BAR_TEXT;
+/** Translations for the Apple sidebar navigation choice, keyed by BCP 47 language tag. */
+export const NAVIGATION_APPLE_SIDEBAR_TEXT: Record<string, string> = trayData.NAVIGATION_APPLE_SIDEBAR_TEXT;
 /** Translations for performance mode, keyed by BCP 47 language tag. */
 export const PERFORMANCE_MODE_TEXT: Record<string, string> = trayData.PERFORMANCE_MODE_TEXT;
 
@@ -284,10 +290,9 @@ const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   showWindow: SHOW_WINDOW_TEXT,
   closeToTray: CLOSE_TO_TRAY_TEXT,
   performanceMode: PERFORMANCE_MODE_TEXT,
-  // English only until translated.
-  navigation: { en: 'Navigation' },
-  navigationTopBar: { en: 'Hydra top bar' },
-  navigationAppleSidebar: { en: 'Apple sidebar' },
+  navigation: NAVIGATION_TEXT,
+  navigationTopBar: NAVIGATION_TOP_BAR_TEXT,
+  navigationAppleSidebar: NAVIGATION_APPLE_SIDEBAR_TEXT,
 };
 
 // TRAY_TEXT is a Record literal, so excess property checking already rules out
