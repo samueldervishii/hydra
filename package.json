@@ -53,6 +53,8 @@
       "assets/musicKitHook.js",
       "assets/navigationBar.js",
       "assets/songSearch.js",
+      "assets/topBar.js",
+      "assets/topBar.css",
       "assets/performanceMode.css",
       "assets/settings.html",
       "assets/settings.css",

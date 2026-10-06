@@ -1,0 +1,28 @@
+/* Hydra's top bar on Apple Music. Every rule is gated on html[data-hydra-top-bar],
+   which assets/topBar.js sets only when the bar is requested, the user is
+   signed in and Apple's layout is present, and removes again when the layout
+   check after it fails, leaving Apple's sidebar exactly as it was. Below 484px
+   Apple swaps the sidebar for its own top bar, so this applies above that. */
+@media (min-width: 484px) {
+  /* Apple declares this on :root only, and the content padding, the floating
+     player and the full-width shelves all read it. */
+  html[data-hydra-top-bar] {
+    --web-navigation-width: 0px !important;
+  }
+
+  /* The sidebar column goes, and the bar's 40px strip is reserved above
+     Apple's grid, so nothing scrolls beneath the bar. 40px is BAR_PX in
+     assets/topBar.js, which checks for it. */
+  html[data-hydra-top-bar] .app-container {
+    grid-template-columns: 0 minmax(0, 1fr) !important;
+    padding-top: 40px !important;
+    box-sizing: border-box !important;
+    height: 100vh !important;
+  }
+
+  /* [data-testid="header"] is the sidebar: a bare .header also matches every
+     section header on the page. */
+  html[data-hydra-top-bar] [data-testid="header"] {
+    display: none !important;
+  }
+}

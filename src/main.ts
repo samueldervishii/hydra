@@ -24,9 +24,11 @@ import {
   getLoadingText,
   getNavigationStrings,
   getSearchStrings,
+  getTopBarStrings,
   getTrayStrings,
   NAV_LABELS_TOKEN,
   SEARCH_LABELS_TOKEN,
+  TOP_BAR_LABELS_TOKEN,
 } from "./i18n";
 import { getAssetPath } from "./paths";
 import { Player, IntegrationContext } from "./player";
@@ -57,7 +59,7 @@ import {
   toggleSidebarCollapsed,
 } from "./settings";
 import { applySidebar } from "./sidebar";
-import { applyNavigation } from "./navigation";
+import { applyNavigation, TOP_BAR_LAYOUT_WARNING } from "./navigation";
 import { initShortcuts } from "./shortcuts";
 import { handleSettingsNavigation, initSettingsWindow } from "./settingsWindow";
 import { initCommandBridge } from "./commandBridge";
@@ -249,10 +251,12 @@ export interface Assets {
   STYLE_FIX_CSS: string;
   PERFORMANCE_CSS: string;
   SIDEBAR_CSS: string;
+  TOP_BAR_CSS: string;
   authFrameScript: string;
   navBarScript: string;
   hookScript: string;
   songSearchScript: string;
+  topBarScript: string;
 }
 
 function createSplash(): {
@@ -483,6 +487,13 @@ function loadAssets(): Assets {
   const navBarScript = fs
     .readFileSync(navBarPath, "utf-8")
     .replace(NAV_LABELS_TOKEN, () => JSON.stringify(getNavigationStrings()));
+  const TOP_BAR_CSS = fs.readFileSync(
+    getAssetPath("assets", "topBar.css"),
+    "utf-8",
+  );
+  const topBarScript = fs
+    .readFileSync(getAssetPath("assets", "topBar.js"), "utf-8")
+    .replace(TOP_BAR_LABELS_TOKEN, () => JSON.stringify(getTopBarStrings()));
   const songSearchScript = fs
     .readFileSync(getAssetPath("assets", "songSearch.js"), "utf-8")
     .replace(SEARCH_LABELS_TOKEN, () => JSON.stringify(getSearchStrings()));
@@ -496,10 +507,12 @@ function loadAssets(): Assets {
     STYLE_FIX_CSS,
     PERFORMANCE_CSS,
     SIDEBAR_CSS,
+    TOP_BAR_CSS,
     authFrameScript,
     navBarScript,
     hookScript,
     songSearchScript,
+    topBarScript,
   };
 }
 
@@ -672,7 +685,8 @@ function setupWindowZoomAndNav(win: BrowserWindow): void {
 // Contain injection failures in both full-load and in-page navigation handlers.
 // The URL read can throw after WebContents destruction, so it stays inside the catch.
 // Separate catches let navigation controls load even when the MusicKit hook fails.
-// The song search panel goes last, on allowed hosts only, like the hook it plays through.
+// The song search panel and the top bar go last, on allowed hosts only, like
+// the hook the panel plays through; each has its own catch.
 async function injectRendererScripts(
   win: BrowserWindow,
   assets: Assets,
@@ -710,6 +724,12 @@ async function injectRendererScripts(
     mainLog.debug("Song search injected");
   } catch (e: unknown) {
     mainLog.warn(`failed to inject songSearchScript ${context}:`, e);
+  }
+  try {
+    await win.webContents.executeJavaScript(assets.topBarScript);
+    mainLog.debug("Top bar injected");
+  } catch (e: unknown) {
+    mainLog.warn(`failed to inject topBarScript ${context}:`, e);
   }
 }
 
@@ -786,6 +806,17 @@ function setupAuthFrameInjection(win: BrowserWindow, script: string): void {
   });
 }
 
+// assets/topBar.js keeps Apple's sidebar when its layout check fails and
+// prints TOP_BAR_LAYOUT_WARNING. Only that exact line from the page's own frame
+// is relayed, as a fixed message, so nothing the page writes reaches the log.
+function setupTopBarWarning(win: BrowserWindow): void {
+  win.webContents.on("console-message", (event) => {
+    if (event.message !== TOP_BAR_LAYOUT_WARNING) return;
+    if (event.frame?.parent !== null) return;
+    mainLog.warn("top bar layout check failed; keeping Apple's sidebar");
+  });
+}
+
 function setupWindowEvents(win: BrowserWindow, markCssReady: () => void): void {
   win.webContents.on("unresponsive", () => {
     mainLog.warn("event=unresponsive processType=renderer");
@@ -859,6 +890,7 @@ function setupContentHandlers(
     // toggle reaches the open page without inserting or removing CSS.
     await win.webContents.insertCSS(assets.PERFORMANCE_CSS);
     await win.webContents.insertCSS(assets.SIDEBAR_CSS);
+    await win.webContents.insertCSS(assets.TOP_BAR_CSS);
     await applyPerformanceMode(win.webContents);
     await applySidebar(win.webContents);
     await applyNavigation(win.webContents);
@@ -1018,6 +1050,7 @@ if (gotLock) {
       setupWindowEvents(win, markCssReady);
       setupNavigationHandlers(win, player);
       setupAuthFrameInjection(win, assets.authFrameScript);
+      setupTopBarWarning(win);
       appTray = createTray();
       if (process.env.HYDRA_DEVTOOLS === "1") {
         win.webContents.openDevTools();

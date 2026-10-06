@@ -404,3 +404,25 @@ export function getSearchStrings(): {
     explicit: getLocalizedString(EXPLICIT_TEXT, langs),
   };
 }
+
+/**
+ * Placeholder for JSON labels in assets/topBar.js, substituted by loadAssets()
+ * as NAV_LABELS_TOKEN is.
+ */
+export const TOP_BAR_LABELS_TOKEN = '__HYDRA_TOP_BAR_LABELS__';
+
+/** Resolve the labels for the injected top bar, which reuses translated records. */
+export function getTopBarStrings(): {
+  back: string;
+  home: string;
+  search: string;
+  allPlaylists: string;
+} {
+  const langs = getSystemLanguages();
+  return {
+    back: getLocalizedString(BACK_TEXT, langs),
+    home: getLocalizedString(START_PAGE_HOME_TEXT, langs),
+    search: getLocalizedString(START_PAGE_SEARCH_TEXT, langs),
+    allPlaylists: getLocalizedString(START_PAGE_ALL_PLAYLISTS_TEXT, langs),
+  };
+}

@@ -190,9 +190,11 @@ vi.mock("../src/i18n", () => ({
   getLoadingText: vi.fn(() => ({ text: "Loading...", lang: "en" })),
   getNavigationStrings: vi.fn(() => ({})),
   getSearchStrings: vi.fn(() => ({})),
+  getTopBarStrings: vi.fn(() => ({})),
   getTrayStrings: vi.fn(() => ({ about: "À propos de Hydra" })),
   NAV_LABELS_TOKEN: "__NAV_LABELS__",
   SEARCH_LABELS_TOKEN: "__SEARCH_LABELS__",
+  TOP_BAR_LABELS_TOKEN: "__TOP_BAR_LABELS__",
 }));
 
 vi.mock("../src/paths", () => ({
@@ -249,6 +251,7 @@ vi.mock("../src/sidebar", () => ({
 }));
 vi.mock("../src/navigation", () => ({
   applyNavigation: bootstrap.applyNavigation,
+  TOP_BAR_LAYOUT_WARNING: "[hydra] top-bar: layout-unavailable",
 }));
 vi.mock("../src/shortcuts", () => ({
   initShortcuts: vi.fn(() => bootstrap.teardownShortcuts),
@@ -499,9 +502,9 @@ describe("main bootstrap", () => {
     const finish = bootstrap.mainWebListeners.get("did-finish-load");
     await finish?.();
     await finish?.();
-    // Each load inserts styleFix.css, performanceMode.css and sidebar.css; the
+    // Each load inserts styleFix.css, performanceMode.css, sidebar.css and topBar.css; the
     // theme is mocked. fs is mocked to return "asset" for every file.
-    expect(bootstrap.webContents.insertCSS).toHaveBeenCalledTimes(6);
+    expect(bootstrap.webContents.insertCSS).toHaveBeenCalledTimes(8);
     expect(bootstrap.applyPerformanceMode).toHaveBeenCalledTimes(2);
     expect(bootstrap.applyPerformanceMode).toHaveBeenCalledWith(
       bootstrap.webContents,
@@ -687,7 +690,7 @@ describe("main bootstrap", () => {
     expect(bootstrap.webContents.executeJavaScript).not.toHaveBeenCalled();
 
     await finish?.();
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(3);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(4);
     for (const initialise of Object.values(bootstrap.integrations)) {
       expect(initialise.mock.invocationCallOrder[0]).toBeLessThan(
         bootstrap.webContents.executeJavaScript.mock.invocationCallOrder[0],
@@ -695,18 +698,19 @@ describe("main bootstrap", () => {
     }
 
     await navigate?.({}, "https://music.apple.com/gb/new", true);
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(6);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(8);
     for (const initialise of Object.values(bootstrap.integrations))
       expect(initialise).toHaveBeenCalledOnce();
   });
 
   // The song search plays through the hook, so it is injected on the same
   // allowed hosts only, after the navigation bar, and a failure is contained.
-  it("injects the song search only where the hook is injected", async () => {
+  it("injects the song search and the top bar only where the hook is injected", async () => {
     await startMain();
     await bootstrap.mainWebListeners.get("did-finish-load")?.();
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(3);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(4);
     expect(bootstrap.log.debug).toHaveBeenCalledWith("Song search injected");
+    expect(bootstrap.log.debug).toHaveBeenCalledWith("Top bar injected");
 
     const { isAllowedNavigationUrl } = await import("../src/musicService");
     bootstrap.webContents.executeJavaScript.mockClear();
@@ -718,6 +722,42 @@ describe("main bootstrap", () => {
     );
     // Only the navigation bar.
     expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledOnce();
+  });
+
+  it("logs a failed top bar injection without failing the load", async () => {
+    await startMain();
+    bootstrap.webContents.executeJavaScript
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockRejectedValueOnce(new Error("bar unavailable"));
+    await expect(
+      Promise.resolve(bootstrap.mainWebListeners.get("did-finish-load")?.()),
+    ).resolves.toBeUndefined();
+    expect(bootstrap.log.warn).toHaveBeenCalledWith(
+      "failed to inject topBarScript on load:",
+      expect.any(Error),
+    );
+  });
+
+  // assets/topBar.js prints one fixed line when it keeps Apple's sidebar.
+  it("relays the top bar's layout warning from the page's own frame only", async () => {
+    await startMain();
+    const listeners = bootstrap.webContents.on.mock.calls
+      .filter(([event]) => event === "console-message")
+      .map(([, listener]) => listener);
+    const send = (message: string, parent: unknown) => {
+      for (const listener of listeners) listener({ message, frame: { parent, url: "https://music.apple.com/" } });
+    };
+    const relayed = () =>
+      bootstrap.log.warn.mock.calls.filter(
+        ([message]: unknown[]) => message === "top bar layout check failed; keeping Apple's sidebar",
+      ).length;
+    send("[hydra] top-bar: layout-unavailable", {});
+    send("[hydra] top-bar: layout-unavailable and more", null);
+    expect(relayed()).toBe(0);
+    send("[hydra] top-bar: layout-unavailable", null);
+    expect(relayed()).toBe(1);
   });
 
   it("logs a failed song search injection without failing the load", async () => {
@@ -784,9 +824,9 @@ describe("main bootstrap", () => {
       expect.any(Error),
     );
     expect(bootstrap.integrations.trayState).toHaveBeenCalledOnce();
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(3);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(4);
     await navigate?.({}, "https://music.apple.com/gb/new", true);
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(6);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(8);
     expect(bootstrap.integrations.dock).toHaveBeenCalledOnce();
   });
 
