@@ -42,6 +42,10 @@
   var LAYOUT_WARNING = "[hydra] top-bar: layout-unavailable";
   /** Apple's library route; library routes carry no storefront segment. */
   var ALL_PLAYLISTS_PATH = "/library/all-playlists";
+  /** Custom property on the host carrying the colour sampled below the strip. */
+  var STRIP_PROPERTY = "--hydra-strip";
+  /** How far below the strip the page colour is sampled, in CSS pixels. */
+  var SAMPLE_BELOW_PX = 4;
   /** Space between an active item's icon and its label, in CSS pixels. */
   var LABEL_GAP_PX = 8;
   /** The avatar's pixel size requested from Apple: twice the 40px it is drawn at. */
@@ -64,9 +68,11 @@
     "  :host { --glass: var(--glassMaterialBackground-onLight, rgba(245, 245, 247, 0.55));",
     "    --glass-shadow: var(--glassMaterialShadowColor-onLight, rgba(0, 0, 0, 0.1));",
     "    --glass-stroke: color-mix(in srgb, var(--glassMaterialInnerStroke-onLight, #000) 5%, transparent); } }",
+    ":host { background-color: var(--pageBG, #1f1f1f); }",
     ".bar { position: relative; box-sizing: border-box; height: 100%; display: flex;",
     "  align-items: center; justify-content: space-between; padding: 0 36px;",
-    "  background: var(--pageBG, #1f1f1f); }",
+    "  background-color: var(" + STRIP_PROPERTY + ", var(--pageBG, #1f1f1f));",
+    "  transition: background-color 0.25s ease; }",
     ".side { display: flex; align-items: center; gap: 8px; }",
     "button { display: flex; align-items: center; justify-content: center; margin: 0; padding: 0;",
     "  border: 0; cursor: pointer; font: inherit; background: transparent;",
@@ -74,7 +80,8 @@
     "button:hover { color: var(--systemPrimary, #ffffff); }",
     "button:focus-visible { outline: 2px solid var(--keyColor, #fa586a); outline-offset: 2px; }",
     ".round { width: 32px; height: 32px; border-radius: 50%;",
-    "  background: var(--systemQuaternary, rgba(128, 128, 128, 0.2)); }",
+    "  background: linear-gradient(var(--glass), var(--glass)), var(--pageBG, #1f1f1f);",
+    "  box-shadow: inset 0 0 0 0.5px var(--glass-stroke); }",
     ".round[aria-disabled='true'] { opacity: 0.4; cursor: default; }",
     ".round[aria-disabled='true']:hover { color: var(--systemSecondary, rgba(128, 128, 128, 0.9)); }",
     ".pill { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);",
@@ -110,7 +117,7 @@
     "  color: var(--systemPrimary, #ffffff); text-align: left; }",
     ".menuitem:hover, .menuitem:focus { background: var(--systemQuaternary, rgba(128, 128, 128, 0.2)); }",
     ".menuitem:focus-visible { outline-offset: -2px; }",
-    "@media (prefers-reduced-motion: reduce) { .label, .capsule { transition: none; } }",
+    "@media (prefers-reduced-motion: reduce) { .bar, .label, .capsule { transition: none; } }",
   ].join("\n");
 
   // The account button's stand-in until Apple's avatar loads, and when there is
@@ -225,6 +232,10 @@
   var face = null;
   /** @type {any} The MusicKit instance the avatar was read for. */
   var avatarFor = null;
+  /** @type {MutationObserver | null} Watches the elements the strip colour came from. */
+  var stripObserver = null;
+  /** @type {number | null} A strip sample waiting for the next frame. */
+  var stripFrame = null;
   /** @type {number | null} */
   var waitTimer = null;
 
@@ -718,6 +729,101 @@
   }
 
   /**
+   * Whether a computed colour paints nothing.
+   * @param {string} colour - A computed background-color
+   * @returns {boolean}
+   */
+  function isTransparent(colour) {
+    if (!colour || colour === "transparent") return true;
+    var rgba = /^rgba\((?:[^,]+,){3}\s*([\d.]+)\)$/.exec(colour);
+    if (rgba) return parseFloat(rgba[1]) === 0;
+    var slash = /\/\s*([\d.]+)%?\s*\)$/.exec(colour);
+    return !!slash && parseFloat(slash[1]) === 0;
+  }
+
+  /**
+   * Match the strip to the colour Apple painted just below it: the first
+   * element up from that point with a background, read from computed styles
+   * so no Apple class is named. Album and playlist pages tint themselves from
+   * the artwork, and a strip in the default colour left a seam above them.
+   * Anything unexpected falls back to the page colour. While a Hydra panel
+   * covers the point, the colour stays as it is.
+   * @returns {void}
+   */
+  function sampleStrip() {
+    stripFrame = null;
+    if (!active || !host) return;
+    var colour = null;
+    /** @type {Element[]} */
+    var chain = [];
+    try {
+      var hit = document.elementFromPoint(
+        Math.round(window.innerWidth / 2),
+        BAR_PX + SAMPLE_BELOW_PX,
+      );
+      if (hit && /^hydra-/.test(hit.id || "")) return;
+      for (var node = hit; node && node.nodeType === 1; node = node.parentElement) {
+        chain.push(node);
+        if (colour) continue;
+        var background = window.getComputedStyle(node).backgroundColor;
+        if (!isTransparent(background)) colour = background;
+      }
+    } catch (_) {
+      colour = null;
+    }
+    if (colour) host.style.setProperty(STRIP_PROPERTY, colour);
+    else host.style.removeProperty(STRIP_PROPERTY);
+    watchStrip(chain);
+  }
+
+  /**
+   * Sample again on the next frame, once however many changes arrive.
+   * @returns {void}
+   */
+  function scheduleStrip() {
+    if (stripFrame !== null) return;
+    if (typeof requestAnimationFrame !== "function") {
+      sampleStrip();
+      return;
+    }
+    stripFrame = requestAnimationFrame(sampleStrip);
+  }
+
+  /**
+   * Resample when the page's background changes: watch only the elements
+   * under the sample point, from the one hit up to <html>, for a new class or
+   * style and for their children being replaced. No subtree is observed, so
+   * the page's own updates elsewhere cost nothing.
+   * @param {Element[]} chain - The hit element and its ancestors
+   * @returns {void}
+   */
+  function watchStrip(chain) {
+    if (typeof MutationObserver !== "function") return;
+    if (!stripObserver) stripObserver = new MutationObserver(scheduleStrip);
+    stripObserver.disconnect();
+    chain.forEach(function (node) {
+      stripObserver.observe(node, {
+        attributes: true,
+        attributeFilter: ["class", "style"],
+        childList: true,
+      });
+    });
+  }
+
+  /**
+   * Stop following the page and go back to the page colour.
+   * @returns {void}
+   */
+  function resetStrip() {
+    if (stripObserver) stripObserver.disconnect();
+    if (stripFrame !== null && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(stripFrame);
+    }
+    stripFrame = null;
+    if (host) host.style.removeProperty(STRIP_PROPERTY);
+  }
+
+  /**
    * Build the bar once, hidden.
    * @returns {HTMLElement}
    */
@@ -832,6 +938,7 @@
    */
   function deactivate() {
     closeMenu(false);
+    resetStrip();
     document.documentElement.removeAttribute(ACTIVE_ATTRIBUTE);
     if (host) host.style.setProperty("display", "none", "important");
     active = false;
@@ -862,6 +969,8 @@
     if (active) {
       refresh();
       loadAvatar();
+      // main.ts re-runs the script after every in-page navigation.
+      scheduleStrip();
     }
   }
 

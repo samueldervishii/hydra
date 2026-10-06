@@ -48,6 +48,15 @@ class StubNode {
 }
 
 class StubElement extends StubNode {
+  readonly nodeType = 1;
+  /** The computed background-color the stand-in reports for this element. */
+  background = 'rgba(0, 0, 0, 0)';
+  get id(): string {
+    return this.attributes.get('id') ?? '';
+  }
+  get parentElement(): StubElement | null {
+    return this.parentNode instanceof StubElement ? this.parentNode : null;
+  }
   readonly attributes = new Map<string, string>();
   readonly listeners: Array<{ type: string; listener: Listener }> = [];
   readonly styles = new Map<string, string>();
@@ -136,6 +145,7 @@ function createHarness({
   stylesheetTakes = true,
   bridge = true,
   canGoBack = true as boolean | undefined,
+  hitAt = null as ((x: number, y: number) => StubElement | null) | null,
   me = (() => Promise.resolve({
     attributes: { avatarArtwork: { url: 'https://is1-ssl.mzstatic.com/image/thumb/avatar/{w}x{h}{c}.{f}' } },
   })) as () => unknown,
@@ -156,6 +166,21 @@ function createHarness({
     me: vi.fn(me),
   };
   const intervals = new Map<number, () => void>();
+  const frames: Array<() => void> = [];
+  const observers: Array<{ callback: () => void; observed: Array<[StubElement, unknown]>; disconnect: ReturnType<typeof vi.fn> }> = [];
+  class MutationObserver {
+    readonly observed: Array<[StubElement, unknown]> = [];
+    readonly disconnect = vi.fn(() => {
+      this.observed.length = 0;
+    });
+    constructor(readonly callback: () => void) {
+      observers.push(this);
+    }
+    observe(node: StubElement, options: unknown) {
+      this.observed.push([node, options]);
+    }
+  }
+  let hit = hitAt;
   let nextInterval = 0;
   const send = vi.fn();
   const location = { hostname, pathname };
@@ -180,11 +205,12 @@ function createHarness({
     __hydraTopBar: undefined as { update(): void } | undefined,
     // The stylesheet's effect: with the gate set, the sidebar is hidden and
     // the strip reserved, unless Apple's layout no longer matches it.
-    getComputedStyle: (element: StubElement): { display?: string; paddingTop?: string } => {
+    innerWidth: 1280,
+    getComputedStyle: (element: StubElement): { display?: string; paddingTop?: string; backgroundColor?: string } => {
       const gated = stylesheetTakes && html.hasAttribute('data-hydra-top-bar');
       if (element === sidebar) return { display: gated ? 'none' : 'grid' };
       if (element === appContainer) return { paddingTop: gated ? '56px' : '0px' };
-      return {};
+      return { backgroundColor: element.background };
     },
   };
   const document = {
@@ -192,6 +218,7 @@ function createHarness({
     documentElement: html,
     createElement: (tag: string) => new StubElement(tag),
     createElementNS: (_ns: string, tag: string) => new StubElement(tag),
+    elementFromPoint: vi.fn((x: number, y: number) => (hit ? hit(x, y) : null)),
     querySelector: (selector: string) => {
       if (selector === '.app-container') return appContainer;
       if (selector === '[data-testid="header"]') return sidebar;
@@ -207,6 +234,14 @@ function createHarness({
     document,
     PopStateEvent,
     URL,
+    MutationObserver,
+    requestAnimationFrame: (callback: () => void) => {
+      frames.push(callback);
+      return frames.length;
+    },
+    cancelAnimationFrame: () => {
+      frames.length = 0;
+    },
     console: { warn, log: vi.fn() },
     setInterval: (callback: () => void) => {
       const id = ++nextInterval;
@@ -258,6 +293,16 @@ function createHarness({
       run();
     },
     focused: () => focused,
+    document,
+    observers,
+    frames,
+    runFrames: () => {
+      for (const callback of frames.splice(0)) callback();
+    },
+    setHit: (next: ((x: number, y: number) => StubElement | null) | null) => {
+      hit = next;
+    },
+    strip: () => host()?.styles.get('--hydra-strip'),
     shadowElements: () => (host() ? descendants(host()!.shadowRoot!) : []),
     activeItem: () =>
       (host() ? descendants(host()!.shadowRoot!).filter((e) => e.tagName === 'button') : [])
@@ -565,6 +610,117 @@ describe('topBar.js', () => {
     });
   });
 
+  describe('strip colour', () => {
+    // A page column whose element at the sample point is unpainted, inside a
+    // header Apple tinted from the artwork, inside the page.
+    function page(tint: string) {
+      const root = new StubElement('html');
+      root.background = 'rgb(31, 31, 31)';
+      const header = root.appendChild(new StubElement('div'));
+      header.background = tint;
+      const title = header.appendChild(new StubElement('div'));
+      title.background = 'transparent';
+      const text = title.appendChild(new StubElement('span'));
+      return { root, header, title, text };
+    }
+
+    it('takes the first painted colour under the strip, at its centre just below it', () => {
+      const { text } = page('rgb(73, 36, 0)');
+      const h = createHarness({ hitAt: () => text });
+      h.runFrames();
+      expect(h.document.elementFromPoint).toHaveBeenCalledWith(640, 60);
+      expect(h.strip()).toBe('rgb(73, 36, 0)');
+    });
+
+    it.each([['rgba(0, 0, 0, 0)'], ['transparent'], ['color(srgb 1 0 0 / 0)']])(
+      'looks past %s',
+      (clear) => {
+        const { text, title } = page('rgb(240, 236, 228)');
+        title.background = clear;
+        const h = createHarness({ hitAt: () => text });
+        h.runFrames();
+        expect(h.strip()).toBe('rgb(240, 236, 228)');
+      },
+    );
+
+    it('falls back to the page colour when nothing is painted, nothing is hit or the read throws', () => {
+      const { text } = page('rgb(73, 36, 0)');
+      const h = createHarness({ hitAt: () => text });
+      h.runFrames();
+      expect(h.strip()).toBe('rgb(73, 36, 0)');
+      h.setHit(() => null);
+      h.run();
+      h.runFrames();
+      expect(h.strip()).toBeUndefined();
+      h.setHit(() => text);
+      h.run();
+      h.runFrames();
+      h.setHit(() => {
+        throw new Error('layout');
+      });
+      h.run();
+      h.runFrames();
+      expect(h.strip()).toBeUndefined();
+    });
+
+    it('keeps its colour while a Hydra panel covers the sample point', () => {
+      const { text } = page('rgb(73, 36, 0)');
+      const h = createHarness({ hitAt: () => text });
+      h.runFrames();
+      const panel = new StubElement('div');
+      panel.setAttribute('id', 'hydra-song-search');
+      panel.background = 'rgb(255, 0, 0)';
+      h.setHit(() => panel);
+      h.run();
+      h.runFrames();
+      expect(h.strip()).toBe('rgb(73, 36, 0)');
+    });
+
+    it('samples again after each in-page navigation', () => {
+      const album = page('rgb(73, 36, 0)');
+      const h = createHarness({ hitAt: () => album.text });
+      h.runFrames();
+      const light = page('rgb(240, 236, 228)');
+      h.setHit(() => light.text);
+      h.visit('/al/album/light/1', 'entry-1');
+      h.runFrames();
+      expect(h.strip()).toBe('rgb(240, 236, 228)');
+    });
+
+    it('watches only the elements under the point, without a subtree, and resamples once per frame', () => {
+      const { root, header, title, text } = page('rgb(73, 36, 0)');
+      const h = createHarness({ hitAt: () => text });
+      h.runFrames();
+      const [observer] = h.observers;
+      expect(observer.observed.map(([node]) => node)).toEqual([text, title, header, root]);
+      for (const [, options] of observer.observed) {
+        expect(options).toEqual({ attributes: true, attributeFilter: ['class', 'style'], childList: true });
+      }
+      header.background = 'rgb(12, 34, 56)';
+      observer.callback();
+      observer.callback();
+      expect(h.frames).toHaveLength(1);
+      h.runFrames();
+      expect(h.strip()).toBe('rgb(12, 34, 56)');
+    });
+
+    it("stops following the page when Apple's sidebar takes over", () => {
+      const { text } = page('rgb(73, 36, 0)');
+      const h = createHarness({ hitAt: () => text });
+      h.runFrames();
+      h.signIn(false);
+      expect(h.observers[0].disconnect).toHaveBeenCalled();
+      expect(h.strip()).toBeUndefined();
+    });
+
+    it('fades the strip in 250ms, not at all with reduced motion, under buttons with their own fill', () => {
+      expect(source).toContain('background-color: var(" + STRIP_PROPERTY + ", var(--pageBG, #1f1f1f));');
+      expect(source).toContain('transition: background-color 0.25s ease;');
+      expect(source).toContain('@media (prefers-reduced-motion: reduce) { .bar, .label, .capsule { transition: none; } }');
+      expect(source).toMatch(/\.round \{[^}]*\n\s*"\s*background: linear-gradient\(var\(--glass\), var\(--glass\)\), var\(--pageBG/);
+    });
+  });
+
   describe('sections', () => {
     it.each([
       ['/library/all-playlists', 'all-playlists'],
@@ -640,7 +796,7 @@ describe('topBar.js', () => {
   it('animates the capsule over 200ms, not at all with reduced motion, with focus rings', () => {
     expect(source).toContain('transition: left 0.2s ease, width 0.2s ease, opacity 0.15s ease;');
     expect(source).toContain('transition: max-width 0.2s ease, margin-left 0.2s ease, opacity 0.2s ease;');
-    expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.label, \.capsule \{ transition: none; \} \}/);
+    expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.bar, \.label, \.capsule \{ transition: none; \} \}/);
     expect(source).toMatch(/button:focus-visible \{ outline: 2px solid/);
   });
 
@@ -656,10 +812,13 @@ describe('topBar.js', () => {
     expect(capsuleOf(elsewhere).styles.get('opacity')).not.toBe('1');
   });
 
-  it('writes no markup, adds no wheel listener, no observer and no blur', () => {
+  // The strip's observer watches a short chain of elements, never a subtree:
+  // a document-wide one in the hook once cost 180 MiB/s.
+  it('writes no markup, adds no wheel listener, no subtree observer and no blur', () => {
     expect(source).not.toMatch(/innerHTML|outerHTML|insertAdjacentHTML/);
     expect(source).not.toMatch(/["']wheel["']/);
-    expect(source).not.toMatch(/MutationObserver/);
+    expect(source).not.toMatch(/subtree\s*:/);
+    expect(source.match(/new MutationObserver/g)).toHaveLength(1);
     expect(source).not.toMatch(/backdrop-filter/);
   });
 });
