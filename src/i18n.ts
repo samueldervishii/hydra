@@ -365,15 +365,18 @@ export function getAboutStrings(): {
  */
 export const SEARCH_LABELS_TOKEN = '__HYDRA_SEARCH_LABELS__';
 
-// English only until translated. Not exported, because
-// test/i18n-consistency.test.ts treats every exported object as a record that
-// must carry every language.
-const SEARCH_SONGS_TEXT: Record<string, string> = { en: 'Search songs' };
-const SEARCHING_TEXT: Record<string, string> = { en: 'Searching…' };
-const NO_SONGS_FOUND_TEXT: Record<string, string> = { en: 'No songs found' };
-const SEARCH_FAILED_TEXT: Record<string, string> = { en: 'Search failed' };
-const ALL_RESULTS_TEXT: Record<string, string> = { en: 'All results in Apple Music' };
-const EXPLICIT_TEXT: Record<string, string> = { en: 'Explicit' };
+/** Translations for the song search field, keyed by BCP 47 language tag. */
+export const SEARCH_SONGS_TEXT: Record<string, string> = trayData.SEARCH_SONGS_TEXT;
+/** Translations for searching, keyed by BCP 47 language tag. */
+export const SEARCHING_TEXT: Record<string, string> = trayData.SEARCHING_TEXT;
+/** Translations for no songs found, keyed by BCP 47 language tag. */
+export const NO_SONGS_FOUND_TEXT: Record<string, string> = trayData.NO_SONGS_FOUND_TEXT;
+/** Translations for search failed, keyed by BCP 47 language tag. */
+export const SEARCH_FAILED_TEXT: Record<string, string> = trayData.SEARCH_FAILED_TEXT;
+/** Translations for the link to Apple's full results, keyed by BCP 47 language tag. */
+export const ALL_RESULTS_TEXT: Record<string, string> = trayData.ALL_RESULTS_TEXT;
+/** Translations for the explicit badge, keyed by BCP 47 language tag. */
+export const EXPLICIT_TEXT: Record<string, string> = trayData.EXPLICIT_TEXT;
 
 /** Resolve the labels for the injected song search panel. */
 export function getSearchStrings(): {
