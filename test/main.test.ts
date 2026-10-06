@@ -106,6 +106,7 @@ const bootstrap = vi.hoisted(() => {
     applyNavigation: vi.fn(() => Promise.resolve()),
     teardownShortcuts: vi.fn(),
     toggleNavigation: vi.fn(),
+    showAppleSidebar: vi.fn(),
     handlePlaybackCapabilitiesDidChange: vi.fn(),
     browserWindow: vi.fn(),
     ipcOn: vi.fn(),
@@ -244,6 +245,7 @@ vi.mock("../src/settings", () => ({
   initSettingsActions: vi.fn(() => vi.fn()),
   notifySettingsChanged: vi.fn(),
   toggleNavigation: bootstrap.toggleNavigation,
+  showAppleSidebar: bootstrap.showAppleSidebar,
 }));
 vi.mock("../src/navigation", () => ({
   applyNavigation: bootstrap.applyNavigation,
@@ -513,6 +515,23 @@ describe("main bootstrap", () => {
     expect(
       bootstrap.webContents.insertCSS.mock.invocationCallOrder[2],
     ).toBeLessThan(bootstrap.applyNavigation.mock.invocationCallOrder[0]);
+  });
+
+  // The top bar's account menu leads to Apple's sidebar, from the page only.
+  it("shows Apple's sidebar for the account menu only from the main window's main frame", async () => {
+    await startMain();
+    const show = bootstrap.ipcOn.mock.calls.find(
+      ([channel]) => channel === "nav:apple-sidebar",
+    )?.[1];
+    const event = {
+      sender: bootstrap.webContents,
+      senderFrame: bootstrap.webContents.mainFrame,
+    };
+    show?.({ ...event, sender: {} });
+    show?.({ ...event, senderFrame: { url: event.senderFrame.url } });
+    expect(bootstrap.showAppleSidebar).not.toHaveBeenCalled();
+    show?.(event);
+    expect(bootstrap.showAppleSidebar).toHaveBeenCalledOnce();
   });
 
   it("registers no sidebar toggle channel", async () => {

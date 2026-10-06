@@ -27,7 +27,8 @@ type SendChannel =
  | "nav:back"
  | "nav:forward"
  | "nav:reload"
- | "nav:settings";
+ | "nav:settings"
+ | "nav:apple-sidebar";
 
 /**
  * Channels that the main process sends to the renderer (main → renderer).

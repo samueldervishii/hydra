@@ -21,6 +21,9 @@ const LABELS = {
   search: 'Suchen',
   allPlaylists: 'Alle Playlists',
   settings: 'Einstellungen',
+  account: 'Konto',
+  switchToSidebar: 'Zur Apple-Seitenleiste wechseln',
+  signOut: 'Abmelden …',
 };
 const script = source.replace(TOP_BAR_LABELS_TOKEN, () => JSON.stringify(LABELS));
 
@@ -85,7 +88,31 @@ class StubElement extends StubNode {
   click(): void {
     for (const entry of this.listeners) if (entry.type === 'click') entry.listener();
   }
+  readonly classList = {
+    contains: (token: string) => (this.attributes.get('class') ?? '').split(' ').includes(token),
+    add: (token: string) => {
+      if (!this.classList.contains(token)) this.attributes.set('class', `${this.attributes.get('class') ?? ''} ${token}`.trim());
+    },
+    remove: (token: string) => {
+      this.attributes.set('class', (this.attributes.get('class') ?? '').split(' ').filter((t) => t !== token).join(' '));
+    },
+  };
+  focus(): void {
+    focused = this;
+  }
+  replaceChildren(...nodes: StubNode[]): void {
+    this.children = [];
+    for (const node of nodes) this.appendChild(node);
+  }
+  /** Dispatch a key or pointer event at this element's own listeners. */
+  dispatch(type: string, init: Record<string, unknown> = {}): { preventDefault: ReturnType<typeof vi.fn> } {
+    const event = { type, target: this, preventDefault: vi.fn(), stopPropagation: vi.fn(), ...init };
+    for (const entry of this.listeners) if (entry.type === type) (entry.listener as (e: unknown) => void)(event);
+    return event;
+  }
 }
+
+let focused: StubElement | null = null;
 
 let body: StubElement;
 
@@ -109,7 +136,11 @@ function createHarness({
   stylesheetTakes = true,
   bridge = true,
   canGoBack = true as boolean | undefined,
+  me = (() => Promise.resolve({
+    attributes: { avatarArtwork: { url: 'https://is1-ssl.mzstatic.com/image/thumb/avatar/{w}x{h}{c}.{f}' } },
+  })) as () => unknown,
 } = {}) {
+  focused = null;
   body = new StubElement('body');
   const html = new StubElement('html');
   if (requested) html.setAttribute(TOP_BAR_REQUEST_ATTRIBUTE, '');
@@ -122,6 +153,7 @@ function createHarness({
     storefrontId,
     addEventListener: vi.fn((event: string, listener: Listener) => mkListeners.set(event, listener)),
     removeEventListener: vi.fn(),
+    me: vi.fn(me),
   };
   const intervals = new Map<number, () => void>();
   let nextInterval = 0;
@@ -137,6 +169,8 @@ function createHarness({
       }),
     },
     dispatchEvent: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
     AMWrapper: bridge ? { ipcRenderer: { send } } : undefined,
     __hydraHookedMk: (musicKitReady ? mk : undefined) as unknown,
     __hydraSongSearch: { open: vi.fn(), isOpen: vi.fn(() => false) },
@@ -172,6 +206,7 @@ function createHarness({
     window,
     document,
     PopStateEvent,
+    URL,
     console: { warn, log: vi.fn() },
     setInterval: (callback: () => void) => {
       const id = ++nextInterval;
@@ -222,6 +257,8 @@ function createHarness({
       if (window.navigation) window.navigation.currentEntry = { key };
       run();
     },
+    focused: () => focused,
+    shadowElements: () => (host() ? descendants(host()!.shadowRoot!) : []),
     activeItem: () =>
       (host() ? descendants(host()!.shadowRoot!).filter((e) => e.tagName === 'button') : [])
         .filter((b) => b.getAttribute('aria-current') === 'page')
@@ -249,14 +286,16 @@ describe('topBar.js', () => {
     const { shown, active, buttons } = createHarness();
     expect(active()).toBe(true);
     expect(shown()).toBe(true);
-    expect(buttons().map((b) => b.getAttribute('aria-label'))).toEqual([
+    const bar = buttons().filter((b) => b.getAttribute('data-hydra-page'));
+    expect(bar.map((b) => b.getAttribute('aria-label'))).toEqual([
       LABELS.back,
       LABELS.home,
       LABELS.search,
       LABELS.allPlaylists,
       LABELS.settings,
+      LABELS.account,
     ]);
-    for (const b of buttons()) expect(b.getAttribute('title')).toBe(b.getAttribute('aria-label'));
+    for (const b of bar) expect(b.getAttribute('title')).toBe(b.getAttribute('aria-label'));
   });
 
   it('keeps Apple\'s sidebar when the Apple sidebar is chosen', () => {
@@ -328,6 +367,14 @@ describe('topBar.js', () => {
       expect(h.warn).toHaveBeenCalledExactlyOnceWith(TOP_BAR_LAYOUT_WARNING);
       h.window.getComputedStyle = style;
     });
+  });
+
+  it('keeps keys pressed in the bar from reaching the page', () => {
+    const h = createHarness();
+    for (const type of ['keydown', 'keyup', 'keypress']) {
+      const event = h.host()!.dispatch(type, { key: ' ' }) as unknown as { stopPropagation: ReturnType<typeof vi.fn> };
+      expect(event.stopPropagation).toHaveBeenCalled();
+    }
   });
 
   it('builds one bar however often it runs', () => {
@@ -426,6 +473,96 @@ describe('topBar.js', () => {
     // A page outside every section keeps the section it was opened from.
     h.visit('/al/album/1', 'entry-9');
     expect(current().map((b) => b.getAttribute('data-hydra-page'))).toEqual(['all-playlists']);
+  });
+
+  describe('account menu', () => {
+    const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+    const menuOf = (h: ReturnType<typeof createHarness>) =>
+      h.shadowElements().find((e) => e.getAttribute('role') === 'menu')!;
+    const itemsOf = (h: ReturnType<typeof createHarness>) =>
+      h.shadowElements().filter((e) => e.getAttribute('role') === 'menuitem');
+    const isOpen = (h: ReturnType<typeof createHarness>) => menuOf(h).classList.contains('open');
+
+    it('shows Apple\'s avatar from mk.me() in the button and the menu', async () => {
+      const h = createHarness();
+      await settle();
+      expect(h.mk.me).toHaveBeenCalledOnce();
+      const images = h.shadowElements().filter((e) => e.tagName === 'img');
+      expect(images.map((img) => img.getAttribute('src'))).toEqual([
+        'https://is1-ssl.mzstatic.com/image/thumb/avatar/80x80cc.jpg',
+        'https://is1-ssl.mzstatic.com/image/thumb/avatar/80x80cc.jpg',
+      ]);
+      h.run();
+      expect(h.mk.me).toHaveBeenCalledOnce();
+    });
+
+    it.each([
+      ['no avatar', () => Promise.resolve({ attributes: {} })],
+      ['an avatar off Apple\'s image host', () =>
+        Promise.resolve({ attributes: { avatarArtwork: { url: 'https://evil.test/{w}x{h}.jpg' } } })],
+      ['a failed request', () => Promise.reject(new Error('private'))],
+    ])('keeps the person icon with %s', async (_label, me) => {
+      const h = createHarness({ me });
+      await settle();
+      expect(h.shadowElements().filter((e) => e.tagName === 'img')).toEqual([]);
+      expect(descendants(h.button('account')).some((e) => e.tagName === 'svg')).toBe(true);
+    });
+
+    it('opens on click, names itself and focuses its first item', () => {
+      const h = createHarness();
+      expect(h.button('account').getAttribute('aria-haspopup')).toBe('menu');
+      expect(isOpen(h)).toBe(false);
+      h.button('account').click();
+      expect(isOpen(h)).toBe(true);
+      expect(h.button('account').getAttribute('aria-expanded')).toBe('true');
+      expect(h.focused()).toBe(itemsOf(h)[0]);
+      expect(itemsOf(h).map((i) => i.textContent)).toEqual([LABELS.switchToSidebar, LABELS.signOut]);
+      h.button('account').click();
+      expect(isOpen(h)).toBe(false);
+    });
+
+    it('moves with the arrow keys and closes on Escape, back on the button', () => {
+      const h = createHarness();
+      h.button('account').dispatch('keydown', { key: 'ArrowUp' });
+      expect(h.focused()).toBe(itemsOf(h)[1]);
+      menuOf(h).dispatch('keydown', { key: 'ArrowDown', target: itemsOf(h)[1] });
+      expect(h.focused()).toBe(itemsOf(h)[0]);
+      menuOf(h).dispatch('keydown', { key: 'ArrowUp', target: itemsOf(h)[0] });
+      expect(h.focused()).toBe(itemsOf(h)[1]);
+      menuOf(h).dispatch('keydown', { key: 'Escape', target: itemsOf(h)[1] });
+      expect(isOpen(h)).toBe(false);
+      expect(h.focused()).toBe(h.button('account'));
+    });
+
+    // Apple's own Sign Out also ends the store session; Hydra does not sign out.
+    it.each([0, 1])('sends item %i to Apple\'s sidebar and never signs out itself', (index) => {
+      const h = createHarness();
+      const unauthorize = vi.fn();
+      Object.assign(h.mk, { unauthorize });
+      h.button('account').click();
+      itemsOf(h)[index].click();
+      expect(h.send).toHaveBeenCalledExactlyOnceWith('nav:apple-sidebar');
+      expect(unauthorize).not.toHaveBeenCalled();
+      expect(isOpen(h)).toBe(false);
+    });
+
+    it('closes on a press outside the bar, and listens for one only while open', () => {
+      const h = createHarness();
+      h.button('account').click();
+      const [, listener] = h.window.addEventListener.mock.calls.find(([type]) => type === 'pointerdown')!;
+      (listener as (e: unknown) => void)({ composedPath: () => [h.host()] });
+      expect(isOpen(h)).toBe(true);
+      (listener as (e: unknown) => void)({ composedPath: () => [] });
+      expect(isOpen(h)).toBe(false);
+      expect(h.window.removeEventListener).toHaveBeenCalledWith('pointerdown', listener, true);
+    });
+
+    it('closes when the bar gives way to Apple\'s sidebar', () => {
+      const h = createHarness();
+      h.button('account').click();
+      h.signIn(false);
+      expect(isOpen(h)).toBe(false);
+    });
   });
 
   describe('sections', () => {

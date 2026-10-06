@@ -56,6 +56,7 @@ import {
 import {
   initSettingsActions,
   notifySettingsChanged,
+  showAppleSidebar,
   toggleNavigation,
 } from "./settings";
 import { applyNavigation, TOP_BAR_LAYOUT_WARNING } from "./navigation";
@@ -654,6 +655,15 @@ function setupWindowZoomAndNav(win: BrowserWindow): void {
     "nav:back": back,
     "nav:forward": forward,
     "nav:reload": reload,
+    // From the top bar's account menu, in the page's own main frame only.
+    "nav:apple-sidebar": (event) => {
+      if (
+        event.sender !== win.webContents ||
+        event.senderFrame !== win.webContents.mainFrame
+      )
+        return;
+      showAppleSidebar();
+    },
   });
   app.on(
     "will-quit",

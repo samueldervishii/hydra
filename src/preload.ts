@@ -176,6 +176,7 @@ const SEND_CHANNELS = channelSet<SendChannel>({
   "nav:forward": true,
   "nav:reload": true,
   "nav:settings": true,
+  "nav:apple-sidebar": true,
 });
 
 // Channels the main process is allowed to send to the renderer.

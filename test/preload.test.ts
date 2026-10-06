@@ -349,6 +349,16 @@ describe('controller polling in the preload', () => {
     expect(harness.ipcRenderer.send).toHaveBeenCalledWith('nav:settings', undefined, undefined);
   });
 
+  it('forwards the account menu\'s request for Apple\'s sidebar', async () => {
+    const harness = await loadPreload();
+    const exposed = vi.mocked(harness.contextBridge.exposeInMainWorld).mock.calls
+      .find(([key]) => key === 'AMWrapper')?.[1] as {
+        ipcRenderer: { send(channel: string, data?: unknown): void };
+      };
+    exposed.ipcRenderer.send('nav:apple-sidebar');
+    expect(harness.ipcRenderer.send).toHaveBeenCalledExactlyOnceWith('nav:apple-sidebar', undefined, undefined);
+  });
+
   // The collapsed sidebar and its toggle button are gone; Ctrl+B switches
   // the navigation mode from the main process instead.
   it('no longer forwards the removed sidebar toggle', async () => {

@@ -1,6 +1,7 @@
 // Hydra's top bar for music.apple.com, in place of Apple's sidebar: Back on
 // the left, a floating pill in the centre with Home, Search and All Playlists,
-// and Settings on the right, in a 56px strip across the top of the window.
+// and Settings and the account menu on the right, in a 56px strip across the
+// top of the window.
 //
 // It is built like assets/songSearch.js: its own markup in a shadow root, and
 // nothing taken from Apple's classes except the two assets/topBar.css needs to
@@ -30,7 +31,7 @@
   }
 
   // loadAssets() in src/main.ts replaces TOP_BAR_LABELS_TOKEN from src/i18n.ts with JSON.
-  /** @type {{ back: string, home: string, search: string, allPlaylists: string, settings: string }} */
+  /** @type {{ back: string, home: string, search: string, allPlaylists: string, settings: string, account: string, switchToSidebar: string, signOut: string }} */
   var LABELS = __HYDRA_TOP_BAR_LABELS__;
 
   var REQUEST_ATTRIBUTE = "data-hydra-top-bar-requested";
@@ -43,6 +44,9 @@
   var ALL_PLAYLISTS_PATH = "/library/all-playlists";
   /** Space between an active item's icon and its label, in CSS pixels. */
   var LABEL_GAP_PX = 8;
+  /** The avatar's pixel size requested from Apple: twice the 40px it is drawn at. */
+  var AVATAR_PX = 80;
+  var MENU_ID = "hydra-account-menu";
   var SVG_NS = "http://www.w3.org/2000/svg";
   var ICON_PX = 20;
   var GLYPH_PX = 16;
@@ -90,8 +94,33 @@
     ".item[aria-current='page'] .label { max-width: 140px; margin-left: " + LABEL_GAP_PX + "px; opacity: 1; }",
     "svg { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor;",
     "  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }",
+    ".account { overflow: hidden; }",
+    ".account img, .face img { width: 100%; height: 100%; object-fit: cover; }",
+    ".menu { display: none; position: absolute; top: 52px; right: 36px; min-width: 220px;",
+    "  box-sizing: border-box; padding: 6px; border-radius: 12px; font-size: 13px;",
+    "  background: linear-gradient(var(--glass), var(--glass)), var(--pageBG, #1f1f1f);",
+    "  box-shadow: 0 10px 40px var(--glass-shadow), inset 0 0 0 0.5px var(--glass-stroke); }",
+    ".menu.open { display: block; }",
+    ".header { display: flex; justify-content: center; padding: 6px 0 10px; margin-bottom: 6px;",
+    "  border-bottom: 1px solid var(--labelDivider, rgba(128, 128, 128, 0.3)); }",
+    ".face { display: flex; align-items: center; justify-content: center; width: 40px;",
+    "  height: 40px; border-radius: 50%; overflow: hidden;",
+    "  background: var(--systemQuaternary, rgba(128, 128, 128, 0.2)); color: var(--systemSecondary, rgba(128, 128, 128, 0.9)); }",
+    ".menuitem { width: 100%; justify-content: flex-start; padding: 8px 10px; border-radius: 8px;",
+    "  color: var(--systemPrimary, #ffffff); text-align: left; }",
+    ".menuitem:hover, .menuitem:focus { background: var(--systemQuaternary, rgba(128, 128, 128, 0.2)); }",
+    ".menuitem:focus-visible { outline-offset: -2px; }",
     "@media (prefers-reduced-motion: reduce) { .label, .capsule { transition: none; } }",
   ].join("\n");
+
+  // The account button's stand-in until Apple's avatar loads, and when there is
+  // none: a person, since no name is read for an initial.
+  var PERSON_BOX = [4, 4, 16, 16];
+  /** @type {Array<[string, Record<string, string>]>} */
+  var PERSON_ICON = [
+    ["circle", { cx: "12", cy: "8.5", r: "4" }],
+    ["path", { d: "M4 20c0-3.6 3.6-6 8-6s8 2.4 8 6" }],
+  ];
 
   // box is the glyph's extent in the icon's own units: [x, y, width, height].
   // place: "left" and "right" are round actions, "pill" items are pages.
@@ -152,6 +181,13 @@
         ],
       ],
     },
+    {
+      id: "account",
+      label: LABELS.account,
+      place: "right",
+      box: PERSON_BOX,
+      icon: PERSON_ICON,
+    },
   ];
 
   /** @type {HTMLElement | null} */
@@ -181,6 +217,14 @@
   var MAX_REMEMBERED_ENTRIES = 200;
   /** @type {any} The MusicKit instance whose sign-in changes are followed. */
   var boundMk = null;
+  /** @type {HTMLElement | null} The account menu. */
+  var menu = null;
+  /** @type {HTMLElement[]} Its items, in order. */
+  var menuItems = [];
+  /** @type {HTMLElement | null} The avatar slot in the menu's header. */
+  var face = null;
+  /** @type {any} The MusicKit instance the avatar was read for. */
+  var avatarFor = null;
   /** @type {number | null} */
   var waitTimer = null;
 
@@ -431,7 +475,10 @@
    * @returns {void}
    */
   function press(id) {
-    if (id === "back") {
+    if (id === "account") {
+      if (menu && menu.classList.contains("open")) closeMenu(false);
+      else openMenu(0);
+    } else if (id === "back") {
       if (canGoBack()) sendToMain("nav:back");
     } else if (id === "settings") sendToMain("nav:settings");
     else if (id === "search") {
@@ -490,6 +537,17 @@
     button.setAttribute("aria-label", spec.label);
     button.setAttribute("title", spec.label);
     button.setAttribute("data-hydra-page", spec.id);
+    if (spec.id === "account") {
+      button.setAttribute("class", "round account");
+      button.setAttribute("aria-haspopup", "menu");
+      button.setAttribute("aria-expanded", "false");
+      button.setAttribute("aria-controls", MENU_ID);
+      button.addEventListener("keydown", function (event) {
+        if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+        event.preventDefault();
+        openMenu(event.key === "ArrowDown" ? 0 : -1);
+      });
+    }
     button.appendChild(iconFor(spec));
     if (spec.place === "pill") {
       var label = document.createElement("span");
@@ -504,6 +562,159 @@
     });
     buttons[spec.id] = button;
     return button;
+  }
+
+  /**
+   * A sized avatar URL on Apple's image host, or "" for anything else. Apple's
+   * artwork templates carry {w} and {h}, and may carry {c} and {f}.
+   * @param {unknown} template - attributes.avatarArtwork.url from mk.me()
+   * @returns {string}
+   */
+  function avatarUrl(template) {
+    if (typeof template !== "string") return "";
+    try {
+      var url = new URL(
+        template
+          .replace("{w}", String(AVATAR_PX))
+          .replace("{h}", String(AVATAR_PX))
+          .replace("{c}", "cc")
+          .replace("{f}", "jpg"),
+      );
+      return url.protocol === "https:" && /\.mzstatic\.com$/.test(url.hostname) ? url.href : "";
+    } catch (_) {
+      return "";
+    }
+  }
+
+  /**
+   * Put Apple's avatar in the account button and the menu's header, once per
+   * signed-in MusicKit instance. mk.me() is where Apple's own account menu
+   * gets it. Until it loads, or when there is none, the person icon stays.
+   * @returns {void}
+   */
+  function loadAvatar() {
+    var mk = boundMk;
+    if (!mk || avatarFor === mk || typeof mk.me !== "function") return;
+    avatarFor = mk;
+    var answer;
+    try {
+      answer = Promise.resolve(mk.me());
+    } catch (_) {
+      return;
+    }
+    answer.then(
+      function (me) {
+        if (avatarFor !== mk) return;
+        var src = avatarUrl(me && me.attributes && me.attributes.avatarArtwork && me.attributes.avatarArtwork.url);
+        if (!src) return;
+        [buttons.account, face].forEach(function (slot) {
+          var img = document.createElement("img");
+          img.setAttribute("src", src);
+          img.setAttribute("alt", "");
+          img.setAttribute("draggable", "false");
+          slot.replaceChildren(img);
+        });
+      },
+      function () {
+        // The person icon stays; nothing about the account is logged.
+      },
+    );
+  }
+
+  /**
+   * Close the account menu when a press lands outside the bar.
+   * @param {Event} event - pointerdown on window
+   * @returns {void}
+   */
+  function onOutsidePress(event) {
+    var path = typeof event.composedPath === "function" ? event.composedPath() : [];
+    if (path.indexOf(host) === -1) closeMenu(false);
+  }
+
+  /**
+   * Open the account menu and focus one of its items.
+   * @param {number} index - Item to focus; -1 for the last
+   * @returns {void}
+   */
+  function openMenu(index) {
+    if (!menu) return;
+    if (!menu.classList.contains("open")) {
+      menu.classList.add("open");
+      buttons.account.setAttribute("aria-expanded", "true");
+      window.addEventListener("pointerdown", onOutsidePress, true);
+    }
+    var item = menuItems[index < 0 ? menuItems.length - 1 : index];
+    if (item) item.focus();
+  }
+
+  /**
+   * Close the account menu.
+   * @param {boolean} refocus - Give focus back to the account button
+   * @returns {void}
+   */
+  function closeMenu(refocus) {
+    if (!menu || !menu.classList.contains("open")) return;
+    menu.classList.remove("open");
+    buttons.account.setAttribute("aria-expanded", "false");
+    window.removeEventListener("pointerdown", onOutsidePress, true);
+    if (refocus) buttons.account.focus();
+  }
+
+  /**
+   * The account menu: Apple's avatar, then the way to Apple's sidebar, where
+   * Apple's own account menu and Sign Out are. Hydra does not sign out itself:
+   * Apple's sign-out also ends the store session and resets its own state.
+   * @returns {HTMLElement}
+   */
+  function createMenu() {
+    var node = document.createElement("div");
+    node.setAttribute("class", "menu");
+    node.setAttribute("id", MENU_ID);
+    node.setAttribute("role", "menu");
+    node.setAttribute("aria-label", LABELS.account);
+    var header = document.createElement("div");
+    header.setAttribute("class", "header");
+    header.setAttribute("role", "presentation");
+    face = document.createElement("div");
+    face.setAttribute("class", "face");
+    face.appendChild(iconFor({ box: PERSON_BOX, icon: PERSON_ICON }));
+    header.appendChild(face);
+    node.appendChild(header);
+    menuItems = [LABELS.switchToSidebar, LABELS.signOut].map(function (text) {
+      var item = document.createElement("button");
+      item.setAttribute("type", "button");
+      item.setAttribute("class", "menuitem");
+      item.setAttribute("role", "menuitem");
+      item.setAttribute("tabindex", "-1");
+      item.textContent = text;
+      item.addEventListener("click", function () {
+        closeMenu(false);
+        sendToMain("nav:apple-sidebar");
+      });
+      node.appendChild(item);
+      return item;
+    });
+    node.addEventListener("keydown", function (event) {
+      var at = menuItems.indexOf(event.target);
+      var last = menuItems.length - 1;
+      var next = null;
+      if (event.key === "ArrowDown") next = at >= last ? 0 : at + 1;
+      else if (event.key === "ArrowUp") next = at <= 0 ? last : at - 1;
+      else if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = last;
+      else if (event.key === "Escape") {
+        event.preventDefault();
+        closeMenu(true);
+        return;
+      } else if (event.key === "Tab") {
+        closeMenu(false);
+        return;
+      }
+      if (next === null) return;
+      event.preventDefault();
+      menuItems[next].focus();
+    });
+    return node;
   }
 
   /**
@@ -544,9 +755,18 @@
       var into = spec.place === "pill" ? pill : spec.place === "left" ? left : right;
       into.appendChild(createButton(spec));
     });
+    menu = createMenu();
     bar.appendChild(left);
     bar.appendChild(pill);
     bar.appendChild(right);
+    bar.appendChild(menu);
+    // Apple's page shortcuts would see a key pressed here as aimed at the
+    // host, not a button, so Space could reach its play/pause handler.
+    ["keydown", "keyup", "keypress"].forEach(function (type) {
+      node.addEventListener(type, function (event) {
+        event.stopPropagation();
+      });
+    });
     root.appendChild(style);
     root.appendChild(bar);
     (document.body || document.documentElement).appendChild(node);
@@ -611,6 +831,7 @@
    * @returns {void}
    */
   function deactivate() {
+    closeMenu(false);
     document.documentElement.removeAttribute(ACTIVE_ATTRIBUTE);
     if (host) host.style.setProperty("display", "none", "important");
     active = false;
@@ -638,7 +859,10 @@
       return;
     }
     if (!active) activate();
-    if (active) refresh();
+    if (active) {
+      refresh();
+      loadAvatar();
+    }
   }
 
   window.__hydraTopBar = { update: update, refresh: refresh };

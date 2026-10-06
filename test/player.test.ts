@@ -814,7 +814,8 @@ describe('Channel contract', () => {
       | 'nav:back'
       | 'nav:forward'
       | 'nav:reload'
-      | 'nav:settings';
+      | 'nav:settings'
+      | 'nav:apple-sidebar';
 
     expectTypeOf<SendChannel>().toEqualTypeOf<ExpectedSend>();
   });

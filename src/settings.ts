@@ -234,6 +234,15 @@ export function toggleNavigation(): void {
   });
 }
 
+/**
+ * Switch to Apple's sidebar for the top bar's account menu, whose Apple
+ * sidebar and Sign out items both lead there: the account menu and Sign Out
+ * Apple keeps in its sidebar are the ones to use.
+ */
+export function showAppleSidebar(): void {
+  applySettingsAction({ type: "navigation", value: "apple-sidebar" });
+}
+
 /** Validate an action against available choices, apply it and refresh the tray and Settings. */
 export function applySettingsAction(action: unknown): SettingsState {
   const state = getSettingsState();

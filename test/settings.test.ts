@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Conf } from 'electron-conf/main';
 import type { BrowserWindow } from 'electron';
 import * as config from '../src/config';
-import { applySettingsAction, getSettingsState, initSettingsActions, notifySettingsChanged, subscribeSettingsChanges, toggleNavigation } from '../src/settings';
+import { applySettingsAction, getSettingsState, initSettingsActions, notifySettingsChanged, subscribeSettingsChanges, showAppleSidebar, toggleNavigation } from '../src/settings';
 import { applyTheme, hasCustomTheme } from '../src/theme';
 
 vi.mock('../src/theme', () => ({
@@ -106,6 +106,13 @@ describe('settings actions', () => {
     expect(contents.executeJavaScript).toHaveBeenLastCalledWith(
       expect.stringContaining('toggleAttribute("data-hydra-top-bar-requested", true)'));
     expect(refreshTray).toHaveBeenCalledTimes(2);
+  });
+
+  it("switches to Apple's sidebar for the account menu", () => {
+    showAppleSidebar();
+    expect(config.getNavigation()).toBe('apple-sidebar');
+    showAppleSidebar();
+    expect(config.getNavigation()).toBe('apple-sidebar');
   });
 
   it('shows a hidden player when close to tray is disabled', () => {
