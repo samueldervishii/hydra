@@ -155,6 +155,16 @@ describe("performanceMode.css", () => {
     expect(platters?.body).toMatch(/will-change:\s*auto !important/);
   });
 
+  // Without its blur, the platter's glass covered the "..." button on playlist
+  // pages, which then looked greyed out and opened no menu.
+  it("keeps the button platter's glass beneath its buttons and out of their clicks", () => {
+    const glass = rules(css).find((rule) =>
+      rule.selectors.includes('html[data-hydra-performance] .cloud-buttons--with-platter::before'),
+    );
+    expect(glass?.body).toMatch(/z-index:\s*-1 !important/);
+    expect(glass?.body).toMatch(/pointer-events:\s*none !important/);
+  });
+
   it("is unpacked from the asar archive, because main.ts reads it with fs", () => {
     const pkg = JSON.parse(
       fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf-8"),

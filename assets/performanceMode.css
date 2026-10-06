@@ -41,6 +41,17 @@ html[data-hydra-performance] .app-container.has-theme-override :is([data-testid=
   background-color: var(--joe-color, var(--pageBG)) !important;
 }
 
+/* The button platter's ::before is absolutely positioned over the whole
+   platter. With its blur, Chromium still painted and hit-tested the buttons
+   above it; with the blur gone it covers them, so the playlist page's "..."
+   looked greyed out and a click on it opened nothing. The platter is
+   position: relative with z-index: 1, a stacking context, so z-index: -1
+   keeps the glass inside it, above its new base and below its buttons. */
+html[data-hydra-performance] .cloud-buttons--with-platter::before {
+  z-index: -1 !important;
+  pointer-events: none !important;
+}
+
 /* The volume pop-up draws its own glass with no parent of its shape, so its
    glass is layered over the page colour on the element itself. */
 html[data-hydra-performance] .chrome-volume__slider {
