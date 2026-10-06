@@ -1,19 +1,23 @@
-// Hydra's top bar for music.apple.com: Back, Home, Search and All Playlists in
-// a 40px strip across the top of the window, in place of Apple's sidebar.
+// Hydra's top bar for music.apple.com, in place of Apple's sidebar: Back on
+// the left, a floating pill in the centre with Home, Search and All Playlists,
+// and Settings on the right, in a 56px strip across the top of the window.
 //
 // It is built like assets/songSearch.js: its own markup in a shadow root, and
 // nothing taken from Apple's classes except the two assets/topBar.css needs to
-// hide the sidebar, .app-container and [data-testid="header"]. It shows only when
-// all of these hold, and otherwise leaves Apple's sidebar exactly as it is:
+// hide the sidebar, .app-container and [data-testid="header"]. The pill copies
+// Apple's floating player bar through its variables alone: the glass material,
+// its shadow and inner stroke, picked for the colour scheme with
+// prefers-color-scheme, over an opaque --pageBG so nothing shows through and
+// nothing is blurred, with or without Performance mode. It shows only when all
+// of these hold, and otherwise leaves Apple's sidebar exactly as it is:
 // - the main process asks for it (data-hydra-top-bar-requested on <html>,
 //   from the Navigation setting in src/navigation.ts);
 // - MusicKit says the user is signed in, because Apple's Sign In button and
 //   account menu live in the sidebar; the bar follows authorizationStatusDidChange;
 // - .app-container and [data-testid="header"] exist, and once
 //   data-hydra-top-bar is set the stylesheet has visibly taken: the sidebar
-//   is hidden and the 40px strip is reserved. Anything else removes the
-//   attribute again and prints one fixed warning, which src/main.ts relays to
-//   its log.
+//   is hidden and the strip is reserved. Anything else removes the attribute
+//   again and prints one fixed warning, which src/main.ts relays to its log.
 // Pages open in-app with pushState plus popstate, so playback never stops.
 // Apple Music only: Classical keeps Apple's sidebar.
 (function () {
@@ -26,47 +30,84 @@
   }
 
   // loadAssets() in src/main.ts replaces TOP_BAR_LABELS_TOKEN from src/i18n.ts with JSON.
-  /** @type {{ back: string, home: string, search: string, allPlaylists: string }} */
+  /** @type {{ back: string, home: string, search: string, allPlaylists: string, settings: string }} */
   var LABELS = __HYDRA_TOP_BAR_LABELS__;
 
   var REQUEST_ATTRIBUTE = "data-hydra-top-bar-requested";
   var ACTIVE_ATTRIBUTE = "data-hydra-top-bar";
   /** The strip assets/topBar.css reserves above Apple's grid. */
-  var BAR_PX = 40;
+  var BAR_PX = 56;
   /** src/main.ts matches this exact line and logs a fixed warning. */
   var LAYOUT_WARNING = "[hydra] top-bar: layout-unavailable";
   /** Apple's library route; library routes carry no storefront segment. */
   var ALL_PLAYLISTS_PATH = "/library/all-playlists";
+  /** Space between an active item's icon and its label, in CSS pixels. */
+  var LABEL_GAP_PX = 8;
   var SVG_NS = "http://www.w3.org/2000/svg";
   var ICON_PX = 20;
   var GLYPH_PX = 16;
 
+  // Apple's player paints var(--glassMaterialBackground) with a shadow and an
+  // inner stroke, choosing each -onDark or -onLight through a theme class on
+  // .app-container that a shadow root cannot see; the colour scheme picks the
+  // same pair here. The opaque --pageBG beneath is what Performance mode gives
+  // Apple's own floating surfaces.
   var STYLE = [
-    ".bar { box-sizing: border-box; height: 100%; display: flex; align-items: center;",
-    "  gap: 4px; padding: 0 34px; background: var(--pageBG, #1f1f1f);",
-    "  border-bottom: 1px solid var(--labelDivider, rgba(128, 128, 128, 0.3)); }",
-    "button { display: flex; align-items: center; justify-content: center; width: 32px;",
-    "  height: 32px; padding: 0; border: 0; border-radius: 6px; cursor: pointer;",
-    "  background: transparent; color: var(--systemSecondary, rgba(128, 128, 128, 0.9)); }",
-    "button:hover, button:focus-visible { outline: none; color: var(--systemPrimary, #ffffff);",
+    ":host { --glass: var(--glassMaterialBackground-onDark, rgba(38, 38, 40, 0.6));",
+    "  --glass-shadow: var(--glassMaterialShadowColor-onDark, rgba(0, 0, 0, 0.2));",
+    "  --glass-stroke: color-mix(in srgb, var(--glassMaterialInnerStroke-onDark, #fff) 20%, transparent); }",
+    "@media (prefers-color-scheme: light) {",
+    "  :host { --glass: var(--glassMaterialBackground-onLight, rgba(245, 245, 247, 0.55));",
+    "    --glass-shadow: var(--glassMaterialShadowColor-onLight, rgba(0, 0, 0, 0.1));",
+    "    --glass-stroke: color-mix(in srgb, var(--glassMaterialInnerStroke-onLight, #000) 5%, transparent); } }",
+    ".bar { position: relative; box-sizing: border-box; height: 100%; display: flex;",
+    "  align-items: center; justify-content: space-between; padding: 0 36px;",
+    "  background: var(--pageBG, #1f1f1f); }",
+    ".side { display: flex; align-items: center; gap: 8px; }",
+    "button { display: flex; align-items: center; justify-content: center; margin: 0; padding: 0;",
+    "  border: 0; cursor: pointer; font: inherit; background: transparent;",
+    "  color: var(--systemSecondary, rgba(128, 128, 128, 0.9)); }",
+    "button:hover { color: var(--systemPrimary, #ffffff); }",
+    "button:focus-visible { outline: 2px solid var(--keyColor, #fa586a); outline-offset: 2px; }",
+    ".round { width: 32px; height: 32px; border-radius: 50%;",
     "  background: var(--systemQuaternary, rgba(128, 128, 128, 0.2)); }",
-    "button[aria-current='page'] { color: var(--keyColor, #fa586a); }",
-    "svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8;",
-    "  stroke-linecap: round; stroke-linejoin: round; }",
+    ".round[aria-disabled='true'] { opacity: 0.4; cursor: default; }",
+    ".round[aria-disabled='true']:hover { color: var(--systemSecondary, rgba(128, 128, 128, 0.9)); }",
+    ".pill { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);",
+    "  display: flex; align-items: center; gap: 4px; height: 44px; padding: 0 4px;",
+    "  box-sizing: border-box; border-radius: 1000px;",
+    "  background: linear-gradient(var(--glass), var(--glass)), var(--pageBG, #1f1f1f);",
+    "  box-shadow: 0 10px 40px var(--glass-shadow), inset 0 0 0 0.5px var(--glass-stroke); }",
+    ".capsule { position: absolute; top: 4px; bottom: 4px; left: 0; width: 0; opacity: 0;",
+    "  border-radius: 1000px; pointer-events: none;",
+    "  transition: left 0.2s ease, width 0.2s ease, opacity 0.15s ease;",
+    "  background: color-mix(in srgb, var(--systemPrimary, #ffffff) 14%, transparent); }",
+    ".item { position: relative; z-index: 1; height: 36px; padding: 0 10px; border-radius: 1000px; }",
+    ".item[aria-current='page'] { color: var(--systemPrimary, #ffffff); }",
+    ".label { display: inline-block; overflow: hidden; white-space: nowrap; max-width: 0;",
+    "  margin-left: 0; opacity: 0; font-size: 13px; font-weight: 500;",
+    "  transition: max-width 0.2s ease, margin-left 0.2s ease, opacity 0.2s ease; }",
+    ".item[aria-current='page'] .label { max-width: 140px; margin-left: " + LABEL_GAP_PX + "px; opacity: 1; }",
+    "svg { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor;",
+    "  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }",
+    "@media (prefers-reduced-motion: reduce) { .label, .capsule { transition: none; } }",
   ].join("\n");
 
   // box is the glyph's extent in the icon's own units: [x, y, width, height].
-  /** @type {Array<{ id: string, label: string, box: number[], icon: Array<[string, Record<string, string>]> }>} */
+  // place: "left" and "right" are round actions, "pill" items are pages.
+  /** @type {Array<{ id: string, label: string, place: string, box: number[], icon: Array<[string, Record<string, string>]> }>} */
   var BUTTONS = [
     {
       id: "back",
       label: LABELS.back,
+      place: "left",
       box: [9, 4, 6, 16],
       icon: [["polyline", { points: "15 20 9 12 15 4" }]],
     },
     {
       id: "home",
       label: LABELS.home,
+      place: "pill",
       box: [3, 4, 18, 16],
       icon: [
         ["polyline", { points: "3 11 12 4 21 11" }],
@@ -76,6 +117,7 @@
     {
       id: "search",
       label: LABELS.search,
+      place: "pill",
       box: [4.5, 4.5, 15.5, 15.5],
       icon: [
         ["circle", { cx: "10.5", cy: "10.5", r: "6" }],
@@ -85,6 +127,7 @@
     {
       id: "all-playlists",
       label: LABELS.allPlaylists,
+      place: "pill",
       box: [4, 6, 17, 14],
       icon: [
         ["line", { x1: "4", y1: "6", x2: "16", y2: "6" }],
@@ -94,12 +137,35 @@
         ["polyline", { points: "19 17.5 19 9 21 9.5" }],
       ],
     },
+    {
+      id: "settings",
+      label: LABELS.settings,
+      place: "right",
+      box: [2, 2, 20, 20],
+      icon: [
+        ["circle", { cx: "12", cy: "12", r: "3.7" }],
+        [
+          "path",
+          {
+            d: "M10 2h4l.5 2.5 1.5.6 2.1-1.4 2.2 2.2-1.4 2.1.6 1.5L22 10v4l-2.5.5-.6 1.5 1.4 2.1-2.2 2.2-2.1-1.4-1.5.6L14 22h-4l-.5-2.5-1.5-.6-2.1 1.4-2.2-2.2L5.1 16l-.6-1.5L2 14v-4l2.5-.5.6-1.5-1.4-2.1 2.2-2.2L8 5.1l1.5-.6z",
+          },
+        ],
+      ],
+    },
   ];
 
   /** @type {HTMLElement | null} */
   var host = null;
   /** @type {Record<string, HTMLElement>} */
   var buttons = {};
+  /** @type {Record<string, HTMLElement>} The label inside each page item. */
+  var labels = {};
+  /** @type {HTMLElement | null} The pill that holds the page items. */
+  var pill = null;
+  /** @type {HTMLElement | null} The lighter capsule behind the active item. */
+  var capsule = null;
+  /** @type {string | null} The item the capsule sits behind. */
+  var capsuleOn = null;
   var active = false;
   var warned = false;
   /** @type {any} The MusicKit instance whose sign-in changes are followed. */
@@ -166,16 +232,14 @@
   }
 
   /**
-   * The path a button leads to, or null for one that does not navigate.
+   * The path a page item leads to, or null for one that does not navigate.
    * @param {string} id - Button id
    * @returns {string | null}
    */
   function pathFor(id) {
     if (id === "all-playlists") return ALL_PLAYLISTS_PATH;
     var sf = storefront();
-    if (!sf) return null;
-    if (id === "home") return "/" + sf + "/home";
-    if (id === "search") return "/" + sf + "/search";
+    if (id === "home" && sf) return "/" + sf + "/home";
     return null;
   }
 
@@ -185,21 +249,105 @@
   }
 
   /**
-   * Mark the button for the current page.
+   * The page item to mark: Search while the search panel is open, otherwise
+   * the item whose page is open, otherwise none.
+   * @returns {string | null}
+   */
+  function activeItem() {
+    var search = window.__hydraSongSearch;
+    if (search && typeof search.isOpen === "function" && search.isOpen()) return "search";
+    var here = currentPath();
+    if (pathFor("home") === here) return "home";
+    if (pathFor("all-playlists") === here) return "all-playlists";
+    return null;
+  }
+
+  /**
+   * Whether the page has an entry to go back to. The Navigation API answers
+   * for this tab's history; without it, Back stays available.
+   * @returns {boolean}
+   */
+  function canGoBack() {
+    var nav = window.navigation;
+    return !nav || typeof nav.canGoBack !== "boolean" ? true : nav.canGoBack;
+  }
+
+  /**
+   * Where an item will sit once the labels have finished changing: its
+   * offset in the pill and its width. Labels animate their width, so the live
+   * layout is still moving when the capsule sets off; aiming at it made the
+   * capsule run past the item and come back. Each item's width without its
+   * label is measured live, and only the active item's label is added back.
+   * @param {string} id - The item that becomes active
+   * @returns {{ x: number, w: number }}
+   */
+  function settledBox(id) {
+    var style = window.getComputedStyle(pill);
+    var x = parseFloat(style.paddingLeft) || 0;
+    var gap = parseFloat(style.columnGap) || 0;
+    var box = { x: 0, w: 0 };
+    BUTTONS.forEach(function (spec) {
+      if (spec.place !== "pill") return;
+      var label = labels[spec.id];
+      var margin = parseFloat(window.getComputedStyle(label).marginLeft) || 0;
+      var width = buttons[spec.id].offsetWidth - label.offsetWidth - margin;
+      if (spec.id === id) {
+        width += label.scrollWidth + LABEL_GAP_PX;
+        box = { x: x, w: width };
+      }
+      x += width + gap;
+    });
+    return box;
+  }
+
+  /**
+   * Move the capsule behind the active item. Its left and width carry a
+   * 200ms ease transition in the stylesheet, which prefers-reduced-motion
+   * turns off; the first placement after the bar shows skips it, so the
+   * capsule appears on its item instead of travelling from the edge.
+   * @param {string | null} id - The active item, or null for none
+   * @returns {void}
+   */
+  function moveCapsule(id) {
+    if (!capsule) return;
+    if (!id || !buttons[id]) {
+      capsule.style.setProperty("opacity", "0");
+      capsuleOn = null;
+      return;
+    }
+    var instant = capsuleOn === null;
+    capsuleOn = id;
+    var box = settledBox(id);
+    if (instant) capsule.style.setProperty("transition", "none");
+    capsule.style.setProperty("left", box.x + "px");
+    capsule.style.setProperty("width", box.w + "px");
+    capsule.style.setProperty("opacity", "1");
+    if (instant) {
+      // Apply the jump before the transition comes back.
+      void capsule.offsetWidth;
+      capsule.style.removeProperty("transition");
+    }
+  }
+
+  /**
+   * Mark the active item, move the capsule and show whether Back can go back.
    * @returns {void}
    */
   function refresh() {
-    var here = currentPath();
+    if (!host) return;
+    var current = activeItem();
     BUTTONS.forEach(function (spec) {
-      var button = buttons[spec.id];
-      if (pathFor(spec.id) === here) button.setAttribute("aria-current", "page");
-      else button.removeAttribute("aria-current");
+      if (spec.place !== "pill") return;
+      if (spec.id === current) buttons[spec.id].setAttribute("aria-current", "page");
+      else buttons[spec.id].removeAttribute("aria-current");
     });
+    buttons.back.setAttribute("aria-disabled", canGoBack() ? "false" : "true");
+    if (current !== capsuleOn) moveCapsule(current);
   }
 
   /**
    * Open a page in-app so playback continues: push the path and let Apple's
-   * router answer the popstate, as assets/navigationBar.js does.
+   * router answer the popstate.
    * @param {string | null} path - Target path
    * @returns {void}
    */
@@ -227,7 +375,9 @@
    * @returns {void}
    */
   function press(id) {
-    if (id === "back") sendToMain("nav:back");
+    if (id === "back") {
+      if (canGoBack()) sendToMain("nav:back");
+    } else if (id === "settings") sendToMain("nav:settings");
     else if (id === "search") {
       if (window.__hydraSongSearch) window.__hydraSongSearch.open();
     } else go(pathFor(id));
@@ -247,7 +397,7 @@
 
   /**
    * An icon framed so the longer side of its glyph is GLYPH_PX in the ICON_PX
-   * slot, centred, as the navigation bar frames its icons.
+   * slot, centred, as the navigation row frames its icons.
    * @param {{ box: number[], icon: Array<[string, Record<string, string>]> }} spec - Button definition
    * @returns {SVGElement}
    */
@@ -272,6 +422,35 @@
   }
 
   /**
+   * One button. A page item carries its label, shown beside the icon while it
+   * is active; every button has the label as its tooltip and accessible name.
+   * @param {{ id: string, label: string, place: string }} spec - Button definition
+   * @returns {HTMLElement}
+   */
+  function createButton(spec) {
+    var button = document.createElement("button");
+    button.setAttribute("type", "button");
+    button.setAttribute("class", spec.place === "pill" ? "item" : "round");
+    button.setAttribute("aria-label", spec.label);
+    button.setAttribute("title", spec.label);
+    button.setAttribute("data-hydra-page", spec.id);
+    button.appendChild(iconFor(spec));
+    if (spec.place === "pill") {
+      var label = document.createElement("span");
+      label.setAttribute("class", "label");
+      label.setAttribute("aria-hidden", "true");
+      label.textContent = spec.label;
+      button.appendChild(label);
+      labels[spec.id] = label;
+    }
+    button.addEventListener("click", function () {
+      press(spec.id);
+    });
+    buttons[spec.id] = button;
+    return button;
+  }
+
+  /**
    * Build the bar once, hidden.
    * @returns {HTMLElement}
    */
@@ -293,21 +472,25 @@
     var root = node.attachShadow({ mode: "open" });
     var style = document.createElement("style");
     style.textContent = STYLE;
-    var bar = document.createElement("nav");
+    var bar = document.createElement("div");
     bar.setAttribute("class", "bar");
+    var left = document.createElement("div");
+    left.setAttribute("class", "side");
+    pill = document.createElement("nav");
+    pill.setAttribute("class", "pill");
+    capsule = document.createElement("div");
+    capsule.setAttribute("class", "capsule");
+    capsule.setAttribute("aria-hidden", "true");
+    pill.appendChild(capsule);
+    var right = document.createElement("div");
+    right.setAttribute("class", "side");
     BUTTONS.forEach(function (spec) {
-      var button = document.createElement("button");
-      button.setAttribute("type", "button");
-      button.setAttribute("aria-label", spec.label);
-      button.setAttribute("title", spec.label);
-      button.setAttribute("data-hydra-page", spec.id);
-      button.appendChild(iconFor(spec));
-      button.addEventListener("click", function () {
-        press(spec.id);
-      });
-      buttons[spec.id] = button;
-      bar.appendChild(button);
+      var into = spec.place === "pill" ? pill : spec.place === "left" ? left : right;
+      into.appendChild(createButton(spec));
     });
+    bar.appendChild(left);
+    bar.appendChild(pill);
+    bar.appendChild(right);
     root.appendChild(style);
     root.appendChild(bar);
     (document.body || document.documentElement).appendChild(node);
@@ -363,6 +546,8 @@
     else if (!host.isConnected) (document.body || document.documentElement).appendChild(host);
     host.style.setProperty("display", "block", "important");
     active = true;
+    // Shown again, the capsule lands on its item without travelling.
+    capsuleOn = null;
   }
 
   /**
@@ -400,6 +585,6 @@
     if (active) refresh();
   }
 
-  window.__hydraTopBar = { update: update };
+  window.__hydraTopBar = { update: update, refresh: refresh };
   update();
 })();

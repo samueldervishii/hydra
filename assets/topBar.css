@@ -10,12 +10,12 @@
     --web-navigation-width: 0px !important;
   }
 
-  /* The sidebar column goes, and the bar's 40px strip is reserved above
-     Apple's grid, so nothing scrolls beneath the bar. 40px is BAR_PX in
+  /* The sidebar column goes, and the bar's 56px strip is reserved above
+     Apple's grid, so nothing scrolls beneath the bar. 56px is BAR_PX in
      assets/topBar.js, which checks for it. */
   html[data-hydra-top-bar] .app-container {
     grid-template-columns: 0 minmax(0, 1fr) !important;
-    padding-top: 40px !important;
+    padding-top: 56px !important;
     box-sizing: border-box !important;
     height: 100vh !important;
   }

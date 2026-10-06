@@ -15,7 +15,13 @@ const css = fs.readFileSync(path.join(__dirname, '..', 'assets', 'topBar.css'), 
 const stripped = css.replace(/\/\*[\s\S]*?\*\//g, '');
 
 // Non-English labels show the injected translations reach the bar.
-const LABELS = { back: 'Zurück', home: 'Startseite', search: 'Suchen', allPlaylists: 'Alle Playlists' };
+const LABELS = {
+  back: 'Zurück',
+  home: 'Startseite',
+  search: 'Suchen',
+  allPlaylists: 'Alle Playlists',
+  settings: 'Einstellungen',
+};
 const script = source.replace(TOP_BAR_LABELS_TOKEN, () => JSON.stringify(LABELS));
 
 type Listener = () => void;
@@ -45,6 +51,9 @@ class StubElement extends StubNode {
   readonly style = {
     setProperty: (name: string, value: string, priority?: string) => {
       this.styles.set(name, priority ? `${value} !${priority}` : value);
+    },
+    removeProperty: (name: string) => {
+      this.styles.delete(name);
     },
   };
   textContent = '';
@@ -99,6 +108,7 @@ function createHarness({
   header = true,
   stylesheetTakes = true,
   bridge = true,
+  canGoBack = true as boolean | undefined,
 } = {}) {
   body = new StubElement('body');
   const html = new StubElement('html');
@@ -129,14 +139,15 @@ function createHarness({
     dispatchEvent: vi.fn(),
     AMWrapper: bridge ? { ipcRenderer: { send } } : undefined,
     __hydraHookedMk: (musicKitReady ? mk : undefined) as unknown,
-    __hydraSongSearch: { open: vi.fn() },
+    __hydraSongSearch: { open: vi.fn(), isOpen: vi.fn(() => false) },
+    navigation: canGoBack === undefined ? undefined : { canGoBack },
     __hydraTopBar: undefined as { update(): void } | undefined,
     // The stylesheet's effect: with the gate set, the sidebar is hidden and
     // the strip reserved, unless Apple's layout no longer matches it.
     getComputedStyle: (element: StubElement): { display?: string; paddingTop?: string } => {
       const gated = stylesheetTakes && html.hasAttribute('data-hydra-top-bar');
       if (element === sidebar) return { display: gated ? 'none' : 'grid' };
-      if (element === appContainer) return { paddingTop: gated ? '40px' : '0px' };
+      if (element === appContainer) return { paddingTop: gated ? '56px' : '0px' };
       return {};
     },
   };
@@ -230,6 +241,7 @@ describe('topBar.js', () => {
       LABELS.home,
       LABELS.search,
       LABELS.allPlaylists,
+      LABELS.settings,
     ]);
     for (const b of buttons()) expect(b.getAttribute('title')).toBe(b.getAttribute('aria-label'));
   });
@@ -314,9 +326,42 @@ describe('topBar.js', () => {
 
   it('goes back through the same command as Alt+Left', () => {
     const h = createHarness();
+    expect(h.button('back').getAttribute('aria-disabled')).toBe('false');
     h.button('back').click();
     expect(h.send).toHaveBeenCalledExactlyOnceWith('nav:back');
     expect(h.window.history.pushState).not.toHaveBeenCalled();
+  });
+
+  it('looks disabled and does nothing with no history to go back to', () => {
+    const h = createHarness({ canGoBack: false });
+    expect(h.button('back').getAttribute('aria-disabled')).toBe('true');
+    h.button('back').click();
+    expect(h.send).not.toHaveBeenCalled();
+  });
+
+  it('keeps Back available where the Navigation API is missing', () => {
+    const h = createHarness({ canGoBack: undefined });
+    expect(h.button('back').getAttribute('aria-disabled')).toBe('false');
+  });
+
+  it('opens Hydra Settings through the same command as before', () => {
+    const h = createHarness();
+    h.button('settings').click();
+    expect(h.send).toHaveBeenCalledExactlyOnceWith('nav:settings');
+  });
+
+  it('shows labels only inside the page items, and names every button', () => {
+    const h = createHarness();
+    const labelOf = (id: string) => descendants(h.button(id)).find((e) => e.getAttribute('class') === 'label');
+    for (const id of ['home', 'search', 'all-playlists']) {
+      expect(labelOf(id)?.textContent).toBe(h.button(id).getAttribute('aria-label'));
+      expect(labelOf(id)?.getAttribute('aria-hidden')).toBe('true');
+      expect(h.button(id).getAttribute('class')).toBe('item');
+    }
+    for (const id of ['back', 'settings']) {
+      expect(labelOf(id)).toBeUndefined();
+      expect(h.button(id).getAttribute('class')).toBe('round');
+    }
   });
 
   it('tolerates an absent preload bridge', () => {
@@ -359,15 +404,46 @@ describe('topBar.js', () => {
     expect(h.window.history.pushState).not.toHaveBeenCalled();
   });
 
-  it('highlights the current page and moves the highlight with navigation', () => {
+  it('marks the current page and moves the mark with navigation', () => {
     const h = createHarness({ pathname: '/al/home' });
     const current = () => h.buttons().filter((b) => b.getAttribute('aria-current') === 'page');
     expect(current().map((b) => b.getAttribute('data-hydra-page'))).toEqual(['home']);
     h.button('all-playlists').click();
     expect(current().map((b) => b.getAttribute('data-hydra-page'))).toEqual(['all-playlists']);
-    h.window.location.pathname = '/al/search';
+    h.window.location.pathname = '/al/album/1';
     h.run();
+    expect(current()).toEqual([]);
+  });
+
+  // assets/songSearch.js calls refresh() when it opens and closes.
+  it('marks Search while the search panel is open', () => {
+    const h = createHarness({ pathname: '/al/home' });
+    const current = () => h.buttons().filter((b) => b.getAttribute('aria-current') === 'page');
+    h.window.__hydraSongSearch.isOpen.mockReturnValue(true);
+    (h.window.__hydraTopBar as unknown as { refresh(): void }).refresh();
     expect(current().map((b) => b.getAttribute('data-hydra-page'))).toEqual(['search']);
+    h.window.__hydraSongSearch.isOpen.mockReturnValue(false);
+    (h.window.__hydraTopBar as unknown as { refresh(): void }).refresh();
+    expect(current().map((b) => b.getAttribute('data-hydra-page'))).toEqual(['home']);
+  });
+
+  // The capsule and the labels animate in CSS, which reduced motion turns off.
+  it('animates the capsule over 200ms, not at all with reduced motion, with focus rings', () => {
+    expect(source).toContain('transition: left 0.2s ease, width 0.2s ease, opacity 0.15s ease;');
+    expect(source).toContain('transition: max-width 0.2s ease, margin-left 0.2s ease, opacity 0.2s ease;');
+    expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.label, \.capsule \{ transition: none; \} \}/);
+    expect(source).toMatch(/button:focus-visible \{ outline: 2px solid/);
+  });
+
+  it('shows the capsule only behind an active item', () => {
+    const capsuleOf = (h: ReturnType<typeof createHarness>) =>
+      descendants(h.host()!.shadowRoot!).find((e) => e.getAttribute('class') === 'capsule')!;
+    const onHome = createHarness({ pathname: '/al/home' });
+    expect(capsuleOf(onHome).styles.get('opacity')).toBe('1');
+    // The first placement jumps, then the transition is handed back.
+    expect(capsuleOf(onHome).styles.has('transition')).toBe(false);
+    const elsewhere = createHarness({ pathname: '/al/album/1' });
+    expect(capsuleOf(elsewhere).styles.get('opacity')).not.toBe('1');
   });
 
   it('writes no markup, adds no wheel listener, no observer and no blur', () => {
@@ -398,8 +474,8 @@ describe('topBar.css', () => {
     expect(stripped).toMatch(/html\[data-hydra-top-bar\] \[data-testid="header"\] \{\s*display:\s*none !important/);
     expect(stripped).toMatch(/grid-template-columns:\s*0 minmax\(0, 1fr\) !important/);
     // The script checks for exactly this strip.
-    expect(stripped).toMatch(/padding-top:\s*40px !important/);
-    expect(source).toMatch(/var BAR_PX = 40;/);
+    expect(stripped).toMatch(/padding-top:\s*56px !important/);
+    expect(source).toMatch(/var BAR_PX = 56;/);
   });
 
   it('is unpacked from the asar archive with its script, because main.ts reads both with fs', () => {

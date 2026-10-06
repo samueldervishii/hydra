@@ -547,9 +547,21 @@
       isOpen = true;
       returnFocus = document.activeElement;
       host.style.setProperty("display", "block", "important");
+      notifyTopBar();
     }
     input.focus();
     input.select();
+  }
+
+  /**
+   * Let the top bar (assets/topBar.js) mark Search as active while the panel
+   * is open.
+   * @returns {void}
+   */
+  function notifyTopBar() {
+    if (window.__hydraTopBar && typeof window.__hydraTopBar.refresh === "function") {
+      window.__hydraTopBar.refresh();
+    }
   }
 
   /**
@@ -562,6 +574,7 @@
     isOpen = false;
     playOnArrival = false;
     host.style.setProperty("display", "none", "important");
+    notifyTopBar();
     var previous = returnFocus;
     returnFocus = null;
     if (previous && previous.isConnected && typeof previous.focus === "function") {
@@ -616,5 +629,11 @@
 
   (document.body || document.documentElement).appendChild(host);
 
-  window.__hydraSongSearch = { open: open, close: close };
+  window.__hydraSongSearch = {
+    open: open,
+    close: close,
+    isOpen: function () {
+      return isOpen;
+    },
+  };
 })();

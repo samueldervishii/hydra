@@ -407,6 +407,7 @@ export function getTopBarStrings(): {
   home: string;
   search: string;
   allPlaylists: string;
+  settings: string;
 } {
   const langs = getSystemLanguages();
   return {
@@ -414,5 +415,6 @@ export function getTopBarStrings(): {
     home: getLocalizedString(START_PAGE_HOME_TEXT, langs),
     search: getLocalizedString(START_PAGE_SEARCH_TEXT, langs),
     allPlaylists: getLocalizedString(START_PAGE_ALL_PLAYLISTS_TEXT, langs),
+    settings: getLocalizedString(SETTINGS_TEXT, langs),
   };
 }

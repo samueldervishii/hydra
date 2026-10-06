@@ -331,6 +331,21 @@ describe('songSearch.js', () => {
     expect(input().select).toHaveBeenCalled();
   });
 
+  // The top bar marks Search while the panel is open.
+  it('reports whether it is open and tells the top bar when that changes', () => {
+    const { window } = createHarness();
+    const refresh = vi.fn();
+    (window as unknown as { __hydraTopBar: { refresh: () => void } }).__hydraTopBar = { refresh };
+    const search = window.__hydraSongSearch as unknown as { open(): void; close(): void; isOpen(): boolean };
+    expect(search.isOpen()).toBe(false);
+    search.open();
+    expect(search.isOpen()).toBe(true);
+    search.open();
+    search.close();
+    expect(search.isOpen()).toBe(false);
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
   // Ctrl+K lives in src/shortcuts.ts: a focused iframe keeps keys from the page.
   it('registers nothing on window', () => {
     const { window } = createHarness();
