@@ -14,7 +14,6 @@ import {
 import { BUNDLED_THEMES, type ThemeName } from "./palettes";
 import { applyTheme, hasCustomTheme, resolveTheme } from "./theme";
 import { applyPerformanceMode } from "./performanceMode";
-import { applySidebar } from "./sidebar";
 import { applyNavigation } from "./navigation";
 import { liveWebContents } from "./utils";
 
@@ -33,10 +32,7 @@ export type SettingsAction =
   | { type: "zoomFactor"; value: ZoomFactor }
   | { type: "navigation"; value: config.NavigationMode }
   | {
-      type:
-        | "closeToTray"
-        | "performanceMode"
-        | "sidebarCollapsed";
+      type: "closeToTray" | "performanceMode";
       value: boolean;
     };
 
@@ -52,7 +48,6 @@ export interface SettingsState {
   theme: ThemeName;
   zoomFactor: number;
   performanceMode: boolean;
-  sidebarCollapsed: boolean;
   navigation: config.NavigationMode;
   closeToTray: boolean;
   options: {
@@ -143,7 +138,6 @@ export function getSettingsState(): SettingsState {
     theme: resolveTheme(),
     zoomFactor: config.getZoomFactor(),
     performanceMode: config.getPerformanceModeEnabled(),
-    sidebarCollapsed: config.getSidebarCollapsed(),
     navigation: config.getNavigation(),
     closeToTray: config.getCloseToTrayEnabled(),
     options: {
@@ -223,7 +217,6 @@ function isSettingsAction(
       );
     case "closeToTray":
     case "performanceMode":
-    case "sidebarCollapsed":
       return typeof data.value === "boolean";
     default:
       return false;
@@ -231,13 +224,13 @@ function isSettingsAction(
 }
 
 /**
- * Flip the sidebar for the navigation bar button and Ctrl+B. It goes through
- * the same action as the Settings toggle, so all three stay in step.
+ * Switch between Hydra's top bar and Apple's sidebar for Ctrl+B. It goes
+ * through the same action as the Settings choice, so the two stay in step.
  */
-export function toggleSidebarCollapsed(): void {
+export function toggleNavigation(): void {
   applySettingsAction({
-    type: "sidebarCollapsed",
-    value: !config.getSidebarCollapsed(),
+    type: "navigation",
+    value: config.getNavigation() === "top-bar" ? "apple-sidebar" : "top-bar",
   });
 }
 
@@ -271,10 +264,6 @@ export function applySettingsAction(action: unknown): SettingsState {
     case "performanceMode":
       config.setPerformanceModeEnabled(action.value);
       void applyPerformanceMode(liveWebContents(runtime.getMainWindow()));
-      break;
-    case "sidebarCollapsed":
-      config.setSidebarCollapsed(action.value);
-      void applySidebar(liveWebContents(runtime.getMainWindow()));
       break;
     case "closeToTray": {
       config.setCloseToTrayEnabled(action.value);

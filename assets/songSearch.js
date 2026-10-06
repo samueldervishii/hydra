@@ -9,7 +9,7 @@
 // Performance mode cannot reach its rules; it reads Apple's colour variables,
 // which inherit into it, so it follows the light and dark schemes and the
 // active theme. Its background is opaque and blurs nothing behind it. It opens
-// from the collapsed sidebar's Search button (assets/navigationBar.js) and
+// from the top bar's Search button (assets/topBar.js) and
 // from Ctrl+K, which src/shortcuts.ts catches in the main process, because a
 // focused iframe keeps keys from the page. Apple Music only: Classical is left
 // alone.
@@ -525,7 +525,7 @@
 
   /**
    * Open Apple's search page for the term in-app, so playback continues, the
-   * way assets/navigationBar.js reaches a page without a link to click.
+   * way assets/topBar.js opens its pages.
    * @returns {void}
    */
   function openAllResults() {

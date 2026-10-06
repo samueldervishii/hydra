@@ -2,8 +2,8 @@
 // a 40px strip across the top of the window, in place of Apple's sidebar.
 //
 // It is built like assets/songSearch.js: its own markup in a shadow root, and
-// nothing taken from Apple's classes except the two the layout needs, which
-// assets/topBar.css shares with the old collapsed sidebar. It shows only when
+// nothing taken from Apple's classes except the two assets/topBar.css needs to
+// hide the sidebar, .app-container and [data-testid="header"]. It shows only when
 // all of these hold, and otherwise leaves Apple's sidebar exactly as it is:
 // - the main process asks for it (data-hydra-top-bar-requested on <html>,
 //   from the Navigation setting in src/navigation.ts);

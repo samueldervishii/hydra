@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Conf } from 'electron-conf/main';
 import type { BrowserWindow } from 'electron';
 import * as config from '../src/config';
-import { applySettingsAction, getSettingsState, initSettingsActions, notifySettingsChanged, subscribeSettingsChanges, toggleSidebarCollapsed } from '../src/settings';
+import { applySettingsAction, getSettingsState, initSettingsActions, notifySettingsChanged, subscribeSettingsChanges, toggleNavigation } from '../src/settings';
 import { applyTheme, hasCustomTheme } from '../src/theme';
 
 vi.mock('../src/theme', () => ({
@@ -28,7 +28,7 @@ afterEach(() => dispose());
 describe('settings actions', () => {
   it('reads defaults', () => {
     const state = getSettingsState();
-    expect(state).toMatchObject({ musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1, performanceMode: true, sidebarCollapsed: false });
+    expect(state).toMatchObject({ musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1, performanceMode: true, navigation: 'top-bar' });
   });
 
   // Notifications, Discord and Last.fm were removed; an existing config.json
@@ -95,26 +95,16 @@ describe('settings actions', () => {
       expect.stringContaining('toggleAttribute("data-hydra-top-bar-requested", true)'));
   });
 
-  it('persists the sidebar state before applying it to the open page', () => {
-    contents.executeJavaScript.mockImplementationOnce(() => {
-      expect(config.getSidebarCollapsed()).toBe(true);
-      return Promise.resolve();
-    });
-    expect(applySettingsAction({ type: 'sidebarCollapsed', value: true }).sidebarCollapsed).toBe(true);
-    expect(contents.executeJavaScript).toHaveBeenCalledExactlyOnceWith(
-      expect.stringContaining('toggleAttribute("data-hydra-sidebar-collapsed", true)'));
-  });
-
-  it('toggles the sidebar through the Settings action, so Settings follows the button and shortcut', () => {
+  it('switches the navigation mode through the Settings action, so Settings follows Ctrl+B', () => {
     const listener = vi.fn();
     subscribeSettingsChanges(listener);
-    toggleSidebarCollapsed();
-    expect(config.getSidebarCollapsed()).toBe(true);
-    expect(listener).toHaveBeenLastCalledWith(expect.objectContaining({ sidebarCollapsed: true }));
-    toggleSidebarCollapsed();
-    expect(config.getSidebarCollapsed()).toBe(false);
+    toggleNavigation();
+    expect(config.getNavigation()).toBe('apple-sidebar');
+    expect(listener).toHaveBeenLastCalledWith(expect.objectContaining({ navigation: 'apple-sidebar' }));
+    toggleNavigation();
+    expect(config.getNavigation()).toBe('top-bar');
     expect(contents.executeJavaScript).toHaveBeenLastCalledWith(
-      expect.stringContaining('toggleAttribute("data-hydra-sidebar-collapsed", false)'));
+      expect.stringContaining('toggleAttribute("data-hydra-top-bar-requested", true)'));
     expect(refreshTray).toHaveBeenCalledTimes(2);
   });
 
@@ -145,7 +135,7 @@ describe('settings actions', () => {
     { type: 'theme', value: 'other' }, { type: 'startPage', serviceId: 'music', value: 'search' },
     { type: 'closeToTray', value: true, extra: true }, { type: 'notifications', value: false }, { type: 'lastfmDisconnect' },
     { type: 'lastfmEnabled', value: true }, { type: 'lastfmConnect' }, { type: 'discord', value: true },
-    { type: 'performanceMode', value: 'false' }, { type: 'sidebarCollapsed', value: 1 },
+    { type: 'performanceMode', value: 'false' }, { type: 'sidebarCollapsed', value: true },
     { type: 'navigation', value: 'sidebar' }, { type: 'navigation', value: true },
   ])('rejects unavailable or malformed actions: %j', action => {
     expect(() => applySettingsAction(action)).toThrow('Invalid settings action');

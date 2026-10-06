@@ -29,7 +29,7 @@ class Element {
 function fixture(): SettingsState {
   return {
     musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1,
-    performanceMode: true, sidebarCollapsed: false, navigation: 'top-bar', closeToTray: false,
+    performanceMode: true, navigation: 'top-bar', closeToTray: false,
     options: {
       musicService: [{ value: 'music', label: 'Apple Music' }, { value: 'classical', label: 'Apple Music Classical' }],
       startPage: [{ value: 'new', label: 'New' }],
@@ -170,18 +170,6 @@ describe('settings page', () => {
     h.element('performanceMode').fire('change');
     await settle();
     expect(h.apply).toHaveBeenCalledExactlyOnceWith({ type: 'performanceMode', value: true });
-  });
-
-  it('renders the sidebar toggle and follows a state pushed by the shortcut', async () => {
-    const h = harness();
-    await settle();
-    expect(h.element('sidebarCollapsed').checked).toBe(false);
-    h.push({ ...fixture(), sidebarCollapsed: true });
-    expect(h.element('sidebarCollapsed').checked).toBe(true);
-    h.element('sidebarCollapsed').checked = false;
-    h.element('sidebarCollapsed').fire('change');
-    await settle();
-    expect(h.apply).toHaveBeenCalledExactlyOnceWith({ type: 'sidebarCollapsed', value: false });
   });
 
   it('renders the navigation choice and sends a change', async () => {

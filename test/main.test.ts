@@ -103,10 +103,9 @@ const bootstrap = vi.hoisted(() => {
     resetForDocumentReplacement,
     handleHookReady: vi.fn(),
     applyPerformanceMode: vi.fn(() => Promise.resolve()),
-    applySidebar: vi.fn(() => Promise.resolve()),
     applyNavigation: vi.fn(() => Promise.resolve()),
     teardownShortcuts: vi.fn(),
-    toggleSidebarCollapsed: vi.fn(),
+    toggleNavigation: vi.fn(),
     handlePlaybackCapabilitiesDidChange: vi.fn(),
     browserWindow: vi.fn(),
     ipcOn: vi.fn(),
@@ -244,10 +243,7 @@ vi.mock("../src/tray", () => ({
 vi.mock("../src/settings", () => ({
   initSettingsActions: vi.fn(() => vi.fn()),
   notifySettingsChanged: vi.fn(),
-  toggleSidebarCollapsed: bootstrap.toggleSidebarCollapsed,
-}));
-vi.mock("../src/sidebar", () => ({
-  applySidebar: bootstrap.applySidebar,
+  toggleNavigation: bootstrap.toggleNavigation,
 }));
 vi.mock("../src/navigation", () => ({
   applyNavigation: bootstrap.applyNavigation,
@@ -502,9 +498,9 @@ describe("main bootstrap", () => {
     const finish = bootstrap.mainWebListeners.get("did-finish-load");
     await finish?.();
     await finish?.();
-    // Each load inserts styleFix.css, performanceMode.css, sidebar.css and topBar.css; the
+    // Each load inserts styleFix.css, performanceMode.css and topBar.css; the
     // theme is mocked. fs is mocked to return "asset" for every file.
-    expect(bootstrap.webContents.insertCSS).toHaveBeenCalledTimes(8);
+    expect(bootstrap.webContents.insertCSS).toHaveBeenCalledTimes(6);
     expect(bootstrap.applyPerformanceMode).toHaveBeenCalledTimes(2);
     expect(bootstrap.applyPerformanceMode).toHaveBeenCalledWith(
       bootstrap.webContents,
@@ -512,32 +508,22 @@ describe("main bootstrap", () => {
     expect(
       bootstrap.webContents.insertCSS.mock.invocationCallOrder[1],
     ).toBeLessThan(bootstrap.applyPerformanceMode.mock.invocationCallOrder[0]);
-    expect(bootstrap.applySidebar).toHaveBeenCalledTimes(2);
-    expect(bootstrap.applySidebar).toHaveBeenCalledWith(bootstrap.webContents);
+    expect(bootstrap.applyNavigation).toHaveBeenCalledTimes(2);
     expect(bootstrap.applyNavigation).toHaveBeenCalledWith(bootstrap.webContents);
     expect(
       bootstrap.webContents.insertCSS.mock.invocationCallOrder[2],
-    ).toBeLessThan(bootstrap.applySidebar.mock.invocationCallOrder[0]);
+    ).toBeLessThan(bootstrap.applyNavigation.mock.invocationCallOrder[0]);
   });
 
-  it("toggles the sidebar only from the main window's main frame", async () => {
+  it("registers no sidebar toggle channel", async () => {
     await startMain();
-    const toggle = bootstrap.ipcOn.mock.calls.find(
-      ([channel]) => channel === "nav:sidebar",
-    )?.[1];
-    const event = {
-      sender: bootstrap.webContents,
-      senderFrame: bootstrap.webContents.mainFrame,
-    };
-    toggle?.({ ...event, sender: {} });
-    toggle?.({ ...event, senderFrame: { url: event.senderFrame.url } });
-    expect(bootstrap.toggleSidebarCollapsed).not.toHaveBeenCalled();
-    toggle?.(event);
-    expect(bootstrap.toggleSidebarCollapsed).toHaveBeenCalledOnce();
+    expect(
+      bootstrap.ipcOn.mock.calls.some(([channel]) => channel === "nav:sidebar"),
+    ).toBe(false);
   });
 
-  // The collapsed sidebar hides Back, Forward and Reload, so the keys must do
-  // exactly what those buttons do.
+  // The top bar has no Forward or Reload, so the keys must do exactly what
+  // the navigation row's buttons do.
   it("gives the shortcuts the same actions as the buttons and tears them down on quit", async () => {
     const { initShortcuts } = await import("../src/shortcuts");
     const { goBackIfPossible } = await import("../src/controllerIPC");
@@ -547,7 +533,7 @@ describe("main bootstrap", () => {
     expect(initShortcuts).toHaveBeenCalledOnce();
     const [window, actions] = vi.mocked(initShortcuts).mock.calls[0];
     expect(window).toBe(bootstrap.mainWindow);
-    expect(actions.sidebar).toBe(bootstrap.toggleSidebarCollapsed);
+    expect(actions.navigation).toBe(bootstrap.toggleNavigation);
     const button = (channel: string) =>
       bootstrap.ipcOn.mock.calls.find(([name]) => name === channel)?.[1];
     expect(actions.back).toBe(button("nav:back"));

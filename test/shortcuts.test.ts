@@ -1,5 +1,5 @@
-// Main-window shortcuts. The collapsed sidebar hides Back, Forward and Reload,
-// so these keys are the only way to reach them there.
+// Main-window shortcuts. Hydra's top bar has no Forward or Reload, so these
+// keys are the only way to reach them there; Ctrl+B switches the navigation.
 import type { BrowserWindow, Input } from "electron";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -27,8 +27,8 @@ function key(overrides: Partial<Input>): Input {
 
 describe("shortcutAction", () => {
   it.each([
-    ["Ctrl+B", key({ control: true }), "sidebar"],
-    ["Ctrl+B with Caps Lock", key({ control: true, key: "B" }), "sidebar"],
+    ["Ctrl+B", key({ control: true }), "navigation"],
+    ["Ctrl+B with Caps Lock", key({ control: true, key: "B" }), "navigation"],
     ["Alt+Left", key({ alt: true, key: "ArrowLeft" }), "back"],
     ["Alt+Right", key({ alt: true, key: "ArrowRight" }), "forward"],
     ["Ctrl+R", key({ control: true, key: "r" }), "reload"],
@@ -39,7 +39,7 @@ describe("shortcutAction", () => {
   });
 
   it.each([
-    ["Cmd+B", key({ meta: true }), "sidebar"],
+    ["Cmd+B", key({ meta: true }), "navigation"],
     ["Cmd+[", key({ meta: true, key: "[" }), "back"],
     ["Cmd+]", key({ meta: true, key: "]" }), "forward"],
     ["Cmd+R", key({ meta: true, key: "r" }), "reload"],
@@ -81,7 +81,7 @@ describe("initShortcuts", () => {
       removeListener: vi.fn((event: string) => listeners.delete(event)),
     };
     const actions: Record<ShortcutAction, ReturnType<typeof vi.fn<() => void>>> = {
-      sidebar: vi.fn(),
+      navigation: vi.fn(),
       back: vi.fn(),
       forward: vi.fn(),
       reload: vi.fn(),
@@ -110,7 +110,7 @@ describe("initShortcuts", () => {
     expect(actions.back).toHaveBeenCalledOnce();
     expect(actions.reload).toHaveBeenCalledOnce();
     expect(actions.forward).not.toHaveBeenCalled();
-    expect(actions.sidebar).not.toHaveBeenCalled();
+    expect(actions.navigation).not.toHaveBeenCalled();
   });
 
   it("leaves other keys to the page", () => {
@@ -129,6 +129,6 @@ describe("initShortcuts", () => {
       listener,
     );
     press(key({ control: true }));
-    expect(actions.sidebar).not.toHaveBeenCalled();
+    expect(actions.navigation).not.toHaveBeenCalled();
   });
 });

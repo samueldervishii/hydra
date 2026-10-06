@@ -13,14 +13,10 @@ const navBarSource = fs.readFileSync(
 // Substitute the label token as main.ts loadAssets() does before executing the asset.
 // Non-English labels distinguish injected translations from asset defaults.
 const LABELS = {
-  sidebar: 'Seitenleiste umschalten',
   back: 'Zurück',
   forward: 'Vorwärts',
   reload: 'Neu laden',
   settings: 'Einstellungen',
-  home: 'Startseite',
-  search: 'Suchen',
-  allPlaylists: 'Alle Playlists',
 };
 
 const navBarScript = navBarSource.replace(NAV_LABELS_TOKEN, () => JSON.stringify(LABELS));
@@ -251,21 +247,18 @@ describe('navigationBar', () => {
     expect(logo?.children).toEqual([]);
   });
 
-  // The row is spread across the sidebar; the strip overrides all of these.
-  it('spreads the row with overridable distribution and inset', () => {
+  it('spreads the row across the sidebar and lets it shrink with it', () => {
     const { bar, run } = createHarness();
 
     run();
 
     const style = bar()?.getAttribute('style') ?? '';
-    expect(style).toContain('justify-content: space-between;');
-    expect(style).toContain('padding: 4px 14px 0');
+    expect(style).toContain('justify-content: space-between !important');
+    expect(style).toContain('padding: 4px 14px 0 !important');
     expect(style).toContain('min-width: 0 !important');
-    expect(style).not.toMatch(/(justify-content|padding|gap)[^;]*!important/);
   });
 
-  // Apple's sidebar is 164px wide at Hydra's 484px minimum window width,
-  // narrower than five fixed 32px buttons plus the row's inset.
+  // Apple's sidebar is 164px wide at Hydra's 484px minimum window width.
   it('lets every button shrink from 32px to its 20px icon', () => {
     const { buttons, run } = createHarness();
 
@@ -273,6 +266,7 @@ describe('navigationBar', () => {
 
     for (const button of buttons()) {
       const style = button.getAttribute('style') ?? '';
+      expect(style).toMatch(/^display: flex !important; /);
       expect(style).toContain('flex: 0 1 32px !important');
       expect(style).toContain('width: 32px !important');
       expect(style).toContain('min-width: 20px !important');
@@ -293,7 +287,6 @@ describe('navigationBar', () => {
       expect(svg?.getAttribute('height')).toBe('20');
       const [, , w, h] = (svg?.getAttribute('viewBox') ?? '').split(' ').map(Number);
       expect(w).toBe(h);
-      // Hydra's own glyphs are 14 to 20 units on their longer side.
       expect(w).toBeGreaterThanOrEqual(14 * 1.25);
       expect(w).toBeLessThanOrEqual(20 * 1.25);
       for (const shape of svg?.children ?? []) {
@@ -301,43 +294,26 @@ describe('navigationBar', () => {
       }
     }
     // The back chevron is 6 by 16 units, so its box is 20 units square.
-    expect(buttons()[1].querySelector('svg')?.getAttribute('viewBox')).toBe('2 2 20 20');
+    expect(buttons()[0].querySelector('svg')?.getAttribute('viewBox')).toBe('2 2 20 20');
   });
 
-  it('orders the expanded set, then the collapsed set, with tooltips', () => {
+  it('shows Back, Forward, Reload and Settings, with tooltips', () => {
     const { buttons, run } = createHarness();
 
     run();
 
-    expect(labelsOf(buttons())).toEqual([
-      LABELS.sidebar,
-      LABELS.back,
-      LABELS.forward,
-      LABELS.reload,
-      LABELS.settings,
-      LABELS.home,
-      LABELS.search,
-      LABELS.allPlaylists,
-    ]);
-    expect(buttons().map((b) => b.getAttribute('data-hydra-show'))).toEqual([
-      'both', 'both', 'expanded', 'expanded', 'expanded', 'collapsed', 'collapsed', 'collapsed',
-    ]);
+    expect(labelsOf(buttons())).toEqual([LABELS.back, LABELS.forward, LABELS.reload, LABELS.settings]);
     for (const button of buttons()) {
       expect(button.getAttribute('title')).toBe(button.getAttribute('aria-label'));
     }
   });
 
-  // sidebar.css swaps the sets with !important, which only beats an inline
-  // display that is not itself !important.
-  it('shows the expanded set by default, with an overridable display', () => {
-    const { buttons, run } = createHarness();
+  it('shows the same row on Apple Music Classical', () => {
+    const { buttons, run } = createHarness({ host: 'classical.music.apple.com' });
 
     run();
 
-    for (const button of buttons()) {
-      const display = button.getAttribute('data-hydra-show') === 'collapsed' ? 'none' : 'flex';
-      expect(button.getAttribute('style')).toMatch(new RegExp(`^display: ${display}; `));
-    }
+    expect(labelsOf(buttons())).toEqual([LABELS.back, LABELS.forward, LABELS.reload, LABELS.settings]);
   });
 
   it('appends nothing and throws nothing when the anchor is missing', () => {
@@ -361,149 +337,36 @@ describe('navigationBar', () => {
     const { anchor, buttons, run } = createHarness();
 
     run();
-    expect(buttons()).toHaveLength(8);
-
     run();
-    expect(buttons()).toHaveLength(8);
+
+    expect(buttons()).toHaveLength(4);
     expect(anchor?.children).toHaveLength(2);
   });
 
   it.each([
-    [LABELS.sidebar, 'nav:sidebar'],
-    [LABELS.settings, 'nav:settings'],
     [LABELS.back, 'nav:back'],
     [LABELS.forward, 'nav:forward'],
     [LABELS.reload, 'nav:reload'],
-  ])('sends %s clicks on the %s channel', (label, channel) => {
-    const { button, run, send } = createHarness();
+    [LABELS.settings, 'nav:settings'],
+  ])('sends %s clicks on the %s channel and navigates nothing itself', (label, channel) => {
+    const { button, run, send, history } = createHarness();
 
     run();
     button(label).dispatch('click');
 
-    expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith(channel);
+    expect(send).toHaveBeenCalledExactlyOnceWith(channel);
+    expect(history.pushState).not.toHaveBeenCalled();
   });
 
-  it("clicks Apple's own sidebar link when it exists", () => {
-    const h = createHarness({ appleLinks: { home: { href: '/gb/home' } } });
+  it('lights a button while the pointer is over it', () => {
+    const { button, run } = createHarness();
 
-    h.run();
-    h.button(LABELS.home).dispatch('click');
-
-    expect(h.links.get('home')?.click).toHaveBeenCalledOnce();
-    expect(h.history.pushState).not.toHaveBeenCalled();
-    expect(h.send).not.toHaveBeenCalled();
-  });
-
-  it.each([
-    [LABELS.home, '/gb/home'],
-    [LABELS.search, '/gb/search'],
-    [LABELS.allPlaylists, '/library/all-playlists/'],
-  ])('pushes %s in-app with the storefront when Apple has no link', (label, target) => {
-    const h = createHarness();
-
-    h.run();
-    h.button(label).dispatch('click');
-
-    expect(h.history.pushState).toHaveBeenCalledExactlyOnceWith({}, '', target);
-    expect(h.dispatchEvent).toHaveBeenCalledOnce();
-    expect(h.dispatchEvent.mock.calls[0][0]).toMatchObject({ type: 'popstate' });
-    expect(h.send).not.toHaveBeenCalled();
-  });
-
-  it("takes the storefront from Apple's links on a library page", () => {
-    const h = createHarness({
-      pathname: '/library/all-playlists/',
-      appleLinks: { new: { href: '/fr/new' } },
-    });
-
-    h.run();
-    h.button(LABELS.search).dispatch('click');
-
-    expect(h.history.pushState).toHaveBeenCalledWith({}, '', '/fr/search');
-  });
-
-  // assets/songSearch.js exposes window.__hydraSongSearch on Apple Music only.
-  it("opens Hydra's song search from Search on Apple Music", () => {
-    const h = createHarness({ appleLinks: { search: { href: '/gb/search' } } });
-    const open = vi.fn();
-    h.window.__hydraSongSearch = { open };
-
-    h.run();
-    h.button(LABELS.search).dispatch('click');
-
-    expect(open).toHaveBeenCalledOnce();
-    expect(h.links.get('search')?.click).not.toHaveBeenCalled();
-    expect(h.history.pushState).not.toHaveBeenCalled();
-  });
-
-  it("keeps Apple's search page on Classical", () => {
-    const h = createHarness({ host: 'classical.music.apple.com', pathname: '/us/browse' });
-    const open = vi.fn();
-    h.window.__hydraSongSearch = { open };
-
-    h.run();
-    h.button(LABELS.search).dispatch('click');
-
-    expect(open).not.toHaveBeenCalled();
-    expect(h.history.pushState).toHaveBeenCalledWith({}, '', '/us/search');
-  });
-
-  it('leaves All Playlists out on Classical and uses its root for Home', () => {
-    const h = createHarness({ host: 'classical.music.apple.com', pathname: '/us/browse/catalog' });
-
-    h.run();
-    expect(labelsOf(h.buttons())).not.toContain(LABELS.allPlaylists);
-    h.button(LABELS.home).dispatch('click');
-
-    expect(h.history.pushState).toHaveBeenCalledWith({}, '', '/us');
-  });
-
-  it('highlights the current page and moves the highlight on the next run', () => {
-    const h = createHarness({ pathname: '/gb/home' });
-
-    h.run();
-    expect(h.button(LABELS.home).getAttribute('aria-current')).toBe('page');
-    expect(h.button(LABELS.home).styles.get('color')).toBe(ACTIVE_COLOR);
-    expect(h.button(LABELS.search).getAttribute('aria-current')).toBeNull();
-
-    // main.ts runs the script again on each in-page navigation.
-    h.location.pathname = '/gb/search';
-    h.run();
-    expect(h.button(LABELS.home).getAttribute('aria-current')).toBeNull();
-    expect(h.button(LABELS.search).getAttribute('aria-current')).toBe('page');
-
-    // Leaving the pointer keeps the accent on the current page only.
-    h.button(LABELS.search).dispatch('mouseleave');
-    expect(h.button(LABELS.search).styles.get('color')).toBe(ACTIVE_COLOR);
-  });
-
-  it("adopts Apple's icon once the sidebar renders it and refits it once measurable", () => {
-    const h = createHarness();
-
-    h.run();
-    expect(h.button(LABELS.home).getAttribute('data-hydra-icon')).toBeNull();
-
-    const link = Object.assign(new StubElement('a'), { href: 'https://music.apple.com/gb/home' });
-    const source = link.appendChild(new StubElement('svg'));
-    source.setAttribute('data-apple-icon', 'home');
-    h.links.set('home', link);
-    h.run();
-
-    // Hidden sidebar: Apple's standard 16-unit box stands in.
-    const icon = h.button(LABELS.home).querySelector('svg');
-    expect(icon?.getAttribute('data-apple-icon')).toBe('home');
-    expect(icon?.getAttribute('width')).toBe('20');
-    expect(icon?.getAttribute('viewBox')).toBe('2 2 20 20');
-    expect(icon?.styles.get('fill')).toBe('currentColor');
-    expect(h.button(LABELS.home).getAttribute('data-hydra-icon')).toBe('apple');
-
-    // Rendered sidebar: the real glyph is measured and the same icon refitted.
-    source.bbox = { x: 5, y: 4.6, width: 13.8, height: 13.9 };
-    h.run();
-    expect(h.button(LABELS.home).querySelector('svg')).toBe(icon);
-    const [, , side] = (icon?.getAttribute('viewBox') ?? '').split(' ').map(Number);
-    expect(side).toBeCloseTo(13.9 * 1.25);
-    expect(h.button(LABELS.home).getAttribute('data-hydra-icon')).toBe('apple-measured');
+    run();
+    const back = button(LABELS.back);
+    back.dispatch('mouseenter');
+    expect(back.styles.get('color')).toBe(ACTIVE_COLOR);
+    expect(back.styles.get('opacity')).toBe('1');
+    back.dispatch('mouseleave');
+    expect(back.styles.get('opacity')).toBe('0.7');
   });
 });

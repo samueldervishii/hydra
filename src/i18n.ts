@@ -108,10 +108,6 @@ export const APP_TEXT: Record<string, string> = trayData.APP_TEXT;
 export const SETTINGS_ERROR_TEXT: Record<string, string> = trayData.SETTINGS_ERROR_TEXT;
 /** Translations for performance mode, keyed by BCP 47 language tag. */
 export const PERFORMANCE_MODE_TEXT: Record<string, string> = trayData.PERFORMANCE_MODE_TEXT;
-/** Translations for collapse sidebar, keyed by BCP 47 language tag. */
-export const COLLAPSE_SIDEBAR_TEXT: Record<string, string> = trayData.COLLAPSE_SIDEBAR_TEXT;
-/** Translations for the navigation bar's sidebar toggle, keyed by BCP 47 language tag. */
-export const SIDEBAR_TOGGLE_TEXT: Record<string, string> = trayData.SIDEBAR_TOGGLE_TEXT;
 
 /** Translations for close, keyed by BCP 47 language tag. */
 export const CLOSE_TEXT: Record<string, string> = aboutData.CLOSE_TEXT;
@@ -239,7 +235,6 @@ export interface TrayStrings {
   showWindow: string;
   closeToTray: string;
   performanceMode: string;
-  sidebarCollapsed: string;
   navigation: string;
   navigationTopBar: string;
   navigationAppleSidebar: string;
@@ -289,7 +284,6 @@ const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   showWindow: SHOW_WINDOW_TEXT,
   closeToTray: CLOSE_TO_TRAY_TEXT,
   performanceMode: PERFORMANCE_MODE_TEXT,
-  sidebarCollapsed: COLLAPSE_SIDEBAR_TEXT,
   // English only until translated.
   navigation: { en: 'Navigation' },
   navigationTopBar: { en: 'Hydra top bar' },
@@ -327,28 +321,19 @@ export function getTrayStrings(): TrayStrings {
  */
 export const NAV_LABELS_TOKEN = '__HYDRA_NAV_LABELS__';
 
-/** Resolve the labels for the injected navigation bar. */
+/** Resolve the labels for the navigation row in Apple's sidebar. */
 export function getNavigationStrings(): {
-  sidebar: string;
   settings: string;
   back: string;
   forward: string;
   reload: string;
-  home: string;
-  search: string;
-  allPlaylists: string;
 } {
   const langs = getSystemLanguages();
   return {
-    sidebar: getLocalizedString(SIDEBAR_TOGGLE_TEXT, langs),
     settings: getLocalizedString(SETTINGS_TEXT, langs),
     back: getLocalizedString(BACK_TEXT, langs),
     forward: getLocalizedString(FORWARD_TEXT, langs),
     reload: getLocalizedString(RELOAD_TEXT, langs),
-    // The collapsed sidebar's page buttons reuse the start page labels.
-    home: getLocalizedString(START_PAGE_HOME_TEXT, langs),
-    search: getLocalizedString(START_PAGE_SEARCH_TEXT, langs),
-    allPlaylists: getLocalizedString(START_PAGE_ALL_PLAYLISTS_TEXT, langs),
   };
 }
 

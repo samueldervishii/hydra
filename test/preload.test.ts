@@ -349,14 +349,16 @@ describe('controller polling in the preload', () => {
     expect(harness.ipcRenderer.send).toHaveBeenCalledWith('nav:settings', undefined, undefined);
   });
 
-  it('forwards the sidebar toggle from the navigation bar', async () => {
+  // The collapsed sidebar and its toggle button are gone; Ctrl+B switches
+  // the navigation mode from the main process instead.
+  it('no longer forwards the removed sidebar toggle', async () => {
     const harness = await loadPreload();
     const exposed = vi.mocked(harness.contextBridge.exposeInMainWorld).mock.calls
       .find(([key]) => key === 'AMWrapper')?.[1] as {
         ipcRenderer: { send(channel: string, data?: unknown): void };
       };
     exposed.ipcRenderer.send('nav:sidebar');
-    expect(harness.ipcRenderer.send).toHaveBeenCalledExactlyOnceWith('nav:sidebar', undefined, undefined);
+    expect(harness.ipcRenderer.send).not.toHaveBeenCalled();
   });
 
   it('installs one polling loop for each isolated preload setup', async () => {

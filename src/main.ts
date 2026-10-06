@@ -56,9 +56,8 @@ import {
 import {
   initSettingsActions,
   notifySettingsChanged,
-  toggleSidebarCollapsed,
+  toggleNavigation,
 } from "./settings";
-import { applySidebar } from "./sidebar";
 import { applyNavigation, TOP_BAR_LAYOUT_WARNING } from "./navigation";
 import { initShortcuts } from "./shortcuts";
 import { handleSettingsNavigation, initSettingsWindow } from "./settingsWindow";
@@ -93,9 +92,9 @@ const SPLASH_WIDTH_PX = 300;
 const SPLASH_HEIGHT_PX = 350;
 const MAIN_WINDOW_WIDTH_PX = 1280;
 const MAIN_WINDOW_HEIGHT_PX = 800;
-// Below this page width, in CSS pixels, Apple swaps the sidebar for a top bar,
-// where Hydra's button row covers Apple's Sign In button and the sidebar toggle
-// has nothing to collapse. Matches the breakpoint in assets/sidebar.css.
+// Below this page width, in CSS pixels, Apple swaps the sidebar for a top bar
+// of its own, where Hydra's button row covers Apple's Sign In button. Matches
+// the breakpoint in assets/topBar.css.
 const DESKTOP_LAYOUT_MIN_WIDTH_PX = 484;
 const PRELOAD_ERROR_NAMES = new Set([
   "AggregateError",
@@ -250,7 +249,6 @@ function routeItmsTarget(target: ItmsTarget | null): void {
 export interface Assets {
   STYLE_FIX_CSS: string;
   PERFORMANCE_CSS: string;
-  SIDEBAR_CSS: string;
   TOP_BAR_CSS: string;
   authFrameScript: string;
   navBarScript: string;
@@ -467,10 +465,6 @@ function loadAssets(): Assets {
     getAssetPath("assets", "performanceMode.css"),
     "utf-8",
   );
-  const SIDEBAR_CSS = fs.readFileSync(
-    getAssetPath("assets", "sidebar.css"),
-    "utf-8",
-  );
   const authStyleFixCssPath = getAssetPath("assets", "authStyleFix.css");
   const authCss = fs.readFileSync(authStyleFixCssPath, "utf-8");
   const authFramePath = getAssetPath("assets", "authFrameFix.js");
@@ -506,7 +500,6 @@ function loadAssets(): Assets {
   return {
     STYLE_FIX_CSS,
     PERFORMANCE_CSS,
-    SIDEBAR_CSS,
     TOP_BAR_CSS,
     authFrameScript,
     navBarScript,
@@ -661,19 +654,11 @@ function setupWindowZoomAndNav(win: BrowserWindow): void {
     "nav:back": back,
     "nav:forward": forward,
     "nav:reload": reload,
-    "nav:sidebar": (event) => {
-      if (
-        event.sender !== win.webContents ||
-        event.senderFrame !== win.webContents.mainFrame
-      )
-        return;
-      toggleSidebarCollapsed();
-    },
   });
   app.on(
     "will-quit",
     initShortcuts(win, {
-      sidebar: toggleSidebarCollapsed,
+      navigation: toggleNavigation,
       back,
       forward,
       reload,
@@ -889,10 +874,8 @@ function setupContentHandlers(
     // Inserted on every load and gated on <html> attributes, so a Settings
     // toggle reaches the open page without inserting or removing CSS.
     await win.webContents.insertCSS(assets.PERFORMANCE_CSS);
-    await win.webContents.insertCSS(assets.SIDEBAR_CSS);
     await win.webContents.insertCSS(assets.TOP_BAR_CSS);
     await applyPerformanceMode(win.webContents);
-    await applySidebar(win.webContents);
     await applyNavigation(win.webContents);
     await injectThemeCss(win.webContents);
     await injectRendererScripts(win, assets, "on load");

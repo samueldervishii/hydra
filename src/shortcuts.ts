@@ -1,16 +1,16 @@
 import type { BrowserWindow, Event, Input } from "electron";
 
 /** What a main-window shortcut does. */
-export type ShortcutAction = "sidebar" | "back" | "forward" | "reload" | "search";
+export type ShortcutAction = "navigation" | "back" | "forward" | "reload" | "search";
 
 /**
  * The action a key-down maps to, or null for keys that belong to the page.
  *
  * Hydra sets no application menu on Linux and Windows, so Chromium's own
  * browser keys never reach the page. These restore the usual ones, which the
- * collapsed sidebar relies on because it hides Back, Forward and Reload:
- * Ctrl+B toggles the sidebar, Alt+Left and Alt+Right go back and forward, and
- * Ctrl+R or F5 reloads. macOS uses Cmd+B, Cmd+[, Cmd+] and Cmd+R. Ctrl+K
+ * top bar relies on because it has no Forward or Reload: Alt+Left and
+ * Alt+Right go back and forward, and Ctrl+R or F5 reloads. Ctrl+B switches
+ * between Hydra's top bar and Apple's sidebar. macOS uses Cmd+B, Cmd+[, Cmd+] and Cmd+R. Ctrl+K
  * (Cmd+K) opens Hydra's song search, here rather than in the page because a
  * focused iframe, such as Apple's subscription offer, keeps keys from it.
  */
@@ -25,7 +25,7 @@ export function shortcutAction(
       ? input.meta && !input.control && !input.alt
       : input.control && !input.meta && !input.alt;
   const plain = !input.control && !input.meta && !input.alt;
-  if (command && key === "b") return "sidebar";
+  if (command && key === "b") return "navigation";
   if (command && key === "r") return "reload";
   if (command && key === "k") return "search";
   if (platform === "darwin") {

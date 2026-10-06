@@ -14,10 +14,8 @@ import {
   setTheme,
   getPerformanceModeEnabled,
   setPerformanceModeEnabled,
-  getSidebarCollapsed,
   getNavigation,
   setNavigation,
-  setSidebarCollapsed,
   getLastPageUrl,
   setLastPageUrl,
   getStartPage,
@@ -80,12 +78,12 @@ describe("Config store type assertions", () => {
     expectTypeOf(setPerformanceModeEnabled).parameter(0).toEqualTypeOf<boolean>();
   });
 
-  it("getSidebarCollapsed returns boolean", () => {
-    expectTypeOf(getSidebarCollapsed).returns.toEqualTypeOf<boolean>();
+  it("getNavigation returns a navigation mode", () => {
+    expectTypeOf(getNavigation).returns.toEqualTypeOf<"top-bar" | "apple-sidebar">();
   });
 
-  it("setSidebarCollapsed accepts boolean", () => {
-    expectTypeOf(setSidebarCollapsed).parameter(0).toEqualTypeOf<boolean>();
+  it("setNavigation accepts a navigation mode", () => {
+    expectTypeOf(setNavigation).parameter(0).toEqualTypeOf<"top-bar" | "apple-sidebar">();
   });
 
   it("getLastPageUrl returns string | undefined", () => {
@@ -205,15 +203,6 @@ describe("Config store runtime behaviour", () => {
     expect(getNavigation()).toBe("apple-sidebar");
   });
 
-  it("getSidebarCollapsed defaults to false", () => {
-    expect(getSidebarCollapsed()).toBe(false);
-  });
-
-  it("setSidebarCollapsed persists value", () => {
-    setSidebarCollapsed(true);
-    expect(getSidebarCollapsed()).toBe(true);
-  });
-
   it("getStartPage defaults to new", () => {
     expect(getStartPage()).toBe("new");
   });
@@ -317,18 +306,18 @@ describe("Config store runtime behaviour", () => {
     expect(getCloseToTrayEnabled()).toBe(false);
   });
 
-  it("close-to-tray and sidebar readers each read their own key", () => {
+  it("close-to-tray and performance mode readers each read their own key", () => {
     // Opposite values, so a reader crossed onto the other key inverts its answer.
     store.set("closeToTray.enabled", true);
-    store.set("sidebar.collapsed", false);
+    store.set("performanceMode.enabled", false);
     expect(getCloseToTrayEnabled()).toBe(true);
-    expect(getSidebarCollapsed()).toBe(false);
+    expect(getPerformanceModeEnabled()).toBe(false);
   });
 
   it("setCloseToTrayEnabled persists to the close-to-tray key only", () => {
     setCloseToTrayEnabled(true);
     expect(getCloseToTrayEnabled()).toBe(true);
-    expect(getSidebarCollapsed()).toBe(false);
+    expect(getPerformanceModeEnabled()).toBe(true);
   });
 
   it("setStartPage persists to the music start page key, not the Classical one", () => {
