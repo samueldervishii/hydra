@@ -168,6 +168,17 @@
   var capsuleOn = null;
   var active = false;
   var warned = false;
+  /** @type {string | null} The section of the last page that had one. */
+  var lastSection = null;
+  /**
+   * The section each history entry showed, by Navigation API entry key, so a
+   * page outside every section shows the one it was opened from again when
+   * Back returns to it.
+   * @type {Map<string, string | null>}
+   */
+  var entrySections = new Map();
+  /** Entries remembered at most; the oldest is forgotten first. */
+  var MAX_REMEMBERED_ENTRIES = 200;
   /** @type {any} The MusicKit instance whose sign-in changes are followed. */
   var boundMk = null;
   /** @type {number | null} */
@@ -249,17 +260,62 @@
   }
 
   /**
-   * The page item to mark: Search while the search panel is open, otherwise
-   * the item whose page is open, otherwise none.
+   * The section a page belongs to: Home on any storefront's home page, All
+   * Playlists on the library's playlist list, every library playlist and
+   * every playlist folder, and none elsewhere.
+   * @param {string} path - Page path without a trailing slash
+   * @returns {string | null}
+   */
+  function sectionOf(path) {
+    if (/^\/[a-z]{2}\/home$/.test(path)) return "home";
+    if (
+      path === ALL_PLAYLISTS_PATH ||
+      path.indexOf("/library/playlist/") === 0 ||
+      path.indexOf("/library/playlist-folder/") === 0
+    ) {
+      return "all-playlists";
+    }
+    return null;
+  }
+
+  /** @returns {string | null} The current history entry's key, where the Navigation API has one. */
+  function entryKey() {
+    var entry = window.navigation && window.navigation.currentEntry;
+    return entry && typeof entry.key === "string" ? entry.key : null;
+  }
+
+  /**
+   * @param {string} key - History entry key
+   * @param {string | null} section - The section it shows
+   * @returns {void}
+   */
+  function remember(key, section) {
+    entrySections.delete(key);
+    entrySections.set(key, section);
+    if (entrySections.size > MAX_REMEMBERED_ENTRIES) {
+      entrySections.delete(entrySections.keys().next().value);
+    }
+  }
+
+  /**
+   * The page item to mark. Search while the search panel is open; otherwise
+   * the open page's section; and on a page outside every section (an album,
+   * an artist) the section it was opened from, so the capsule never leaves the
+   * pill. That section is remembered for the page's history entry, so Back
+   * shows it again even after other sections were visited since.
    * @returns {string | null}
    */
   function activeItem() {
     var search = window.__hydraSongSearch;
     if (search && typeof search.isOpen === "function" && search.isOpen()) return "search";
-    var here = currentPath();
-    if (pathFor("home") === here) return "home";
-    if (pathFor("all-playlists") === here) return "all-playlists";
-    return null;
+    var key = entryKey();
+    var section = sectionOf(currentPath());
+    if (!section) {
+      section = key && entrySections.has(key) ? entrySections.get(key) : lastSection;
+    }
+    if (key) remember(key, section);
+    lastSection = section;
+    return section;
   }
 
   /**

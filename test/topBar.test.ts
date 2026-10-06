@@ -140,7 +140,9 @@ function createHarness({
     AMWrapper: bridge ? { ipcRenderer: { send } } : undefined,
     __hydraHookedMk: (musicKitReady ? mk : undefined) as unknown,
     __hydraSongSearch: { open: vi.fn(), isOpen: vi.fn(() => false) },
-    navigation: canGoBack === undefined ? undefined : { canGoBack },
+    navigation: (canGoBack === undefined ? undefined : { canGoBack, currentEntry: { key: 'entry-0' } }) as
+      | { canGoBack: boolean; currentEntry: { key: string } }
+      | undefined,
     __hydraTopBar: undefined as { update(): void } | undefined,
     // The stylesheet's effect: with the gate set, the sidebar is hidden and
     // the strip reserved, unless Apple's layout no longer matches it.
@@ -213,6 +215,17 @@ function createHarness({
     makeMusicKitReady: () => {
       window.__hydraHookedMk = mk;
     },
+    // A navigation to a new or revisited history entry, then main.ts's
+    // re-injection on did-navigate-in-page.
+    visit: (pathname: string, key: string) => {
+      location.pathname = pathname;
+      if (window.navigation) window.navigation.currentEntry = { key };
+      run();
+    },
+    activeItem: () =>
+      (host() ? descendants(host()!.shadowRoot!).filter((e) => e.tagName === 'button') : [])
+        .filter((b) => b.getAttribute('aria-current') === 'page')
+        .map((b) => b.getAttribute('data-hydra-page')),
   };
 }
 
@@ -410,9 +423,68 @@ describe('topBar.js', () => {
     expect(current().map((b) => b.getAttribute('data-hydra-page'))).toEqual(['home']);
     h.button('all-playlists').click();
     expect(current().map((b) => b.getAttribute('data-hydra-page'))).toEqual(['all-playlists']);
-    h.window.location.pathname = '/al/album/1';
-    h.run();
-    expect(current()).toEqual([]);
+    // A page outside every section keeps the section it was opened from.
+    h.visit('/al/album/1', 'entry-9');
+    expect(current().map((b) => b.getAttribute('data-hydra-page'))).toEqual(['all-playlists']);
+  });
+
+  describe('sections', () => {
+    it.each([
+      ['/library/all-playlists', 'all-playlists'],
+      ['/library/playlist/p.abc123', 'all-playlists'],
+      ['/library/playlist-folder/p.folder1', 'all-playlists'],
+      ['/al/home', 'home'],
+      ['/gb/home', 'home'],
+    ])('treats %s as the %s section', (pathname, section) => {
+      const h = createHarness({ pathname });
+      expect(h.activeItem()).toEqual([section]);
+    });
+
+    it('keeps the section a page outside every section was opened from', () => {
+      const h = createHarness({ pathname: '/al/home' });
+      h.visit('/al/album/blonde/1146195596', 'entry-1');
+      expect(h.activeItem()).toEqual(['home']);
+      h.visit('/library/playlist/p.abc123', 'entry-2');
+      expect(h.activeItem()).toEqual(['all-playlists']);
+      h.visit('/al/artist/frank-ocean/442122051', 'entry-3');
+      expect(h.activeItem()).toEqual(['all-playlists']);
+    });
+
+    it('restores the section of the page Back returns to', () => {
+      const h = createHarness({ pathname: '/al/home' });
+      h.visit('/al/album/blonde/1146195596', 'entry-1');
+      h.visit('/library/all-playlists', 'entry-2');
+      h.visit('/library/playlist/p.abc123', 'entry-3');
+      // Back twice: the playlist list, then the album opened from Home.
+      h.visit('/library/all-playlists', 'entry-2');
+      expect(h.activeItem()).toEqual(['all-playlists']);
+      h.visit('/al/album/blonde/1146195596', 'entry-1');
+      expect(h.activeItem()).toEqual(['home']);
+      // A new page from there belongs to Home too.
+      h.visit('/al/album/channel-orange/1440765580', 'entry-4');
+      expect(h.activeItem()).toEqual(['home']);
+    });
+
+    it('falls back to the last section without the Navigation API', () => {
+      const h = createHarness({ pathname: '/library/all-playlists', canGoBack: undefined });
+      h.visit('/al/album/blonde/1146195596', 'unused');
+      expect(h.activeItem()).toEqual(['all-playlists']);
+    });
+
+    it('marks nothing on a first page outside every section', () => {
+      const h = createHarness({ pathname: '/al/album/blonde/1146195596' });
+      expect(h.activeItem()).toEqual([]);
+    });
+
+    it('returns to the section after the search panel closes', () => {
+      const h = createHarness({ pathname: '/library/playlist/p.abc123' });
+      h.window.__hydraSongSearch.isOpen.mockReturnValue(true);
+      (h.window.__hydraTopBar as unknown as { refresh(): void }).refresh();
+      expect(h.activeItem()).toEqual(['search']);
+      h.window.__hydraSongSearch.isOpen.mockReturnValue(false);
+      (h.window.__hydraTopBar as unknown as { refresh(): void }).refresh();
+      expect(h.activeItem()).toEqual(['all-playlists']);
+    });
   });
 
   // assets/songSearch.js calls refresh() when it opens and closes.
@@ -442,6 +514,7 @@ describe('topBar.js', () => {
     expect(capsuleOf(onHome).styles.get('opacity')).toBe('1');
     // The first placement jumps, then the transition is handed back.
     expect(capsuleOf(onHome).styles.has('transition')).toBe(false);
+    // A first page outside every section has nothing to mark.
     const elsewhere = createHarness({ pathname: '/al/album/1' });
     expect(capsuleOf(elsewhere).styles.get('opacity')).not.toBe('1');
   });
