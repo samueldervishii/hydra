@@ -401,12 +401,12 @@ export function getSearchStrings(): {
  */
 export const TOP_BAR_LABELS_TOKEN = '__HYDRA_TOP_BAR_LABELS__';
 
-// English only until translated. Not exported, because
-// test/i18n-consistency.test.ts treats every exported object as a record that
-// must carry every language.
-const ACCOUNT_TEXT: Record<string, string> = { en: 'Account' };
-const SWITCH_TO_APPLE_SIDEBAR_TEXT: Record<string, string> = { en: 'Switch to Apple sidebar' };
-const SIGN_OUT_TEXT: Record<string, string> = { en: 'Sign out…' };
+/** Translations for the top bar's account button, keyed by BCP 47 language tag. */
+export const ACCOUNT_TEXT: Record<string, string> = trayData.ACCOUNT_TEXT;
+/** Translations for the account menu's sidebar item, keyed by BCP 47 language tag. */
+export const SWITCH_TO_APPLE_SIDEBAR_TEXT: Record<string, string> = trayData.SWITCH_TO_APPLE_SIDEBAR_TEXT;
+/** Translations for the account menu's sign-out item, keyed by BCP 47 language tag. */
+export const SIGN_OUT_TEXT: Record<string, string> = trayData.SIGN_OUT_TEXT;
 
 /** Resolve the labels for the injected top bar, which reuses translated records. */
 export function getTopBarStrings(): {

@@ -174,7 +174,7 @@ hydra/
 │   ├── topBar.css                 - Top bar layout; every rule gated on html[data-hydra-top-bar]
 │   ├── locales/
 │   │   ├── loading.json           - 1 translation record: LOADING_TEXT
-│   │   ├── tray.json              - 45 translation records: tray menu, dock, Windows taskbar,
+│   │   ├── tray.json              - 48 translation records: tray menu, dock, Windows taskbar,
 │   │   │                             Settings, navigation row and song search labels
 │   │   └── about.json             - 3 translation records: about window labels
 │   ├── styleFix.css               - CSS overrides injected via webContents.insertCSS()
