@@ -35,6 +35,8 @@
     window.addEventListener("pageshow", () => {
       documentActive = true;
     });
+    /** The most songs __hydraPlaySongs() queues: one page of catalogue search results. */
+    const MAX_QUEUED_SONGS = 25;
     const unsafeTimedText =
       /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
 
@@ -543,6 +545,58 @@
        * @type {HydraHook}
        * @see {HydraHook} in src/types/hook.d.ts
        */
+      /**
+       * Replace the queue and start it, one replacement at a time. A newer
+       * request drops one still waiting, and the wait is bounded: a timed-out
+       * SDK call keeps the queue until it settles, so nothing overlaps it.
+       * Clears an acknowledged Stop first, so MPRIS reports the new playback.
+       * Rejects on a timeout or while a timed-out call is still pending.
+       *
+       * @param {object} options - MusicKit setQueue() options
+       * @returns {Promise<void>}
+       */
+      async function replaceQueue(options) {
+        if (blockedQueue) throw new Error("Queue replacement still pending");
+        const request = ++queueRequest;
+        const pageGeneration = documentGeneration;
+        queueTask = queueTask
+          .then(async () => {
+            if (
+              request !== queueRequest ||
+              pageGeneration !== documentGeneration ||
+              !documentActive ||
+              window.__hydraHookedMk !== mk
+            )
+              return;
+            resetStop();
+            await mk.setQueue(options);
+          })
+          .catch(() => {
+            console.warn("[Hydra] failed to open requested media");
+          });
+        let timeout;
+        try {
+          await Promise.race([
+            queueTask,
+            new Promise((_, reject) => {
+              timeout = setTimeout(() => {
+                if (!blockedQueue) {
+                  // Keep the SDK operation serialised after callers stop waiting.
+                  queueRequest += 1;
+                  blockedQueue = queueTask;
+                  blockedQueue.then(() => {
+                    blockedQueue = null;
+                  });
+                }
+                reject(new Error("Queue replacement timed out"));
+              }, 5000);
+            }),
+          ]);
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
+
       window.__hydra = {
         openUri: async (uri) => {
           try {
@@ -558,46 +612,7 @@
               window.__hydraHookedMk !== mk
             )
               return;
-            if (blockedQueue)
-              throw new Error("Queue replacement still pending");
-            const request = ++queueRequest;
-            const pageGeneration = documentGeneration;
-            queueTask = queueTask
-              .then(async () => {
-                if (
-                  request !== queueRequest ||
-                  pageGeneration !== documentGeneration ||
-                  !documentActive ||
-                  window.__hydraHookedMk !== mk
-                )
-                  return;
-                resetStop();
-                await mk.setQueue({ url: url.href, startPlaying: true });
-              })
-              .catch(() => {
-                console.warn("[Hydra] failed to open requested media");
-              });
-            let timeout;
-            try {
-              await Promise.race([
-                queueTask,
-                new Promise((_, reject) => {
-                  timeout = setTimeout(() => {
-                    if (!blockedQueue) {
-                      // Keep the SDK operation serialised after callers stop waiting.
-                      queueRequest += 1;
-                      blockedQueue = queueTask;
-                      blockedQueue.then(() => {
-                        blockedQueue = null;
-                      });
-                    }
-                    reject(new Error("Queue replacement timed out"));
-                  }, 5000);
-                }),
-              ]);
-            } finally {
-              clearTimeout(timeout);
-            }
+            await replaceQueue({ url: url.href, startPlaying: true });
           } catch (_) {
             console.warn("[Hydra] failed to open requested media");
           }
@@ -621,6 +636,42 @@
         setShuffle: (m) => {
           mk.shuffleMode = m;
         },
+      };
+
+      /**
+       * Play catalogue songs from the page: the queue is the whole list and
+       * starts at startIndex, so Next and Previous move through it. Page-only:
+       * assets/songSearch.js calls it directly, and it is deliberately not on
+       * window.__hydra, whose methods are the commands the preload may send
+       * (HydraHook in src/types/hook.d.ts). Shares replaceQueue() with openUri,
+       * so the two never race. Catalogue song ids are digits only.
+       *
+       * @param {unknown} ids - Catalogue song ids, at most MAX_QUEUED_SONGS
+       * @param {unknown} startIndex - Index into ids of the song to play first
+       * @returns {Promise<void>}
+       */
+      window.__hydraPlaySongs = async (ids, startIndex) => {
+        try {
+          if (
+            !Array.isArray(ids) ||
+            ids.length === 0 ||
+            ids.length > MAX_QUEUED_SONGS ||
+            !ids.every((id) => typeof id === "string" && /^\d{1,20}$/.test(id)) ||
+            !Number.isSafeInteger(startIndex) ||
+            startIndex < 0 ||
+            startIndex >= ids.length ||
+            !documentActive ||
+            window.__hydraHookedMk !== mk
+          )
+            return;
+          await replaceQueue({
+            songs: ids.slice(),
+            startWith: startIndex,
+            startPlaying: true,
+          });
+        } catch (_) {
+          console.warn("[Hydra] failed to open requested media");
+        }
       };
       sendToMain("hookReady", injectedDocumentGeneration);
     }

@@ -197,6 +197,7 @@ function createHarness({
     location: { hostname: string; origin: string };
     __hydraHookedMk?: unknown;
     __hydra?: Record<string, (...args: unknown[]) => unknown>;
+    __hydraPlaySongs?: (ids: unknown, startIndex: unknown) => Promise<void>;
   }
   const window: HarnessWindow = {
     addEventListener: vi.fn(
@@ -550,6 +551,123 @@ describe("MusicKit OpenUri", () => {
       expect(musicKit.setQueue).toHaveBeenCalledOnce();
     },
   );
+});
+
+// assets/songSearch.js plays a search result through this page-only entry,
+// which shares openUri's queue serialisation and is not a preload command.
+describe("MusicKit page song queue", () => {
+  const ids = ["697195462", "617154366", "696886431"];
+
+  it("queues every song and starts at the chosen one", async () => {
+    const { window, musicKit } = createHarness();
+    await window.__hydraPlaySongs!(ids, 1);
+    expect(musicKit.setQueue).toHaveBeenCalledExactlyOnceWith({
+      songs: ids,
+      startWith: 1,
+      startPlaying: true,
+    });
+  });
+
+  it("queues a copy, so a later change to the caller's array cannot reach MusicKit", async () => {
+    const { window, musicKit } = createHarness();
+    const list = [...ids];
+    await window.__hydraPlaySongs!(list, 0);
+    list.push("1");
+    expect(musicKit.setQueue.mock.calls[0]).toEqual([
+      { songs: ids, startWith: 0, startPlaying: true },
+    ]);
+  });
+
+  it.each([
+    ["no list", undefined, 0],
+    ["a string", "697195462", 0],
+    ["an empty list", [], 0],
+    ["more than one page of results", Array(26).fill("1"), 0],
+    ["a numeric id", [697195462], 0],
+    ["a library id", ["i.abc123"], 0],
+    ["an id with a path", ["1/../2"], 0],
+    ["a negative index", ids, -1],
+    ["an index past the end", ids, 3],
+    ["a fractional index", ids, 0.5],
+    ["a string index", ids, "1"],
+  ])("ignores %s", async (_label, list, index) => {
+    const { window, musicKit } = createHarness();
+    await window.__hydraPlaySongs!(list, index);
+    expect(musicKit.setQueue).not.toHaveBeenCalled();
+  });
+
+  // The preload may only send what HydraHook declares; this entry is not one.
+  it("is not a command on window.__hydra", () => {
+    const { window } = createHarness();
+    expect(Object.keys(window.__hydra!)).not.toContain("playSongs");
+    expect(typeof window.__hydraPlaySongs).toBe("function");
+  });
+
+  it("waits behind an OpenUri request and is dropped by a newer one", async () => {
+    let resolveQueue!: () => void;
+    const { window, musicKit } = createHarness();
+    musicKit.setQueue.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveQueue = resolve;
+      }),
+    );
+    const first = window.__hydra!.openUri("https://music.apple.com/album/1");
+    await Promise.resolve();
+    const songs = window.__hydraPlaySongs!(ids, 0);
+    const latest = window.__hydra!.openUri("https://music.apple.com/album/2");
+    resolveQueue();
+    await Promise.all([first, songs, latest]);
+    expect(musicKit.setQueue.mock.calls).toEqual([
+      [{ url: "https://music.apple.com/album/1", startPlaying: true }],
+      [{ url: "https://music.apple.com/album/2", startPlaying: true }],
+    ]);
+  });
+
+  // After an acknowledged Stop, PlayPause resumes; once a new queue starts,
+  // the stopped state is gone and PlayPause pauses the playing song.
+  it("clears an acknowledged Stop, as OpenUri does", async () => {
+    const { window, musicKit } = createHarness();
+    await window.__hydra!.stop(1);
+    await window.__hydraPlaySongs!(ids, 0);
+    await window.__hydra!.playPause();
+    expect(musicKit.pause).toHaveBeenCalledTimes(2);
+    expect(musicKit.play).not.toHaveBeenCalled();
+  });
+
+  it("logs a failed queue without its ids", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { window, musicKit } = createHarness();
+      musicKit.setQueue.mockRejectedValueOnce(new Error(ids.join(",")));
+      await expect(window.__hydraPlaySongs!(ids, 0)).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalledExactlyOnceWith(
+        "[Hydra] failed to open requested media",
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("does nothing once the page is hidden", async () => {
+    const { window, musicKit, globalRegistrations } = createHarness();
+    globalRegistrations.find(({ type }) => type === "pagehide")?.listener({});
+    await window.__hydraPlaySongs!(ids, 0);
+    expect(musicKit.setQueue).not.toHaveBeenCalled();
+  });
+
+  it("follows a replaced MusicKit instance", async () => {
+    const { window, musicKit, replaceInstance, runMonitorCycles } =
+      createHarness();
+    const replacement = replaceInstance();
+    runMonitorCycles(1);
+    await window.__hydraPlaySongs!(ids, 2);
+    expect(musicKit.setQueue).not.toHaveBeenCalled();
+    expect(replacement.setQueue).toHaveBeenCalledExactlyOnceWith({
+      songs: ids,
+      startWith: 2,
+      startPlaying: true,
+    });
+  });
 });
 
 describe("MusicKit Stop", () => {
