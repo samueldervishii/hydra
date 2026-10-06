@@ -474,6 +474,75 @@ describe('songSearch.js', () => {
     });
   });
 
+  // Searching an artist listed their features before their own songs.
+  describe('ranking', () => {
+    const by = (id: string, artistName: string) => song(id, `Song ${id}`, { artistName });
+
+    async function playFirst(term: string, ...items: unknown[]) {
+      const h = createHarness();
+      h.music.mockResolvedValueOnce(answer(...items));
+      h.window.__hydraSongSearch!.open();
+      h.type(term);
+      h.runTimers();
+      await settle();
+      h.rows()[0].dispatch('click');
+      return (h.window.__hydraPlaySongs as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    }
+
+    it("lists the artist's own songs first, each group in Apple's order", async () => {
+      const queue = await playFirst(
+        'nle choppa',
+        by('1', 'Lil Baby & NLE Choppa'),
+        by('2', 'NLE Choppa'),
+        by('3', 'Moneybagg Yo, NLE Choppa'),
+        by('4', 'NLE Choppa & Lil Wayne'),
+        by('5', 'Polo G'),
+        by('6', 'NLE Choppa, Mulatto'),
+      );
+      expect(queue).toEqual(['2', '4', '6', '1', '3', '5']);
+    });
+
+    it('compares the artist without regard to case or spacing', async () => {
+      const queue = await playFirst('  NLE   choppa ', by('1', 'Lil Baby'), by('2', 'nle Choppa'));
+      expect(queue).toEqual(['2', '1']);
+    });
+
+    it("keeps Apple's order when the term names no primary artist", async () => {
+      const queue = await playFirst(
+        'shotta flow',
+        by('1', 'Lil Baby & NLE Choppa'),
+        by('2', 'NLE Choppa'),
+        by('3', 'Polo G'),
+      );
+      expect(queue).toEqual(['1', '2', '3']);
+    });
+
+    // A feature credit is not the primary artist, even when it is the term.
+    it('does not promote a song for a featured artist alone', async () => {
+      const queue = await playFirst('nle choppa', by('1', 'Polo G'), by('2', 'Lil Baby & NLE Choppa'));
+      expect(queue).toEqual(['1', '2']);
+    });
+
+    it('ranks after removing duplicates, and the highlight starts on the top song', async () => {
+      const h = createHarness();
+      h.music.mockResolvedValueOnce(
+        answer(
+          song('1', 'Shotta Flow', { artistName: 'Polo G & NLE Choppa', albumName: 'A' }),
+          song('2', 'Camelot', { artistName: 'NLE Choppa', albumName: 'B' }),
+          song('3', 'Camelot', { artistName: 'NLE Choppa', albumName: 'B', contentRating: 'explicit' }),
+        ),
+      );
+      h.window.__hydraSongSearch!.open();
+      h.type('nle choppa');
+      h.runTimers();
+      await settle();
+      expect(h.rows()).toHaveLength(2);
+      expect(h.rows()[0].getAttribute('aria-selected')).toBe('true');
+      h.key('Enter');
+      expect(h.window.__hydraPlaySongs).toHaveBeenCalledExactlyOnceWith(['3', '1'], 0);
+    });
+  });
+
   it('shows at most 25 songs', async () => {
     const { music, type, runTimers, rows } = createHarness();
     music.mockResolvedValueOnce(

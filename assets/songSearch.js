@@ -250,6 +250,38 @@
   }
 
   /**
+   * The artist a song is credited to first: its artistName before any " & "
+   * or ",", so "Lil Baby & NLE Choppa" is Lil Baby's.
+   * @param {string} artist - The song's artistName
+   * @returns {string}
+   */
+  function primaryArtist(artist) {
+    return normalise(artist.split(/,| & /)[0]);
+  }
+
+  /**
+   * Put the songs whose primary artist is the term itself first, then the
+   * rest, each group in Apple's order, so searching an artist lists their own
+   * songs before their features. A term that names no primary artist leaves
+   * Apple's order exactly as it was.
+   * @param {Song[]} found - Songs in Apple's order
+   * @param {string} term - The search term
+   * @returns {Song[]}
+   */
+  function byArtistFirst(found, term) {
+    var wanted = normalise(term);
+    var own = found.filter(function (song) {
+      return primaryArtist(song.artist) === wanted;
+    });
+    if (!own.length) return found;
+    return own.concat(
+      found.filter(function (song) {
+        return primaryArtist(song.artist) !== wanted;
+      }),
+    );
+  }
+
+  /**
    * The playable songs in a catalogue search answer, at most MAX_RESULTS.
    * @param {any} response - The answer from mk.api.music()
    * @returns {Song[]}
@@ -417,7 +449,8 @@
       function (response) {
         if (mine !== request) return;
         shownRequest = mine;
-        showSongs(songsFrom(response));
+        // The queue is built from the list shown, so Next follows this order.
+        showSongs(byArtistFirst(songsFrom(response), term));
         setStatus(songs.length ? "" : LABELS.noResults);
         if (playOnArrival) {
           playOnArrival = false;
