@@ -253,7 +253,24 @@ describe('navigationBar', () => {
     const style = bar()?.getAttribute('style') ?? '';
     expect(style).toContain('justify-content: space-between;');
     expect(style).toContain('padding: 4px 14px 0');
+    expect(style).toContain('min-width: 0 !important');
     expect(style).not.toMatch(/(justify-content|padding|gap)[^;]*!important/);
+  });
+
+  // Apple's sidebar is 164px wide at Hydra's 484px minimum window width,
+  // narrower than five fixed 32px buttons plus the row's inset.
+  it('lets every button shrink from 32px to its 20px icon', () => {
+    const { buttons, run } = createHarness();
+
+    run();
+
+    for (const button of buttons()) {
+      const style = button.getAttribute('style') ?? '';
+      expect(style).toContain('flex: 0 1 32px !important');
+      expect(style).toContain('width: 32px !important');
+      expect(style).toContain('min-width: 20px !important');
+      expect(style).toContain('padding: 6px 0 !important');
+    }
   });
 
   // Every icon fills the same 20px slot with the longer side of its glyph at

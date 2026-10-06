@@ -123,6 +123,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Vitest does not type-check, so a type error in test/ fails only the
+      # second TypeScript program, which just lint runs and just build does not.
+      - name: Lint
+        run: just lint
+
       - name: Test
         run: just test
 

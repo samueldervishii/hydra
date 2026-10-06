@@ -86,6 +86,14 @@ describe("sidebar.css", () => {
     );
   });
 
+  // Signed out, Apple has no All Playlists link and the route opens the
+  // subscription offer. The hide rule outranks the collapsed set's display.
+  it("hides All Playlists while the sidebar has no All Playlists link", () => {
+    expect(stripped).toMatch(
+      /html\[data-hydra-sidebar-collapsed\] \[data-testid="header"\]:not\(:has\(a\.navigation-item__link\[data-testid="all-playlists"\]\)\) #hydra-nav-buttons > \[data-hydra-page="all-playlists"\] \{\s*display:\s*none !important/,
+    );
+  });
+
   it("is unpacked from the asar archive, because main.ts reads it with fs", () => {
     const pkg = JSON.parse(
       fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf-8"),

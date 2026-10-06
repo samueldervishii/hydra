@@ -102,10 +102,16 @@ export const FORWARD_TEXT: Record<string, string> = trayData.FORWARD_TEXT;
 export const RELOAD_TEXT: Record<string, string> = trayData.RELOAD_TEXT;
 /** Translations for settings, keyed by BCP 47 language tag. */
 export const SETTINGS_TEXT: Record<string, string> = trayData.SETTINGS_TEXT;
-/** Translations for integrations, keyed by BCP 47 language tag. */
-export const INTEGRATIONS_TEXT: Record<string, string> = trayData.INTEGRATIONS_TEXT;
+/** Translations for app, keyed by BCP 47 language tag. */
+export const APP_TEXT: Record<string, string> = trayData.APP_TEXT;
 /** Translations for settings error, keyed by BCP 47 language tag. */
 export const SETTINGS_ERROR_TEXT: Record<string, string> = trayData.SETTINGS_ERROR_TEXT;
+/** Translations for performance mode, keyed by BCP 47 language tag. */
+export const PERFORMANCE_MODE_TEXT: Record<string, string> = trayData.PERFORMANCE_MODE_TEXT;
+/** Translations for collapse sidebar, keyed by BCP 47 language tag. */
+export const COLLAPSE_SIDEBAR_TEXT: Record<string, string> = trayData.COLLAPSE_SIDEBAR_TEXT;
+/** Translations for the navigation bar's sidebar toggle, keyed by BCP 47 language tag. */
+export const SIDEBAR_TOGGLE_TEXT: Record<string, string> = trayData.SIDEBAR_TOGGLE_TEXT;
 
 /** Translations for close, keyed by BCP 47 language tag. */
 export const CLOSE_TEXT: Record<string, string> = aboutData.CLOSE_TEXT;
@@ -195,7 +201,7 @@ export function getLoadingText(): { text: string; lang: string } {
 /** Resolved labels shared by tray and settings controls. */
 export interface TrayStrings {
   settings: string;
-  integrations: string;
+  app: string;
   settingsError: string;
   about: string;
   quit: string;
@@ -237,12 +243,12 @@ export interface TrayStrings {
 }
 
 // Map each TrayStrings field to its translation record. The keyed Record makes
-// a missing field a compile error. Brand names, zoom steps and this fork's own
-// labels use English-only records because getLocalizedString() uses English as
-// its final fallback.
+// a missing field a compile error. Brand names and zoom steps read the same in
+// every language, so they use English-only records, which getLocalizedString()
+// falls back to.
 const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   settings: SETTINGS_TEXT,
-  integrations: INTEGRATIONS_TEXT,
+  app: APP_TEXT,
   settingsError: SETTINGS_ERROR_TEXT,
   about: ABOUT_TEXT,
   quit: QUIT_TEXT,
@@ -279,8 +285,8 @@ const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   hideWindow: HIDE_WINDOW_TEXT,
   showWindow: SHOW_WINDOW_TEXT,
   closeToTray: CLOSE_TO_TRAY_TEXT,
-  performanceMode: { en: 'Performance mode' },
-  sidebarCollapsed: { en: 'Collapse sidebar' },
+  performanceMode: PERFORMANCE_MODE_TEXT,
+  sidebarCollapsed: COLLAPSE_SIDEBAR_TEXT,
 };
 
 // TRAY_TEXT is a Record literal, so excess property checking already rules out
@@ -313,11 +319,6 @@ export function getTrayStrings(): TrayStrings {
  * executeJavaScript() has no query parameters, so loadAssets() substitutes it.
  */
 export const NAV_LABELS_TOKEN = '__HYDRA_NAV_LABELS__';
-
-// English only, like this fork's tray labels. Not exported, because
-// test/i18n-consistency.test.ts treats every exported object as a record that
-// must carry every language.
-const SIDEBAR_TOGGLE_TEXT: Record<string, string> = { en: 'Toggle sidebar' };
 
 /** Resolve the labels for the injected navigation bar. */
 export function getNavigationStrings(): {

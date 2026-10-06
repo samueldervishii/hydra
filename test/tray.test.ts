@@ -33,7 +33,7 @@ vi.mock("../src/config", () => ({
 
 const mockTrayStrings: TrayStrings = {
   settings: "Settings",
-  integrations: "Integrations",
+  app: "App",
   settingsError: "Could not apply this setting.",
   about: "About Hydra",
   quit: "Quit",

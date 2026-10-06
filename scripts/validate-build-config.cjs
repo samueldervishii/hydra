@@ -159,6 +159,19 @@ function main() {
   }
   console.log(`  \u2713 desktop file: ${pkg.desktopName}`);
 
+  // A depends list replaces electron-builder's default instead of adding to
+  // it, and that default leaves out two libraries Chromium loads at start:
+  // libgbm1 for the GPU process and libasound2 for audio. A minimal system
+  // lacks both, so the app installed and then failed to start. Ubuntu 24.04
+  // renamed the second to libasound2t64, which provides libasound2.
+  const debDepends = Array.isArray(config.deb?.depends) ? config.deb.depends : [];
+  for (const lib of ["libgtk-3-0", "libnss3", "libgbm1", "libasound2"]) {
+    if (!debDepends.includes(lib)) {
+      throw new Error(`build.deb.depends must include ${lib}`);
+    }
+  }
+  console.log(`  \u2713 .deb depends: ${debDepends.length} packages, libgbm1 and libasound2 included`);
+
   // The /usr/bin link is unregistered from prerm, while its target still
   // exists; from postrm, after dpkg has deleted the files, update-alternatives
   // warned that the link group was dangling. fpm copies the prerm untemplated,

@@ -215,6 +215,7 @@ it("releases the fork from main with the apt signing key as its only secret", ()
     /on:\n  push:\n    branches: \[main\]\n    paths: \["package.json"\]\n\n/,
   );
   expect(releaseWorkflow).toContain("run: just build");
+  expect(releaseWorkflow).toContain("run: just lint");
   expect(releaseWorkflow.match(/secrets\.[A-Z_]+/g)).toEqual(["secrets.HYDRA_GPG_PRIVATE_KEY"]);
   expect(releaseWorkflow).not.toMatch(/SIDRA_LASTFM|EVS_|GITHUB_REF_TYPE/);
 });

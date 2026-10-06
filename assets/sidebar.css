@@ -51,4 +51,12 @@
   html[data-hydra-sidebar-collapsed] #hydra-nav-buttons > [data-hydra-show="collapsed"] {
     display: flex !important;
   }
+
+  /* Apple renders its All Playlists link only for a signed-in library;
+     signed out, the route opens the subscription offer. The test is scoped
+     to the sidebar, which rarely changes, so :has() is not re-checked on
+     every DOM change in the page, and it follows the link appearing late. */
+  html[data-hydra-sidebar-collapsed] [data-testid="header"]:not(:has(a.navigation-item__link[data-testid="all-playlists"])) #hydra-nav-buttons > [data-hydra-page="all-playlists"] {
+    display: none !important;
+  }
 }

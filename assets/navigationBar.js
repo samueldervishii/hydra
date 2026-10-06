@@ -24,7 +24,8 @@
 
   // Every icon draws in a 20px slot with the longer side of its glyph at
   // 16px, so Hydra's icons and the ones adopted from Apple read at one size.
-  // Each button is the same 32px target: the slot plus 6px of padding.
+  // Each button is the same 32px target, the slot plus 6px on each side, and
+  // shrinks towards the slot when the sidebar is too narrow for all five.
   /** @type {number} */
   var ICON_PX = 20;
   /** @type {number} */
@@ -280,22 +281,46 @@
   }
 
   /**
-   * The extent of Apple's glyph, or null while its sidebar is not rendered,
-   * which reports an empty box.
-   * @param {SVGElement} svg - Apple's icon in its sidebar link
+   * The extent of a glyph, or null when it reports an empty box.
+   * @param {SVGElement} svg - Icon to measure
    * @returns {[number, number, number, number] | null}
    */
-  function measuredBox(svg) {
+  function boxOf(svg) {
     if (typeof svg.getBBox !== "function") return null;
     var b = svg.getBBox();
     return b.width > 0 && b.height > 0 ? [b.x, b.y, b.width, b.height] : null;
   }
 
   /**
+   * The extent of Apple's glyph. A hidden sidebar link reports an empty box,
+   * and Classical's search link is never shown, so its glyph is measured from
+   * a copy laid out out of sight; without that it kept the standard box and
+   * drew at 14px instead of 16px.
+   * @param {SVGElement} svg - Apple's icon in its sidebar link
+   * @returns {[number, number, number, number] | null}
+   */
+  function measuredBox(svg) {
+    var box = boxOf(svg);
+    if (box || typeof svg.getBBox !== "function" || !document.body) return box;
+    var holder = document.createElement("div");
+    holder.setAttribute(
+      "style",
+      "position: absolute !important; visibility: hidden !important; left: -10000px !important; top: 0 !important",
+    );
+    holder.appendChild(svg.cloneNode(true));
+    document.body.appendChild(holder);
+    try {
+      return boxOf(/** @type {SVGElement} */ (holder.firstChild));
+    } finally {
+      holder.remove();
+    }
+  }
+
+  /**
    * Swap a page button's own icon for Apple's when the sidebar link renders
    * one, so the strip shows the icons the expanded sidebar uses. The glyph is
-   * measured from Apple's copy, which is rendered when the sidebar is
-   * expanded; until then a standard box stands in, and a later run refits it.
+   * measured from Apple's copy; if it cannot be measured yet, a standard box
+   * stands in and a later run refits it.
    * @param {HTMLButtonElement} button - Page button
    * @returns {void}
    */
@@ -358,7 +383,14 @@
         "background: none !important",
         "border: none !important",
         "cursor: pointer !important",
-        "padding: 6px !important",
+        // 32px wide, shrinking to the icon's own 20px: Apple narrows the
+        // sidebar with the window, to 164px at the 484px minimum, where five
+        // fixed 32px buttons ran 18px past its edge. The width is fixed rather
+        // than padded so it holds in the collapsed strip's column too.
+        "flex: 0 1 " + (ICON_PX + 12) + "px !important",
+        "width: " + (ICON_PX + 12) + "px !important",
+        "min-width: " + ICON_PX + "px !important",
+        "padding: 6px 0 !important",
         "border-radius: 6px !important",
         "align-items: center !important",
         "justify-content: center !important",
@@ -413,6 +445,10 @@
       "display: flex !important",
       "align-items: center !important",
       "pointer-events: auto !important",
+      // A grid item stops at its content's minimum width unless told
+      // otherwise, which kept the row at five full buttons and let the
+      // shrinkable ones overflow the sidebar anyway.
+      "min-width: 0 !important",
       "justify-content: space-between",
       "gap: 0",
       "padding: 4px 14px 0",
