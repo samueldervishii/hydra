@@ -256,6 +256,12 @@
    * @returns {void}
    */
   function goToPage(page) {
+    // On Apple Music, Search opens Hydra's songs-first panel
+    // (assets/songSearch.js); Classical keeps Apple's search page.
+    if (page === "search" && !IS_CLASSICAL && window.__hydraSongSearch) {
+      window.__hydraSongSearch.open();
+      return;
+    }
     var link = appleLink(page);
     if (link) {
       link.click();

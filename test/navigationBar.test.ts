@@ -196,7 +196,13 @@ function createHarness({
     createElementNS: (namespaceURI: string, tagName: string): StubElement =>
       new StubElement(tagName, namespaceURI),
   };
-  const window = { AMWrapper: { ipcRenderer: { send } }, location, history, dispatchEvent };
+  const window: {
+    AMWrapper: unknown;
+    location: typeof location;
+    history: typeof history;
+    dispatchEvent: typeof dispatchEvent;
+    __hydraSongSearch?: { open: () => void };
+  } = { AMWrapper: { ipcRenderer: { send } }, location, history, dispatchEvent };
   const context = vm.createContext({
     console: { log, warn },
     document,
@@ -223,6 +229,7 @@ function createHarness({
     run: () => vm.runInContext(navBarScript, context),
     send,
     warn,
+    window,
   };
 }
 
@@ -414,6 +421,32 @@ describe('navigationBar', () => {
     h.button(LABELS.search).dispatch('click');
 
     expect(h.history.pushState).toHaveBeenCalledWith({}, '', '/fr/search');
+  });
+
+  // assets/songSearch.js exposes window.__hydraSongSearch on Apple Music only.
+  it("opens Hydra's song search from Search on Apple Music", () => {
+    const h = createHarness({ appleLinks: { search: { href: '/gb/search' } } });
+    const open = vi.fn();
+    h.window.__hydraSongSearch = { open };
+
+    h.run();
+    h.button(LABELS.search).dispatch('click');
+
+    expect(open).toHaveBeenCalledOnce();
+    expect(h.links.get('search')?.click).not.toHaveBeenCalled();
+    expect(h.history.pushState).not.toHaveBeenCalled();
+  });
+
+  it("keeps Apple's search page on Classical", () => {
+    const h = createHarness({ host: 'classical.music.apple.com', pathname: '/us/browse' });
+    const open = vi.fn();
+    h.window.__hydraSongSearch = { open };
+
+    h.run();
+    h.button(LABELS.search).dispatch('click');
+
+    expect(open).not.toHaveBeenCalled();
+    expect(h.history.pushState).toHaveBeenCalledWith({}, '', '/us/search');
   });
 
   it('leaves All Playlists out on Classical and uses its root for Home', () => {

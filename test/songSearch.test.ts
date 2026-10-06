@@ -218,7 +218,6 @@ function createHarness({
   const music = vi.fn((_path: string, _query: Record<string, unknown>) =>
     Promise.resolve(answer() as unknown),
   );
-  const windowListeners: Array<{ type: string; listener: Listener; capture: unknown }> = [];
   const window = {
     location: { hostname, pathname },
     history: {
@@ -229,9 +228,7 @@ function createHarness({
       }),
     },
     dispatchEvent: vi.fn(),
-    addEventListener: vi.fn((type: string, listener: Listener, capture?: unknown) => {
-      windowListeners.push({ type, listener, capture });
-    }),
+    addEventListener: vi.fn(),
     __hydraHookedMk: { api: { music }, storefrontId: 'al' } as unknown,
     __hydraPlaySongs: playSongs ? vi.fn() : undefined,
     __hydraSongSearch: undefined as { open(): void; close(): void } | undefined,
@@ -282,7 +279,6 @@ function createHarness({
     allResults: () => find('all'),
     backdrop: () => find('backdrop'),
     panel: () => find('panel'),
-    windowListeners,
     isOpen: () => host()!.styles.get('display') === 'block !important',
     pendingTimers: () => timeouts.size,
     runTimers: () => {
@@ -290,21 +286,6 @@ function createHarness({
         timeouts.delete(id);
         callback();
       }
-    },
-    pressCtrlK: (init: Partial<StubEvent> = {}) => {
-      const event: StubEvent = {
-        type: 'keydown',
-        key: 'k',
-        ctrlKey: true,
-        stopped: false,
-        preventDefault: vi.fn(),
-        stopPropagation() {
-          event.stopped = true;
-        },
-        ...init,
-      };
-      for (const entry of windowListeners) if (entry.type === 'keydown') entry.listener(event);
-      return event;
     },
     type: (value: string) => {
       input().value = value;
@@ -335,43 +316,25 @@ describe('songSearch.js', () => {
 
   // main.ts re-runs the script on every in-page navigation.
   it('closes on a repeat run and adds no second panel or listener', () => {
-    const { window, run, isOpen, windowListeners } = createHarness();
+    const { window, run, isOpen } = createHarness();
     window.__hydraSongSearch!.open();
     run();
     expect(isOpen()).toBe(false);
     expect(body.children).toHaveLength(1);
-    expect(windowListeners).toHaveLength(1);
   });
 
-  it('opens on Ctrl+K and on Cmd+K, focusing the field', () => {
-    const { pressCtrlK, isOpen, input, shadow, window } = createHarness();
-    const event = pressCtrlK();
+  it('opens with the field focused and its term selected', () => {
+    const { window, isOpen, input, shadow } = createHarness();
+    window.__hydraSongSearch!.open();
     expect(isOpen()).toBe(true);
-    expect(event.preventDefault).toHaveBeenCalled();
     expect(shadow().activeElement).toBe(input());
     expect(input().select).toHaveBeenCalled();
-    window.__hydraSongSearch!.close();
-    pressCtrlK({ ctrlKey: false, metaKey: true, key: 'K' });
-    expect(isOpen()).toBe(true);
   });
 
-  it.each([
-    ['plain k', { ctrlKey: false }],
-    ['Ctrl+Shift+K', { shiftKey: true }],
-    ['Ctrl+Alt+K', { altKey: true }],
-    ['Ctrl+J', { key: 'j' }],
-  ])('ignores %s', (_label, init) => {
-    const { pressCtrlK, isOpen } = createHarness();
-    const event = pressCtrlK(init);
-    expect(isOpen()).toBe(false);
-    expect(event.preventDefault).not.toHaveBeenCalled();
-  });
-
-  it('listens for the shortcut in the capture phase', () => {
-    const { windowListeners } = createHarness();
-    expect(windowListeners).toEqual([
-      { type: 'keydown', listener: expect.any(Function), capture: true },
-    ]);
+  // Ctrl+K lives in src/shortcuts.ts: a focused iframe keeps keys from the page.
+  it('registers nothing on window', () => {
+    const { window } = createHarness();
+    expect(window.addEventListener).not.toHaveBeenCalled();
   });
 
   it('searches songs once typing pauses, for the latest term only', async () => {
@@ -647,6 +610,17 @@ describe('songSearch.js', () => {
     expect(input().getAttribute('placeholder')).toBe(LABELS.search);
     expect(panel().getAttribute('aria-label')).toBe(LABELS.search);
     expect(allResults().textContent).toBe(LABELS.allResults);
+  });
+
+  it('carries the label token that src/main.ts substitutes', () => {
+    expect(source).toContain(SEARCH_LABELS_TOKEN);
+  });
+
+  it('is unpacked from the asar archive, because main.ts reads it with fs', () => {
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf-8'),
+    ) as { build: { asarUnpack: string[] } };
+    expect(pkg.build.asarUnpack).toContain('assets/songSearch.js');
   });
 
   // Everything shown is text, the page's scrolling stays on the compositor,

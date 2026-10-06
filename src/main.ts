@@ -23,8 +23,10 @@ import {
 import {
   getLoadingText,
   getNavigationStrings,
+  getSearchStrings,
   getTrayStrings,
   NAV_LABELS_TOKEN,
+  SEARCH_LABELS_TOKEN,
 } from "./i18n";
 import { getAssetPath } from "./paths";
 import { Player, IntegrationContext } from "./player";
@@ -249,6 +251,7 @@ export interface Assets {
   authFrameScript: string;
   navBarScript: string;
   hookScript: string;
+  songSearchScript: string;
 }
 
 function createSplash(): {
@@ -479,6 +482,9 @@ function loadAssets(): Assets {
   const navBarScript = fs
     .readFileSync(navBarPath, "utf-8")
     .replace(NAV_LABELS_TOKEN, () => JSON.stringify(getNavigationStrings()));
+  const songSearchScript = fs
+    .readFileSync(getAssetPath("assets", "songSearch.js"), "utf-8")
+    .replace(SEARCH_LABELS_TOKEN, () => JSON.stringify(getSearchStrings()));
   const hookPath = getAssetPath("assets", "musicKitHook.js");
   const hookScript = fs
     .readFileSync(hookPath, "utf-8")
@@ -492,6 +498,7 @@ function loadAssets(): Assets {
     authFrameScript,
     navBarScript,
     hookScript,
+    songSearchScript,
   };
 }
 
@@ -627,6 +634,13 @@ function setupWindowZoomAndNav(win: BrowserWindow): void {
     resetWedgeDetector();
     win.webContents.reload();
   };
+  // assets/songSearch.js defines the panel on Apple Music only, so on
+  // Classical this does nothing.
+  const search = (): void => {
+    liveWebContents(win)
+      ?.executeJavaScript("window.__hydraSongSearch?.open()")
+      .catch(() => mainLog.warn("failed to open the song search"));
+  };
 
   onSendChannels<NavSendChannel>({
     "nav:settings": onSettings,
@@ -649,6 +663,7 @@ function setupWindowZoomAndNav(win: BrowserWindow): void {
       back,
       forward,
       reload,
+      search,
     }),
   );
 }
@@ -656,14 +671,17 @@ function setupWindowZoomAndNav(win: BrowserWindow): void {
 // Contain injection failures in both full-load and in-page navigation handlers.
 // The URL read can throw after WebContents destruction, so it stays inside the catch.
 // Separate catches let navigation controls load even when the MusicKit hook fails.
+// The song search panel goes last, on allowed hosts only, like the hook it plays through.
 async function injectRendererScripts(
   win: BrowserWindow,
   assets: Assets,
   context: string,
 ): Promise<void> {
+  let allowed = false;
   try {
     const currentUrl = win.webContents.getURL();
-    if (isAllowedNavigationUrl(currentUrl)) {
+    allowed = isAllowedNavigationUrl(currentUrl);
+    if (allowed) {
       await win.webContents.executeJavaScript(
         assets.hookScript.replace("__HYDRA_DOCUMENT_GENERATION__", () =>
           String(rendererDocumentGeneration),
@@ -684,6 +702,13 @@ async function injectRendererScripts(
     mainLog.debug("Navigation bar injected");
   } catch (e: unknown) {
     mainLog.warn(`failed to inject navBarScript ${context}:`, e);
+  }
+  if (!allowed) return;
+  try {
+    await win.webContents.executeJavaScript(assets.songSearchScript);
+    mainLog.debug("Song search injected");
+  } catch (e: unknown) {
+    mainLog.warn(`failed to inject songSearchScript ${context}:`, e);
   }
 }
 

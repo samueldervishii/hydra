@@ -9,8 +9,10 @@
 // Performance mode cannot reach its rules; it reads Apple's colour variables,
 // which inherit into it, so it follows the light and dark schemes and the
 // active theme. Its background is opaque and blurs nothing behind it. It opens
-// from Ctrl+K and from the collapsed sidebar's Search button
-// (assets/navigationBar.js). Apple Music only: Classical is left alone.
+// from the collapsed sidebar's Search button (assets/navigationBar.js) and
+// from Ctrl+K, which src/shortcuts.ts catches in the main process, because a
+// focused iframe keeps keys from the page. Apple Music only: Classical is left
+// alone.
 (function () {
   if (window.location.hostname !== "music.apple.com") return;
   // src/main.ts runs this on every load and every in-page navigation. A repeat
@@ -544,19 +546,6 @@
       event.stopPropagation();
     });
   });
-
-  // Ctrl+K, or Cmd+K on macOS. Apple Music binds neither.
-  window.addEventListener(
-    "keydown",
-    function (event) {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
-      if (event.key !== "k" && event.key !== "K") return;
-      event.preventDefault();
-      event.stopPropagation();
-      open();
-    },
-    true,
-  );
 
   (document.body || document.documentElement).appendChild(host);
 

@@ -33,6 +33,7 @@ describe("shortcutAction", () => {
     ["Alt+Right", key({ alt: true, key: "ArrowRight" }), "forward"],
     ["Ctrl+R", key({ control: true, key: "r" }), "reload"],
     ["F5", key({ key: "F5" }), "reload"],
+    ["Ctrl+K", key({ control: true, key: "k" }), "search"],
   ] as const)("maps %s on Linux", (_name, input, action) => {
     expect(shortcutAction(input, "linux")).toBe(action);
   });
@@ -42,6 +43,7 @@ describe("shortcutAction", () => {
     ["Cmd+[", key({ meta: true, key: "[" }), "back"],
     ["Cmd+]", key({ meta: true, key: "]" }), "forward"],
     ["Cmd+R", key({ meta: true, key: "r" }), "reload"],
+    ["Cmd+K", key({ meta: true, key: "k" }), "search"],
   ] as const)("maps %s on macOS", (_name, input, action) => {
     expect(shortcutAction(input, "darwin")).toBe(action);
   });
@@ -57,6 +59,7 @@ describe("shortcutAction", () => {
     ["Alt+Shift+Left", key({ alt: true, shift: true, key: "ArrowLeft" })],
     ["Ctrl+F5", key({ control: true, key: "F5" })],
     ["Ctrl+, which Settings handles", key({ control: true, key: "," })],
+    ["Ctrl+Shift+K", key({ control: true, shift: true, key: "K" })],
   ])("leaves %s to the page on Linux", (_name, input) => {
     expect(shortcutAction(input, "linux")).toBeNull();
   });
@@ -82,6 +85,7 @@ describe("initShortcuts", () => {
       back: vi.fn(),
       forward: vi.fn(),
       reload: vi.fn(),
+      search: vi.fn(),
     };
     const teardown = initShortcuts(
       { webContents: contents } as unknown as BrowserWindow,
