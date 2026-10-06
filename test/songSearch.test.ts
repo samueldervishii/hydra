@@ -411,6 +411,69 @@ describe('songSearch.js', () => {
     expect(badge.getAttribute('aria-label')).toBe(LABELS.explicit);
   });
 
+  // Apple lists a track's explicit and clean versions as two songs.
+  describe('duplicates', () => {
+    const version = (id: string, name: string, extra: Record<string, unknown> = {}) =>
+      song(id, name, { artistName: 'Ayo', albumName: 'Memphis', ...extra });
+
+    async function shownFor(...items: unknown[]) {
+      const h = createHarness();
+      h.music.mockResolvedValueOnce(answer(...items));
+      h.window.__hydraSongSearch!.open();
+      h.type('x');
+      h.runTimers();
+      await settle();
+      return h;
+    }
+    const names = (h: Awaited<ReturnType<typeof shownFor>>) =>
+      h.rows().map((row) => row.descendants().find((d) => d.getAttribute('class') === 'name')!.textContent);
+
+    it('keeps the explicit version in the place of the first', async () => {
+      const h = await shownFor(
+        version('1', 'Intro'),
+        version('2', 'Memphis, Pt. 2'),
+        version('3', 'Outro'),
+        version('4', 'Memphis, Pt. 2', { contentRating: 'explicit' }),
+      );
+      expect(names(h)).toEqual(['Intro', 'Memphis, Pt. 2', 'Outro']);
+      h.rows()[1].dispatch('click');
+      expect(h.window.__hydraPlaySongs).toHaveBeenCalledExactlyOnceWith(['1', '4', '3'], 1);
+    });
+
+    it('keeps the first when neither or both are explicit', async () => {
+      const h = await shownFor(
+        version('1', 'Clean'),
+        version('2', 'Clean'),
+        version('3', 'Both', { contentRating: 'explicit' }),
+        version('4', 'Both', { contentRating: 'explicit' }),
+      );
+      h.rows()[0].dispatch('click');
+      expect(h.window.__hydraPlaySongs).toHaveBeenCalledExactlyOnceWith(['1', '3'], 0);
+    });
+
+    it('matches regardless of case, spacing and character width', async () => {
+      const h = await shownFor(
+        version('1', 'Memphis,  Pt. 2', { artistName: 'AYO', albumName: ' memphis ' }),
+        version('2', 'memphis, pt. 2', { contentRating: 'explicit' }),
+        version('3', 'Ｍｅｍｐｈｉｓ, Pt. 2'),
+      );
+      h.rows()[0].dispatch('click');
+      expect(h.window.__hydraPlaySongs).toHaveBeenCalledExactlyOnceWith(['2'], 0);
+    });
+
+    it('keeps versions whose title, artist or album differ', async () => {
+      const h = await shownFor(
+        version('1', 'Memphis, Pt. 2'),
+        version('2', 'Memphis, Pt. 2 (Remix)', { contentRating: 'explicit' }),
+        version('3', 'Memphis, Pt. 2 - Live'),
+        version('4', 'Memphis, Pt. 2 (Sped Up)'),
+        version('5', 'Memphis, Pt. 2', { artistName: 'Someone Else' }),
+        version('6', 'Memphis, Pt. 2', { albumName: 'Singles' }),
+      );
+      expect(h.rows()).toHaveLength(6);
+    });
+  });
+
   it('shows at most 25 songs', async () => {
     const { music, type, runTimers, rows } = createHarness();
     music.mockResolvedValueOnce(

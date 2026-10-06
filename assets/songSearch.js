@@ -216,6 +216,40 @@
   }
 
   /**
+   * Fold case, width and spacing, so two spellings of one name compare equal.
+   * @param {string} text - A title, artist or album name
+   * @returns {string}
+   */
+  function normalise(text) {
+    return text.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+  }
+
+  /**
+   * One entry per track. Apple lists a track's explicit and clean versions as
+   * two songs with the same title, artist and album; keep the explicit one, or
+   * else the first, in the place the group first appeared. Titles are compared
+   * whole, so a remix, live or sped-up version stays a song of its own.
+   * @param {Song[]} found - Songs in Apple's order
+   * @returns {Song[]}
+   */
+  function withoutDuplicates(found) {
+    var kept = [];
+    /** @type {Map<string, number>} Group key to its index in kept. */
+    var groups = new Map();
+    found.forEach(function (song) {
+      var key = [song.name, song.artist, song.album].map(normalise).join("\u0000");
+      var at = groups.get(key);
+      if (at === undefined) {
+        groups.set(key, kept.length);
+        kept.push(song);
+      } else if (song.explicit && !kept[at].explicit) {
+        kept[at] = song;
+      }
+    });
+    return kept;
+  }
+
+  /**
    * The playable songs in a catalogue search answer, at most MAX_RESULTS.
    * @param {any} response - The answer from mk.api.music()
    * @returns {Song[]}
@@ -250,7 +284,7 @@
         explicit: a.contentRating === "explicit",
       });
     }
-    return found;
+    return withoutDuplicates(found);
   }
 
   /**
