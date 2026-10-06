@@ -104,6 +104,7 @@ const bootstrap = vi.hoisted(() => {
     handleHookReady: vi.fn(),
     applyPerformanceMode: vi.fn(() => Promise.resolve()),
     applySidebar: vi.fn(() => Promise.resolve()),
+    applyNavigation: vi.fn(() => Promise.resolve()),
     teardownShortcuts: vi.fn(),
     toggleSidebarCollapsed: vi.fn(),
     handlePlaybackCapabilitiesDidChange: vi.fn(),
@@ -245,6 +246,9 @@ vi.mock("../src/settings", () => ({
 }));
 vi.mock("../src/sidebar", () => ({
   applySidebar: bootstrap.applySidebar,
+}));
+vi.mock("../src/navigation", () => ({
+  applyNavigation: bootstrap.applyNavigation,
 }));
 vi.mock("../src/shortcuts", () => ({
   initShortcuts: vi.fn(() => bootstrap.teardownShortcuts),
@@ -507,6 +511,7 @@ describe("main bootstrap", () => {
     ).toBeLessThan(bootstrap.applyPerformanceMode.mock.invocationCallOrder[0]);
     expect(bootstrap.applySidebar).toHaveBeenCalledTimes(2);
     expect(bootstrap.applySidebar).toHaveBeenCalledWith(bootstrap.webContents);
+    expect(bootstrap.applyNavigation).toHaveBeenCalledWith(bootstrap.webContents);
     expect(
       bootstrap.webContents.insertCSS.mock.invocationCallOrder[2],
     ).toBeLessThan(bootstrap.applySidebar.mock.invocationCallOrder[0]);

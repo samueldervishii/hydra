@@ -240,6 +240,9 @@ export interface TrayStrings {
   closeToTray: string;
   performanceMode: string;
   sidebarCollapsed: string;
+  navigation: string;
+  navigationTopBar: string;
+  navigationAppleSidebar: string;
 }
 
 // Map each TrayStrings field to its translation record. The keyed Record makes
@@ -287,6 +290,10 @@ const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   closeToTray: CLOSE_TO_TRAY_TEXT,
   performanceMode: PERFORMANCE_MODE_TEXT,
   sidebarCollapsed: COLLAPSE_SIDEBAR_TEXT,
+  // English only until translated.
+  navigation: { en: 'Navigation' },
+  navigationTopBar: { en: 'Hydra top bar' },
+  navigationAppleSidebar: { en: 'Apple sidebar' },
 };
 
 // TRAY_TEXT is a Record literal, so excess property checking already rules out

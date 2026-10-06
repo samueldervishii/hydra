@@ -15,6 +15,8 @@ import {
   getPerformanceModeEnabled,
   setPerformanceModeEnabled,
   getSidebarCollapsed,
+  getNavigation,
+  setNavigation,
   setSidebarCollapsed,
   getLastPageUrl,
   setLastPageUrl,
@@ -195,6 +197,12 @@ describe("Config store runtime behaviour", () => {
   it("setPerformanceModeEnabled persists value", () => {
     setPerformanceModeEnabled(false);
     expect(getPerformanceModeEnabled()).toBe(false);
+  });
+
+  it("getNavigation defaults to the top bar and reads back a stored mode", () => {
+    expect(getNavigation()).toBe("top-bar");
+    setNavigation("apple-sidebar");
+    expect(getNavigation()).toBe("apple-sidebar");
   });
 
   it("getSidebarCollapsed defaults to false", () => {

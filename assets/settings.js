@@ -10,7 +10,7 @@
   document.documentElement.dir = /^(ar|he)(-|$)/i.test(lang) ? 'rtl' : 'ltr';
   document.title = params.get('settings') || 'Settings';
   document.querySelector('[data-label="settings"]').textContent = document.title;
-  const selects = ['musicService', 'startPage', 'theme', 'zoomFactor'];
+  const selects = ['musicService', 'startPage', 'theme', 'zoomFactor', 'navigation'];
   const toggles = ['performanceMode', 'sidebarCollapsed', 'closeToTray'];
   let state;
   // Pushed state supersedes pending replies from getState() and apply().

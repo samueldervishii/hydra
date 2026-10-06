@@ -80,6 +80,21 @@ describe('settings actions', () => {
     expect(refreshTray).toHaveBeenCalledTimes(2);
   });
 
+  it('defaults to the top bar and persists a navigation change before asking the open page for it', () => {
+    expect(getSettingsState().navigation).toBe('top-bar');
+    expect(getSettingsState().options.navigation.map((option) => option.value)).toEqual(['top-bar', 'apple-sidebar']);
+    contents.executeJavaScript.mockImplementationOnce(() => {
+      expect(config.getNavigation()).toBe('apple-sidebar');
+      return Promise.resolve();
+    });
+    expect(applySettingsAction({ type: 'navigation', value: 'apple-sidebar' }).navigation).toBe('apple-sidebar');
+    expect(contents.executeJavaScript).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('toggleAttribute("data-hydra-top-bar-requested", false)'));
+    applySettingsAction({ type: 'navigation', value: 'top-bar' });
+    expect(contents.executeJavaScript).toHaveBeenLastCalledWith(
+      expect.stringContaining('toggleAttribute("data-hydra-top-bar-requested", true)'));
+  });
+
   it('persists the sidebar state before applying it to the open page', () => {
     contents.executeJavaScript.mockImplementationOnce(() => {
       expect(config.getSidebarCollapsed()).toBe(true);
@@ -131,6 +146,7 @@ describe('settings actions', () => {
     { type: 'closeToTray', value: true, extra: true }, { type: 'notifications', value: false }, { type: 'lastfmDisconnect' },
     { type: 'lastfmEnabled', value: true }, { type: 'lastfmConnect' }, { type: 'discord', value: true },
     { type: 'performanceMode', value: 'false' }, { type: 'sidebarCollapsed', value: 1 },
+    { type: 'navigation', value: 'sidebar' }, { type: 'navigation', value: true },
   ])('rejects unavailable or malformed actions: %j', action => {
     expect(() => applySettingsAction(action)).toThrow('Invalid settings action');
     expect(refreshTray).not.toHaveBeenCalled();

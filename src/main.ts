@@ -57,6 +57,7 @@ import {
   toggleSidebarCollapsed,
 } from "./settings";
 import { applySidebar } from "./sidebar";
+import { applyNavigation } from "./navigation";
 import { initShortcuts } from "./shortcuts";
 import { handleSettingsNavigation, initSettingsWindow } from "./settingsWindow";
 import { initCommandBridge } from "./commandBridge";
@@ -860,6 +861,7 @@ function setupContentHandlers(
     await win.webContents.insertCSS(assets.SIDEBAR_CSS);
     await applyPerformanceMode(win.webContents);
     await applySidebar(win.webContents);
+    await applyNavigation(win.webContents);
     await injectThemeCss(win.webContents);
     await injectRendererScripts(win, assets, "on load");
   }

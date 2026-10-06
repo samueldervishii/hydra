@@ -15,6 +15,7 @@ import { BUNDLED_THEMES, type ThemeName } from "./palettes";
 import { applyTheme, hasCustomTheme, resolveTheme } from "./theme";
 import { applyPerformanceMode } from "./performanceMode";
 import { applySidebar } from "./sidebar";
+import { applyNavigation } from "./navigation";
 import { liveWebContents } from "./utils";
 
 /** Zoom levels that Settings accepts. */
@@ -30,6 +31,7 @@ export type SettingsAction =
     }
   | { type: "theme"; value: ThemeName }
   | { type: "zoomFactor"; value: ZoomFactor }
+  | { type: "navigation"; value: config.NavigationMode }
   | {
       type:
         | "closeToTray"
@@ -51,12 +53,14 @@ export interface SettingsState {
   zoomFactor: number;
   performanceMode: boolean;
   sidebarCollapsed: boolean;
+  navigation: config.NavigationMode;
   closeToTray: boolean;
   options: {
     musicService: SettingsOption<MusicServiceId>[];
     startPage: SettingsOption<AnyStartPageId | "last">[];
     theme: SettingsOption<ThemeName>[];
     zoomFactor: SettingsOption<ZoomFactor>[];
+    navigation: SettingsOption<config.NavigationMode>[];
   };
   labels: TrayStrings;
   lang: string;
@@ -140,6 +144,7 @@ export function getSettingsState(): SettingsState {
     zoomFactor: config.getZoomFactor(),
     performanceMode: config.getPerformanceModeEnabled(),
     sidebarCollapsed: config.getSidebarCollapsed(),
+    navigation: config.getNavigation(),
     closeToTray: config.getCloseToTrayEnabled(),
     options: {
       musicService: allServices().map((service) => ({
@@ -154,6 +159,10 @@ export function getSettingsState(): SettingsState {
         { value: 1.5, label: labels.zoom150 },
         { value: 1.75, label: labels.zoom175 },
         { value: 2, label: labels.zoom200 },
+      ],
+      navigation: [
+        { value: "top-bar", label: labels.navigationTopBar },
+        { value: "apple-sidebar", label: labels.navigationAppleSidebar },
       ],
     },
     labels,
@@ -208,6 +217,10 @@ function isSettingsAction(
       return state.options.zoomFactor.some(
         (option) => option.value === data.value,
       );
+    case "navigation":
+      return state.options.navigation.some(
+        (option) => option.value === data.value,
+      );
     case "closeToTray":
     case "performanceMode":
     case "sidebarCollapsed":
@@ -250,6 +263,10 @@ export function applySettingsAction(action: unknown): SettingsState {
     case "zoomFactor":
       config.setZoomFactor(action.value);
       runtime.applyZoom(action.value);
+      break;
+    case "navigation":
+      config.setNavigation(action.value);
+      void applyNavigation(liveWebContents(runtime.getMainWindow()));
       break;
     case "performanceMode":
       config.setPerformanceModeEnabled(action.value);

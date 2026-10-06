@@ -29,12 +29,13 @@ class Element {
 function fixture(): SettingsState {
   return {
     musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1,
-    performanceMode: true, sidebarCollapsed: false, closeToTray: false,
+    performanceMode: true, sidebarCollapsed: false, navigation: 'top-bar', closeToTray: false,
     options: {
       musicService: [{ value: 'music', label: 'Apple Music' }, { value: 'classical', label: 'Apple Music Classical' }],
       startPage: [{ value: 'new', label: 'New' }],
       theme: [{ value: 'apple-music', label: 'Apple Music' }],
       zoomFactor: [{ value: 1, label: '100%' }, { value: 1.25, label: '125%' }],
+      navigation: [{ value: 'top-bar', label: 'Hydra top bar' }, { value: 'apple-sidebar', label: 'Apple sidebar' }],
     },
     labels: getTrayStrings(), lang: 'en',
   };
@@ -181,6 +182,18 @@ describe('settings page', () => {
     h.element('sidebarCollapsed').fire('change');
     await settle();
     expect(h.apply).toHaveBeenCalledExactlyOnceWith({ type: 'sidebarCollapsed', value: false });
+  });
+
+  it('renders the navigation choice and sends a change', async () => {
+    const h = harness();
+    await settle();
+    expect(h.element('navigation').value).toBe('top-bar');
+    h.push({ ...fixture(), navigation: 'apple-sidebar' });
+    expect(h.element('navigation').value).toBe('apple-sidebar');
+    h.element('navigation').value = 'top-bar';
+    h.element('navigation').fire('change');
+    await settle();
+    expect(h.apply).toHaveBeenCalledExactlyOnceWith({ type: 'navigation', value: 'top-bar' });
   });
 
   it('keeps a pushed state when the initial read resolves later', async () => {

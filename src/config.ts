@@ -16,6 +16,9 @@ import {
 
 const configLog = log.scope('config');
 
+/** How Hydra navigates Apple Music: its own top bar, or Apple's sidebar. */
+export type NavigationMode = 'top-bar' | 'apple-sidebar';
+
 interface StoreSchema {
   storefront: string;
   language: string | null;
@@ -23,6 +26,7 @@ interface StoreSchema {
   theme: ThemeName;
   'performanceMode.enabled': boolean;
   'sidebar.collapsed': boolean;
+  navigation: NavigationMode;
   startPage: MusicStartPageId | 'last';
   lastPageUrl: string;
   'classical.startPage': ClassicalStartPageId | 'last';
@@ -116,6 +120,16 @@ export function getSidebarCollapsed(): boolean {
 /** Persist `sidebar.collapsed` without applying the setting to running components. */
 export function setSidebarCollapsed(collapsed: boolean): void {
   setConfigValue('sidebar.collapsed', collapsed);
+}
+
+/** Read `navigation`, defaulting to `'top-bar'` when absent. */
+export function getNavigation(): NavigationMode {
+  return getConfigValue('navigation', 'top-bar');
+}
+
+/** Persist `navigation` without applying the setting to running components. */
+export function setNavigation(mode: NavigationMode): void {
+  setConfigValue('navigation', mode);
 }
 
 /** Read `lastPageUrl`, returning undefined when the key is absent. */
