@@ -62,6 +62,7 @@ const bootstrap = vi.hoisted(() => {
       return true;
     }),
     isMinimized: vi.fn(() => false),
+    maximize: vi.fn(),
     setMinimumSize: vi.fn(),
     getSize: vi.fn(() => [1280, 800]),
     setSize: vi.fn(),
@@ -109,6 +110,8 @@ const bootstrap = vi.hoisted(() => {
     showAppleSidebar: vi.fn(),
     handlePlaybackCapabilitiesDidChange: vi.fn(),
     browserWindow: vi.fn(),
+    savedWindowBounds: vi.fn((): unknown => null),
+    trackWindowState: vi.fn(),
     ipcOn: vi.fn(),
     appQuit: vi.fn(),
     appOn: vi.fn((event: string, listener: Listener) => {
@@ -160,6 +163,15 @@ vi.mock("electron", () => ({
       setUserAgent: vi.fn(),
       webRequest: { onBeforeSendHeaders: vi.fn() },
     })),
+  },
+  screen: {
+    getPrimaryDisplay: vi.fn(() => ({
+      id: 1,
+      workArea: { x: 0, y: 0, width: 1920, height: 1080 },
+    })),
+    getAllDisplays: vi.fn(() => [
+      { id: 1, workArea: { x: 0, y: 0, width: 1920, height: 1080 } },
+    ]),
   },
   Tray: class {},
   webFrameMain: { fromId: vi.fn() },
@@ -291,6 +303,10 @@ vi.mock("../src/integrations/windows-taskbar", () => ({
   init: bootstrap.integrations.windowsTaskbar,
 }));
 vi.mock("../src/artwork", () => ({ cleanArtworkCache: vi.fn() }));
+vi.mock("../src/windowState", () => ({
+  savedWindowBounds: bootstrap.savedWindowBounds,
+  trackWindowState: bootstrap.trackWindowState,
+}));
 vi.mock("../src/wedgeDetector", () => ({
   init: bootstrap.integrations.wedgeDetector,
   reset: vi.fn(),
@@ -398,6 +414,41 @@ describe("main bootstrap", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(bootstrap.mainWindow.show).toHaveBeenCalledOnce();
     expect(bootstrap.splashWindow.close).toHaveBeenCalledOnce();
+  });
+
+  it("opens the main window at its default size when no state is saved", async () => {
+    await startMain();
+    const options = bootstrap.browserWindow.mock.calls[1][0];
+    expect(options).toMatchObject({ width: 1280, height: 800 });
+    expect(options).not.toHaveProperty("x");
+    expect(bootstrap.trackWindowState).toHaveBeenCalledWith(bootstrap.mainWindow);
+  });
+
+  // maximize() also shows a hidden window, so it must wait for the same
+  // first-paint moment as show() or the window maps before Chromium paints.
+  it("opens the main window at its saved bounds and maximises it only as it is shown", async () => {
+    bootstrap.savedWindowBounds.mockReturnValueOnce({
+      bounds: { x: 2700, y: 200, width: 1000, height: 700 },
+      maximized: true,
+    });
+    await startMain();
+    expect(bootstrap.savedWindowBounds).toHaveBeenCalledWith([
+      { x: 0, y: 0, width: 1920, height: 1080 },
+    ]);
+    expect(bootstrap.browserWindow).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ x: 2700, y: 200, width: 1000, height: 700, show: false }),
+    );
+    await bootstrap.mainWebListeners.get("did-finish-load")?.();
+    await vi.advanceTimersByTimeAsync(3500);
+    expect(bootstrap.mainWindow.maximize).not.toHaveBeenCalled();
+    bootstrap.mainWindowOnceListeners.get("ready-to-show")?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(bootstrap.mainWindow.maximize).toHaveBeenCalledOnce();
+    expect(bootstrap.mainWindow.show).toHaveBeenCalledOnce();
+    expect(bootstrap.mainWindow.maximize.mock.invocationCallOrder[0]).toBeLessThan(
+      bootstrap.mainWindow.show.mock.invocationCallOrder[0],
+    );
   });
 
   it("shows the main window without a first frame once the paint wait times out", async () => {

@@ -5,6 +5,7 @@
 import { Conf } from 'electron-conf/main';
 import log from 'electron-log/main';
 import type { ThemeName } from './theme';
+import type { WindowState } from './windowState';
 import {
   DEFAULT_SERVICE_ID,
   isMusicServiceId,
@@ -32,6 +33,7 @@ interface StoreSchema {
   'classical.lastPageUrl': string;
   zoomFactor: number;
   musicService: MusicServiceId;
+  windowState: WindowState;
 }
 
 const store = new Conf<StoreSchema>();
@@ -89,6 +91,19 @@ export function getCloseToTrayEnabled(): boolean {
 /** Persist `closeToTray.enabled` without applying the setting to running components. */
 export function setCloseToTrayEnabled(enabled: boolean): void {
   setConfigValue('closeToTray.enabled', enabled);
+}
+
+/**
+ * Read `windowState`, returning undefined when the key is absent. The file can
+ * be edited by hand, so `restoreWindowBounds()` checks the value before use.
+ */
+export function getWindowState(): WindowState | undefined {
+  return getConfigValueOptional('windowState');
+}
+
+/** Persist `windowState` without applying the setting to running components. */
+export function setWindowState(state: WindowState): void {
+  setConfigValue('windowState', state);
 }
 
 /** Read `theme`, defaulting to `'apple-music'` when absent. */

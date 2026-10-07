@@ -7,6 +7,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  screen,
   session,
   Tray,
   webFrameMain,
@@ -46,6 +47,7 @@ import {
 } from "./serviceSwitch";
 import { initThemeCSS, injectThemeCss, setThemeChangedCallback } from "./theme";
 import { applyPerformanceMode } from "./performanceMode";
+import { savedWindowBounds, trackWindowState } from "./windowState";
 import {
   createTray,
   getMenuIcon,
@@ -510,14 +512,24 @@ function loadAssets(): Assets {
   };
 }
 
+/** Every display's work area, the primary's first. */
+function displayWorkAreas(): Electron.Rectangle[] {
+  const primary = screen.getPrimaryDisplay();
+  const others = screen.getAllDisplays().filter((d) => d.id !== primary.id);
+  return [primary, ...others].map((d) => d.workArea);
+}
+
 function createMainWindow(ses: Electron.Session): {
   win: BrowserWindow;
   winReady: Promise<void>;
+  maximized: boolean;
 } {
+  const restored = savedWindowBounds(displayWorkAreas());
   const win = new BrowserWindow({
     title: app.getName(),
     width: MAIN_WINDOW_WIDTH_PX,
     height: MAIN_WINDOW_HEIGHT_PX,
+    ...restored?.bounds,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: "#000000",
@@ -576,7 +588,8 @@ function createMainWindow(ses: Electron.Session): {
   ]);
   const winReady = Promise.all([contentReady, firstPaint]).then(() => {});
 
-  return { win, winReady };
+  trackWindowState(win);
+  return { win, winReady, maximized: restored?.maximized ?? false };
 }
 
 function setupSplashTransition(
@@ -585,8 +598,11 @@ function setupSplashTransition(
   minDisplay: Promise<void>,
   cssReady: Promise<void>,
   winReady: Promise<void>,
+  maximized: boolean,
 ): void {
   Promise.all([minDisplay, cssReady, winReady]).then(() => {
+    // maximize() also shows the window, so it waits for the same moment.
+    if (maximized) win.maximize();
     win.show();
     splashLog.info("splash closed");
     splash.close();
@@ -1037,7 +1053,14 @@ if (gotLock) {
       });
       setupWindowZoomAndNav(win);
       initThemeCSS(win);
-      setupSplashTransition(win, splash, minDisplay, cssReady, winReady);
+      setupSplashTransition(
+        win,
+        splash,
+        minDisplay,
+        cssReady,
+        winReady,
+        created.maximized,
+      );
       setupSessionHeaders(ses);
       setupContentHandlers(win, player, markCssReady, assets);
       setupWindowEvents(win, markCssReady);

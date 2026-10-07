@@ -72,6 +72,7 @@ just run
 - **Performance mode:** removes Apple's heavy blur layers, which make dragging the window lag. On by default; toggle it in Settings.
 - **Top bar:** replaces Apple's sidebar with a slim bar, once you are signed in: Back on the left, a floating pill with Home, Search and All Playlists in the centre, and Settings and an account menu on the right. Its "Sign out…" takes you to Apple's sidebar, where Apple's own Sign Out is. Ctrl+B or Settings switches back to Apple's sidebar for Library, Radio and Pins.
 - **Songs-first search:** Ctrl+K or the bar's Search button opens a search that lists songs only, with the artist's own songs first; click one to play it and queue the rest. "All results in Apple Music" opens Apple's full search.
+- **Remembers the window:** Hydra reopens at the size and place you left it, maximised included, and moves onto a connected monitor if that one has gone. Turn on Close to tray (tray menu or Settings) and closing the window keeps the music playing; Show Window in the tray menu, or launching Hydra again, brings it back where it was.
 - **No update checks:** the app never contacts upstream for updates and never replaces itself.
 
 ## Credits
