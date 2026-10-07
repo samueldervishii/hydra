@@ -112,6 +112,14 @@ export const NAVIGATION_TEXT: Record<string, string> = trayData.NAVIGATION_TEXT;
 export const NAVIGATION_TOP_BAR_TEXT: Record<string, string> = trayData.NAVIGATION_TOP_BAR_TEXT;
 /** Translations for the Apple sidebar navigation choice, keyed by BCP 47 language tag. */
 export const NAVIGATION_APPLE_SIDEBAR_TEXT: Record<string, string> = trayData.NAVIGATION_APPLE_SIDEBAR_TEXT;
+/** Translations for lastfm connect, keyed by BCP 47 language tag. */
+export const LASTFM_CONNECT_TEXT: Record<string, string> = trayData.LASTFM_CONNECT_TEXT;
+/** Translations for lastfm connected, keyed by BCP 47 language tag. */
+export const LASTFM_CONNECTED_TEXT: Record<string, string> = trayData.LASTFM_CONNECTED_TEXT;
+/** Translations for lastfm connect failed, keyed by BCP 47 language tag. */
+export const LASTFM_CONNECT_FAILED_TEXT: Record<string, string> = trayData.LASTFM_CONNECT_FAILED_TEXT;
+/** Translations for lastfm disconnect, keyed by BCP 47 language tag. */
+export const LASTFM_DISCONNECT_TEXT: Record<string, string> = trayData.LASTFM_DISCONNECT_TEXT;
 /** Translations for performance mode, keyed by BCP 47 language tag. */
 export const PERFORMANCE_MODE_TEXT: Record<string, string> = trayData.PERFORMANCE_MODE_TEXT;
 
@@ -244,6 +252,11 @@ export interface TrayStrings {
   navigation: string;
   navigationTopBar: string;
   navigationAppleSidebar: string;
+  lastfm: string;
+  lastfmConnect: string;
+  lastfmConnected: string;
+  lastfmConnectFailed: string;
+  lastfmDisconnect: string;
 }
 
 // Map each TrayStrings field to its translation record. The keyed Record makes
@@ -293,6 +306,11 @@ const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   navigation: NAVIGATION_TEXT,
   navigationTopBar: NAVIGATION_TOP_BAR_TEXT,
   navigationAppleSidebar: NAVIGATION_APPLE_SIDEBAR_TEXT,
+  lastfm: { en: 'Last.fm' },
+  lastfmConnect: LASTFM_CONNECT_TEXT,
+  lastfmConnected: LASTFM_CONNECTED_TEXT,
+  lastfmConnectFailed: LASTFM_CONNECT_FAILED_TEXT,
+  lastfmDisconnect: LASTFM_DISCONNECT_TEXT,
 };
 
 // TRAY_TEXT is a Record literal, so excess property checking already rules out

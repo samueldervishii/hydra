@@ -2,7 +2,7 @@
   "name": "hydra",
   "productName": "Hydra",
   "desktopName": "hydra.desktop",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Apple Music desktop client for Linux",
   "main": "dist/main.js",
   "scripts": {

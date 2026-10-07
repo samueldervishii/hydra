@@ -1,4 +1,4 @@
-import { describe, it, expect, expectTypeOf, beforeEach } from "vitest";
+import { describe, it, expect, expectTypeOf, beforeEach, vi } from "vitest";
 import type { ThemeName } from "../src/theme";
 
 // Import the real config module. A hand-written stand-in can reproduce its own defaults and hide production defects.
@@ -31,7 +31,19 @@ import {
   getStartPageFor,
   getLastPageUrlFor,
   setLastPageUrlFor,
+  getLastfmEnabled,
+  setLastfmEnabled,
+  getLastfmUsername,
+  getLastfmEncryptedSession,
+  setLastfmAccount,
+  clearLastfmAccount,
+  removeLegacyLastfmSessionKey,
+  getPendingScrobbles,
+  setPendingScrobbles,
 } from "../src/config";
+import log from "electron-log/main";
+
+const logScope = (name: string) => log.scope(name);
 import { Conf } from "electron-conf/main";
 import { DEFAULT_SERVICE_ID } from "../src/musicService";
 import type {
@@ -401,5 +413,70 @@ describe("Config store runtime behaviour", () => {
     setLastPageUrlFor("classical", "search?term=elgar");
     expect(getLastPageUrlFor("music")).toBe("new");
     expect(getLastPageUrlFor("classical")).toBe("search?term=elgar");
+  });
+});
+
+describe("Last.fm config", () => {
+  const store = (Conf as unknown as { _data: Map<string, unknown> })._data;
+
+  beforeEach(() => {
+    store.clear();
+  });
+
+  it("is off and disconnected until set", () => {
+    expect(getLastfmEnabled()).toBe(false);
+    expect(getLastfmUsername()).toBeNull();
+    expect(getLastfmEncryptedSession()).toBeNull();
+    expect(getPendingScrobbles()).toEqual([]);
+  });
+
+  it("stores and clears an account without touching the enabled flag or the queue", () => {
+    setLastfmEnabled(true);
+    setPendingScrobbles([{ artist: "a", track: "t", timestamp: 1 }]);
+    setLastfmAccount("listener", "c2VhbGVk");
+    expect(getLastfmUsername()).toBe("listener");
+    expect(getLastfmEncryptedSession()).toBe("c2VhbGVk");
+    clearLastfmAccount();
+    expect(getLastfmUsername()).toBeNull();
+    expect(getLastfmEncryptedSession()).toBeNull();
+    expect(getLastfmEnabled()).toBe(true);
+    expect(getPendingScrobbles()).toHaveLength(1);
+  });
+
+  // Sidra kept its session key in plain text, and a config migrated from it
+  // can still hold one.
+  it("deletes Sidra's plain-text session key and nothing else", () => {
+    store.set("lastfm.sessionKey", "private-session");
+    store.set("lastfm.username", "listener");
+    removeLegacyLastfmSessionKey();
+    expect(store.has("lastfm.sessionKey")).toBe(false);
+    expect(store.get("lastfm.username")).toBe("listener");
+    removeLegacyLastfmSessionKey();
+    expect(store.has("lastfm.sessionKey")).toBe(false);
+  });
+
+  it("drops queued entries Last.fm could not accept", () => {
+    const now = Math.floor(Date.now() / 1000);
+    store.set("lastfm.pendingScrobbles", [
+      { artist: "a", track: "t", timestamp: 1, album: "b", durationSec: 200, chosenByUser: 0 },
+      { artist: "", track: "t", timestamp: 1 },
+      { artist: "a", track: "t", timestamp: 1.5 },
+      { artist: "a", track: "t", timestamp: now + 3600 },
+      { artist: "a", track: "t", timestamp: 1, durationSec: 0 },
+      { artist: "a", track: "t", timestamp: 1, chosenByUser: 1 },
+      "not an entry",
+    ]);
+    expect(getPendingScrobbles()).toEqual([
+      { artist: "a", track: "t", timestamp: 1, album: "b", durationSec: 200, chosenByUser: 0 },
+    ]);
+    store.set("lastfm.pendingScrobbles", "not an array");
+    expect(getPendingScrobbles()).toEqual([]);
+  });
+
+  it("logs the queue length, never its plays", () => {
+    const log = vi.mocked(logScope("config").info);
+    log.mockClear();
+    setPendingScrobbles([{ artist: "Private Artist", track: "Private Track", timestamp: 1 }]);
+    expect(JSON.stringify(log.mock.calls)).not.toContain("Private");
   });
 });

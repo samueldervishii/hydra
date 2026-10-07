@@ -16,6 +16,7 @@ import { applyTheme, hasCustomTheme, resolveTheme } from "./theme";
 import { applyPerformanceMode } from "./performanceMode";
 import { applyNavigation } from "./navigation";
 import { liveWebContents } from "./utils";
+import * as lastfm from "./integrations/lastfm";
 
 /** Zoom levels that Settings accepts. */
 export type ZoomFactor = 1 | 1.25 | 1.5 | 1.75 | 2;
@@ -32,9 +33,10 @@ export type SettingsAction =
   | { type: "zoomFactor"; value: ZoomFactor }
   | { type: "navigation"; value: config.NavigationMode }
   | {
-      type: "closeToTray" | "performanceMode";
+      type: "closeToTray" | "performanceMode" | "lastfmEnabled";
       value: boolean;
-    };
+    }
+  | { type: "lastfmConnect" | "lastfmDisconnect" };
 
 /** A stored option value paired with its display label. */
 export interface SettingsOption<T> {
@@ -50,6 +52,7 @@ export interface SettingsState {
   performanceMode: boolean;
   navigation: config.NavigationMode;
   closeToTray: boolean;
+  lastfm: lastfm.LastfmStatus & { enabled: boolean };
   options: {
     musicService: SettingsOption<MusicServiceId>[];
     startPage: SettingsOption<AnyStartPageId | "last">[];
@@ -81,12 +84,17 @@ interface SettingsRuntime {
 let runtime: SettingsRuntime | null = null;
 const listeners = new Set<(state: SettingsState) => void>();
 
-/** Connect application callbacks, returning their teardown function. */
+/** Connect application callbacks and Last.fm updates, returning their teardown function. */
 export function initSettingsActions(callbacks: SettingsRuntime): () => void {
   runtime = callbacks;
+  lastfm.setStateChangedCallback(() => {
+    callbacks.refreshTray();
+    notifySettingsChanged();
+  });
   return () => {
     if (runtime !== callbacks) return;
     runtime = null;
+    lastfm.setStateChangedCallback(null);
     listeners.clear();
   };
 }
@@ -140,6 +148,7 @@ export function getSettingsState(): SettingsState {
     performanceMode: config.getPerformanceModeEnabled(),
     navigation: config.getNavigation(),
     closeToTray: config.getCloseToTrayEnabled(),
+    lastfm: { ...lastfm.getStatus(), enabled: config.getLastfmEnabled() },
     options: {
       musicService: allServices().map((service) => ({
         value: service.id,
@@ -189,7 +198,11 @@ function isSettingsAction(
     return false;
   const data = action as Record<string, unknown>;
   const keys =
-    data.type === "startPage" ? ["type", "value", "serviceId"] : ["type", "value"];
+    data.type === "startPage"
+      ? ["type", "value", "serviceId"]
+      : data.type === "lastfmConnect" || data.type === "lastfmDisconnect"
+        ? ["type"]
+        : ["type", "value"];
   if (
     Object.keys(data).length !== keys.length ||
     !keys.every((key) => Object.hasOwn(data, key))
@@ -218,6 +231,20 @@ function isSettingsAction(
     case "closeToTray":
     case "performanceMode":
       return typeof data.value === "boolean";
+    case "lastfmEnabled":
+      return (
+        state.lastfm.available &&
+        state.lastfm.connected &&
+        typeof data.value === "boolean"
+      );
+    case "lastfmConnect":
+      return (
+        state.lastfm.available &&
+        !state.lastfm.connected &&
+        !state.lastfm.connecting
+      );
+    case "lastfmDisconnect":
+      return state.lastfm.available && state.lastfm.connected;
     default:
       return false;
   }
@@ -283,6 +310,17 @@ export function applySettingsAction(action: unknown): SettingsState {
       }
       break;
     }
+    case "lastfmEnabled":
+      config.setLastfmEnabled(action.value);
+      (action.value ? lastfm.enable : lastfm.disable)();
+      break;
+    case "lastfmConnect":
+      config.setLastfmEnabled(true);
+      lastfm.startAuth();
+      break;
+    case "lastfmDisconnect":
+      lastfm.disconnect();
+      break;
   }
   runtime.refreshTray();
   notifySettingsChanged();

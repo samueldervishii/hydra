@@ -17,6 +17,19 @@ import {
 
 const configLog = log.scope('config');
 
+/**
+ * A play Last.fm has not accepted yet, held until a retry reaches it. The
+ * fields are the track.scrobble parameters of the same names.
+ */
+export interface PendingScrobble {
+  artist: string;
+  track: string;
+  timestamp: number;
+  album?: string;
+  durationSec?: number;
+  chosenByUser?: 0;
+}
+
 /** How Hydra navigates Apple Music: its own top bar, or Apple's sidebar. */
 export type NavigationMode = 'top-bar' | 'apple-sidebar';
 
@@ -34,6 +47,10 @@ interface StoreSchema {
   zoomFactor: number;
   musicService: MusicServiceId;
   windowState: WindowState;
+  'lastfm.enabled': boolean;
+  'lastfm.username': string | null;
+  'lastfm.session': string | null;
+  'lastfm.pendingScrobbles': PendingScrobble[];
 }
 
 const store = new Conf<StoreSchema>();
@@ -104,6 +121,98 @@ export function getWindowState(): WindowState | undefined {
 /** Persist `windowState` without applying the setting to running components. */
 export function setWindowState(state: WindowState): void {
   setConfigValue('windowState', state);
+}
+
+/** Read `lastfm.enabled`, defaulting to `false` when absent. */
+export function getLastfmEnabled(): boolean {
+  return getConfigValue('lastfm.enabled', false);
+}
+
+/** Persist `lastfm.enabled` without applying the setting to running components. */
+export function setLastfmEnabled(enabled: boolean): void {
+  setConfigValue('lastfm.enabled', enabled);
+}
+
+/** Read `lastfm.username`, the connected account's name, or null when none is connected. */
+export function getLastfmUsername(): string | null {
+  return getConfigValue('lastfm.username', null);
+}
+
+/**
+ * Read `lastfm.session`: the session key encrypted by the system keyring, as
+ * base64. src/integrations/lastfm/session.ts is the only reader and the only
+ * place it is decrypted.
+ */
+export function getLastfmEncryptedSession(): string | null {
+  return getConfigValue('lastfm.session', null);
+}
+
+/**
+ * Store the connected account. `encryptedSession` is null when no keyring
+ * could encrypt the key, which then lives in memory only; the username is not
+ * a secret. Neither value is logged.
+ */
+export function setLastfmAccount(username: string, encryptedSession: string | null): void {
+  store.set('lastfm.username', username);
+  store.set('lastfm.session', encryptedSession);
+  configLog.info(`lastfm account set, session ${encryptedSession ? 'encrypted' : 'in memory only'}`);
+}
+
+/** Forget the connected account without changing the enabled preference or pending queue. */
+export function clearLastfmAccount(): void {
+  store.set('lastfm.username', null);
+  store.set('lastfm.session', null);
+  configLog.info('lastfm account cleared');
+}
+
+/**
+ * Delete `lastfm.sessionKey`, the plain-text session key Sidra kept and a
+ * config migrated from it can still hold. It belonged to Sidra's API key, so
+ * Last.fm would refuse it under Hydra's, and it should not stay on disk.
+ */
+export function removeLegacyLastfmSessionKey(): void {
+  if (!store.has('lastfm.sessionKey')) return;
+  store.delete('lastfm.sessionKey');
+  configLog.info('lastfm.sessionKey removed: plain-text session from an earlier build');
+}
+
+function isPendingScrobble(value: unknown): value is PendingScrobble {
+  if (typeof value !== 'object' || value === null) return false;
+  const entry = value as Partial<PendingScrobble>;
+  return typeof entry.artist === 'string' && entry.artist.length > 0
+    && typeof entry.track === 'string' && entry.track.length > 0
+    && typeof entry.timestamp === 'number'
+    && Number.isInteger(entry.timestamp) && entry.timestamp > 0
+    && entry.timestamp <= Math.floor(Date.now() / 1000)
+    && (entry.album === undefined || typeof entry.album === 'string')
+    && (entry.durationSec === undefined
+      || (typeof entry.durationSec === 'number'
+        && Number.isInteger(entry.durationSec) && entry.durationSec > 0))
+    && (entry.chosenByUser === undefined || entry.chosenByUser === 0);
+}
+
+/**
+ * Read `lastfm.pendingScrobbles`. The file can be edited by hand, so entries
+ * that are not plays Last.fm could accept are dropped.
+ */
+export function getPendingScrobbles(): PendingScrobble[] {
+  const stored: unknown = getConfigValue('lastfm.pendingScrobbles', []);
+  if (!Array.isArray(stored)) {
+    configLog.warn('lastfm.pendingScrobbles is not an array - discarding');
+    return [];
+  }
+  const entries = stored.filter(isPendingScrobble);
+  if (entries.length !== stored.length) {
+    // Never log the dropped entries: track titles are the user's listening history.
+    configLog.warn('lastfm.pendingScrobbles dropped malformed entries:', stored.length - entries.length);
+  }
+  return entries;
+}
+
+/** Replace the pending queue and log its length, not its contents. */
+export function setPendingScrobbles(entries: PendingScrobble[]): void {
+  store.set('lastfm.pendingScrobbles', entries);
+  configLog.info('lastfm.pendingScrobbles set, queued:', entries.length);
 }
 
 /** Read `theme`, defaulting to `'apple-music'` when absent. */

@@ -4,10 +4,21 @@ import type { BrowserWindow } from 'electron';
 import * as config from '../src/config';
 import { applySettingsAction, getSettingsState, initSettingsActions, notifySettingsChanged, subscribeSettingsChanges, showAppleSidebar, toggleNavigation } from '../src/settings';
 import { applyTheme, hasCustomTheme } from '../src/theme';
+import * as lastfm from '../src/integrations/lastfm';
 
 vi.mock('../src/theme', () => ({
   applyTheme: vi.fn(), hasCustomTheme: vi.fn(() => false),
   resolveTheme: () => config.getTheme(),
+}));
+
+// What the Last.fm integration reports. Unavailable by default, as it is
+// without API credentials, so its actions are rejected unless a test opts in.
+const lastfmStatus = vi.hoisted(() => ({
+  available: false, connected: false, connecting: false, failed: false, username: '',
+}));
+vi.mock('../src/integrations/lastfm', () => ({
+  getStatus: vi.fn(() => ({ ...lastfmStatus })), enable: vi.fn(), disable: vi.fn(),
+  startAuth: vi.fn(), disconnect: vi.fn(), setStateChangedCallback: vi.fn(),
 }));
 
 const applyZoom = vi.fn();
@@ -21,6 +32,7 @@ beforeEach(() => {
   (Conf as unknown as { _data: Map<string, unknown> })._data.clear();
   vi.clearAllMocks();
   vi.mocked(hasCustomTheme).mockReturnValue(false);
+  Object.assign(lastfmStatus, { available: false, connected: false, connecting: false, failed: false, username: '' });
   dispose = initSettingsActions({ getMainWindow: () => window as unknown as BrowserWindow, applyZoom, switchService, refreshTray });
 });
 afterEach(() => dispose());
@@ -31,23 +43,67 @@ describe('settings actions', () => {
     expect(state).toMatchObject({ musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1, performanceMode: true, navigation: 'top-bar' });
   });
 
-  // Notifications, Discord and Last.fm were removed; an existing config.json
-  // can still hold their keys, which must load without error and never reach
-  // the state.
-  it('ignores notification, Discord and Last.fm keys left in an existing config', () => {
+  // Notifications and Discord were removed; an existing config.json can still
+  // hold their keys, which must load without error and never reach the state.
+  // Sidra's plain-text Last.fm session key must not reach it either.
+  it('ignores notification and Discord keys left in an existing config', () => {
     const store = (Conf as unknown as { _data: Map<string, unknown> })._data;
     store.set('notifications.enabled', false);
     store.set('discord.enabled', true);
-    store.set('lastfm.enabled', true);
     store.set('lastfm.sessionKey', 'private-session');
-    store.set('lastfm.username', 'listener');
-    store.set('lastfm.pendingScrobbles', [{ artist: 'a', track: 't', timestamp: 1 }]);
     const state = getSettingsState();
     expect(state).toMatchObject({ musicService: 'music', theme: 'apple-music' });
     expect(Object.keys(state)).not.toContain('notifications');
     expect(Object.keys(state)).not.toContain('discord');
-    expect(Object.keys(state)).not.toContain('lastfm');
     expect(JSON.stringify(state)).not.toContain('private-session');
+  });
+
+  it('reports the Last.fm status with the stored enabled flag', () => {
+    Object.assign(lastfmStatus, { available: true, connected: true, username: 'listener' });
+    config.setLastfmEnabled(true);
+    expect(getSettingsState().lastfm).toEqual({
+      available: true, connected: true, connecting: false, failed: false, username: 'listener', enabled: true,
+    });
+  });
+
+  it('gates Last.fm and keeps its setter before authentication', () => {
+    expect(() => applySettingsAction({ type: 'lastfmConnect' })).toThrow('Invalid settings action');
+    lastfmStatus.available = true;
+    vi.mocked(lastfm.startAuth).mockImplementationOnce(() => expect(config.getLastfmEnabled()).toBe(true));
+    applySettingsAction({ type: 'lastfmConnect' });
+    expect(lastfm.startAuth).toHaveBeenCalledOnce();
+    expect(() => applySettingsAction({ type: 'lastfmEnabled', value: false })).toThrow('Invalid settings action');
+    expect(() => applySettingsAction({ type: 'lastfmDisconnect' })).toThrow('Invalid settings action');
+    Object.assign(lastfmStatus, { connected: true, username: 'listener' });
+    expect(() => applySettingsAction({ type: 'lastfmConnect' })).toThrow('Invalid settings action');
+    applySettingsAction({ type: 'lastfmEnabled', value: false });
+    expect(config.getLastfmEnabled()).toBe(false);
+    expect(lastfm.disable).toHaveBeenCalledOnce();
+    applySettingsAction({ type: 'lastfmEnabled', value: true });
+    expect(lastfm.enable).toHaveBeenCalledOnce();
+    applySettingsAction({ type: 'lastfmDisconnect' });
+    expect(lastfm.disconnect).toHaveBeenCalledOnce();
+  });
+
+  // A second Connect while the browser approval is pending would start a second flow.
+  it('refuses Connect while a connection is in progress', () => {
+    Object.assign(lastfmStatus, { available: true, connecting: true });
+    expect(() => applySettingsAction({ type: 'lastfmConnect' })).toThrow('Invalid settings action');
+    expect(lastfm.startAuth).not.toHaveBeenCalled();
+  });
+
+  it('publishes asynchronous Last.fm changes and stops on teardown', () => {
+    const listener = vi.fn();
+    subscribeSettingsChanges(listener);
+    const callback = vi.mocked(lastfm.setStateChangedCallback).mock.calls.at(-1)?.[0];
+    Object.assign(lastfmStatus, { available: true, connected: true, username: 'listener' });
+    callback?.();
+    expect(refreshTray).toHaveBeenCalledOnce();
+    expect(listener).toHaveBeenCalledWith(expect.objectContaining({ lastfm: expect.objectContaining({ connected: true }) }));
+    dispose();
+    expect(lastfm.setStateChangedCallback).toHaveBeenLastCalledWith(null);
+    notifySettingsChanged();
+    expect(listener).toHaveBeenCalledOnce();
   });
 
   it('persists before runtime effects and publishes the new state', () => {

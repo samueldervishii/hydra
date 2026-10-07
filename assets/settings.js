@@ -11,7 +11,7 @@
   document.title = params.get('settings') || 'Settings';
   document.querySelector('[data-label="settings"]').textContent = document.title;
   const selects = ['musicService', 'startPage', 'theme', 'zoomFactor', 'navigation'];
-  const toggles = ['performanceMode', 'closeToTray'];
+  const toggles = ['performanceMode', 'closeToTray', 'lastfmEnabled'];
   let state;
   // Pushed state supersedes pending replies from getState() and apply().
   let revision = 0;
@@ -50,9 +50,26 @@
       select.value = String(state[key]);
     }
     for (const key of toggles) {
-      byId(key).checked = state[key];
+      byId(key).checked = key === 'lastfmEnabled' ? state.lastfm.enabled : state[key];
     }
+    renderLastfm(focusedId);
     byId('preferences').hidden = false;
+  }
+
+  function renderLastfm(focusedId) {
+    const { lastfm, labels } = state;
+    byId('lastfm').hidden = !lastfm.available;
+    if (!lastfm.available) return;
+    byId('lastfmEnabled').disabled = !lastfm.connected;
+    // The account name is inserted as text, so a $ in it is not a replacement pattern.
+    byId('lastfm-status').textContent = lastfm.connected
+      ? labels.lastfmConnected.replace('{name}', () => lastfm.username)
+      : lastfm.failed ? labels.lastfmConnectFailed : '';
+    byId('lastfmConnect').hidden = lastfm.connected;
+    byId('lastfmConnect').disabled = lastfm.connecting;
+    byId('lastfmDisconnect').hidden = !lastfm.connected;
+    if (focusedId === 'lastfmConnect' && lastfm.connected) byId('lastfmDisconnect').focus();
+    if (focusedId === 'lastfmDisconnect' && !lastfm.connected) byId('lastfmConnect').focus();
   }
 
   async function refresh() {
@@ -86,6 +103,9 @@
   }
   for (const key of toggles) {
     byId(key).addEventListener('change', () => apply({ type: key, value: byId(key).checked }));
+  }
+  for (const key of ['lastfmConnect', 'lastfmDisconnect']) {
+    byId(key).addEventListener('click', () => apply({ type: key }));
   }
   const unsubscribe = bridge.onState((next) => {
     revision++;

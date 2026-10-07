@@ -30,6 +30,7 @@ function fixture(): SettingsState {
   return {
     musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1,
     performanceMode: true, navigation: 'top-bar', closeToTray: false,
+    lastfm: { available: true, connected: false, connecting: false, failed: false, username: '', enabled: false },
     options: {
       musicService: [{ value: 'music', label: 'Apple Music' }, { value: 'classical', label: 'Apple Music Classical' }],
       startPage: [{ value: 'new', label: 'New' }],
@@ -85,6 +86,47 @@ async function settle(): Promise<void> {
 }
 
 describe('settings page', () => {
+  // The account name is the user's own text: it must reach the page as text,
+  // and a $ in it must not be read as a replacement pattern.
+  it('renders the Last.fm account literally and hides unavailable controls', async () => {
+    const state = fixture();
+    state.lastfm = { ...state.lastfm, connected: true, enabled: true, username: "<img src=x>$&$'" };
+    const h = harness(state);
+    await settle();
+    expect(h.element('lastfm').hidden).toBe(false);
+    expect(h.element('lastfm-status').textContent).toBe(state.labels.lastfmConnected.replace('{name}', () => "<img src=x>$&$'"));
+    expect(h.element('lastfmEnabled').checked).toBe(true);
+    expect(h.element('lastfmEnabled').disabled).toBe(false);
+    expect(h.element('lastfmConnect').hidden).toBe(true);
+    expect(h.element('lastfmDisconnect').hidden).toBe(false);
+    h.push({ ...state, lastfm: { ...state.lastfm, available: false } });
+    expect(h.element('lastfm').hidden).toBe(true);
+  });
+
+  it('shows a failed connection and disables Connect while one is in progress', async () => {
+    const state = fixture();
+    const h = harness(state);
+    await settle();
+    expect(h.element('lastfmEnabled').disabled).toBe(true);
+    expect(h.element('lastfm-status').textContent).toBe('');
+    h.push({ ...state, lastfm: { ...state.lastfm, connecting: true } });
+    expect(h.element('lastfmConnect').disabled).toBe(true);
+    h.push({ ...state, lastfm: { ...state.lastfm, failed: true } });
+    expect(h.element('lastfmConnect').disabled).toBe(false);
+    expect(h.element('lastfm-status').textContent).toBe(state.labels.lastfmConnectFailed);
+  });
+
+  it('sends Connect and Disconnect as bare actions', async () => {
+    const h = harness();
+    await settle();
+    h.element('lastfmConnect').fire('click');
+    await settle();
+    expect(h.apply).toHaveBeenLastCalledWith({ type: 'lastfmConnect' });
+    h.element('lastfmDisconnect').fire('click');
+    await settle();
+    expect(h.apply).toHaveBeenLastCalledWith({ type: 'lastfmDisconnect' });
+  });
+
   it('resolves every HTML data-label from a non-English state', async () => {
     const state = fixture();
     const englishSettings = state.labels.settings;

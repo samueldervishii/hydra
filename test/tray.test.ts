@@ -22,6 +22,7 @@ vi.mock("../src/config", () => ({
   setSidebarCollapsed: vi.fn(),
   getCloseToTrayEnabled: vi.fn(() => false),
   setCloseToTrayEnabled: vi.fn(),
+  getLastfmEnabled: vi.fn(() => false),
   getMusicService: vi.fn(() => "music"),
   setMusicService: vi.fn(),
   getClassicalStartPage: vi.fn(() => "home"),
@@ -74,6 +75,11 @@ const mockTrayStrings: TrayStrings = {
   navigation: "Navigation",
   navigationTopBar: "Hydra top bar",
   navigationAppleSidebar: "Apple sidebar",
+  lastfm: "Last.fm",
+  lastfmConnect: "Connect to Last.fm…",
+  lastfmConnected: "Connected to Last.fm as {name}",
+  lastfmConnectFailed: "Could not connect to Last.fm",
+  lastfmDisconnect: "Disconnect",
 };
 
 // Expected menu label per registry page id. Typed over the union, so a new page

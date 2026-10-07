@@ -1170,7 +1170,7 @@ describe("musicKitHook", () => {
     );
   });
 
-  it("delivers two distinct radio songs end to end", () => {
+  it("marks two distinct radio songs as an initial item and a clean boundary", () => {
     const { bridgeSend, musicKitListeners } = createHarness({
       musicKitOverrides: { nowPlayingItem: radioItem },
     });
@@ -1187,8 +1187,10 @@ describe("musicKitHook", () => {
       ([channel]) => channel === "timedMetadataDidChange",
     );
     const player = new Player();
-    const names: string[] = [];
-    player.on("timedMetadataDidChange", (payload) => names.push(payload.name));
+    const transitions: string[] = [];
+    player.on("timedMetadataDidChange", (payload) =>
+      transitions.push(payload.transition),
+    );
     vi.useFakeTimers();
     try {
       player.handleNowPlayingItemDidChange({
@@ -1198,7 +1200,7 @@ describe("musicKitHook", () => {
       player.handleTimedMetadataDidChange(sends[0][1]);
       vi.advanceTimersByTime(1500);
       player.handleTimedMetadataDidChange(sends[1][1]);
-      expect(names).toEqual([timedSong.title, "Temptation"]);
+      expect(transitions).toEqual(["initial", "clean"]);
     } finally {
       vi.useRealTimers();
     }
@@ -1258,7 +1260,7 @@ describe("musicKitHook", () => {
     vi.useFakeTimers();
     try {
       const player = new Player();
-      const delivered: Array<{ trackId?: string }> = [];
+      const delivered: Array<{ trackId?: string; transition: string }> = [];
       player.on("timedMetadataDidChange", (payload) => delivered.push(payload));
       player.handleNowPlayingItemDidChange({
         name: "Station",
@@ -1272,8 +1274,8 @@ describe("musicKitHook", () => {
       player.handleTimedMetadataDidChange(sends[2][1]);
 
       expect(delivered).toEqual([
-        expect.objectContaining({ trackId: undefined }),
-        expect.objectContaining({ trackId: "67890" }),
+        expect.objectContaining({ trackId: undefined, transition: "initial" }),
+        expect.objectContaining({ trackId: "67890", transition: "clean" }),
       ]);
     } finally {
       vi.useRealTimers();

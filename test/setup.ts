@@ -79,6 +79,18 @@ vi.mock("electron", () => ({
   },
   dialog: { showMessageBox: vi.fn() },
   net: { fetch: vi.fn() },
+  // A reversible stand-in for the keyring: "encrypted" text is marked, and
+  // anything without the mark fails to decrypt, as a foreign blob would.
+  safeStorage: {
+    isEncryptionAvailable: vi.fn(() => true),
+    getSelectedStorageBackend: vi.fn(() => "gnome_libsecret"),
+    encryptString: vi.fn((text: string) => Buffer.from(`sealed:${text}`)),
+    decryptString: vi.fn((data: Buffer) => {
+      const text = data.toString();
+      if (!text.startsWith("sealed:")) throw new Error("Error while decrypting the ciphertext");
+      return text.slice("sealed:".length);
+    }),
+  },
   contextBridge: { exposeInMainWorld: vi.fn() },
   ipcRenderer: { send: vi.fn() },
 }));
@@ -129,6 +141,9 @@ vi.mock("electron-conf/main", () => {
       }
       set(key: string, value: unknown) {
         data.set(key, value);
+      }
+      delete(key: string) {
+        data.delete(key);
       }
       clear() {
         data.clear();

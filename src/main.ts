@@ -75,6 +75,7 @@ import {
 } from "./musicService";
 import { init as initDock } from "./integrations/macos-dock";
 import { init as initWindowsTaskbar } from "./integrations/windows-taskbar";
+import { init as initLastfm } from "./integrations/lastfm";
 import { cleanArtworkCache } from "./artwork";
 import {
   init as initWedgeDetector,
@@ -946,6 +947,7 @@ function setupContentHandlers(
               mpris.init({ player, getMainWindow: () => win });
             },
           ],
+          ["lastfm", () => initLastfm({ player, getMainWindow: () => win })],
           [
             "wedgeDetector",
             () => initWedgeDetector({ player, getMainWindow: () => win }),
