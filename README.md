@@ -9,15 +9,21 @@ An Apple Music desktop client for Linux, a fork of [Sidra](https://github.com/wi
 Add the signing key and the repository once, then install. Updates arrive through `apt upgrade` and the Software Updater like any other package:
 
 ```bash
-sudo wget -qO /usr/share/keyrings/hydra.gpg https://github.com/samueldervishii/hydra/releases/latest/download/hydra.gpg
-gpg --show-keys /usr/share/keyrings/hydra.gpg   # fingerprint 3620 EBD1 BECC 5DA8 21BE  A555 085D 4BC4 8EFD 3C56
-echo "deb [signed-by=/usr/share/keyrings/hydra.gpg] https://github.com/samueldervishii/hydra/releases/latest/download/ ./" \
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL https://apt.six9.uk/hydra.gpg | sudo tee /etc/apt/keyrings/hydra.gpg >/dev/null
+gpg --show-keys /etc/apt/keyrings/hydra.gpg   # fingerprint 3620 EBD1 BECC 5DA8 21BE  A555 085D 4BC4 8EFD 3C56
+echo "deb [signed-by=/etc/apt/keyrings/hydra.gpg] https://apt.six9.uk stable main" \
   | sudo tee /etc/apt/sources.list.d/hydra.list
-sudo apt update
-sudo apt install hydra-music
+sudo apt update && sudo apt install hydra-music
 ```
 
-If you have Hydra 2.0.0 or 2.0.1 installed, finish with `sudo apt install hydra-music hydra-` instead, so apt removes the old `hydra` package rather than replacing it with THC-Hydra.
+The package is `hydra-music`: `hydra` is THC-Hydra, a network security tool Ubuntu and Debian already ship. If you have Hydra 2.0.0 or 2.0.1 installed, finish with `sudo apt install hydra-music hydra-` instead, so apt removes the old `hydra` package rather than replacing it with THC-Hydra.
+
+The repository keeps the last five versions, so `sudo apt install hydra-music=<version>` can go back one if a release misbehaves.
+
+### Switching from the GitHub repository
+
+Before 2.7.0 the instructions pointed apt at `https://github.com/samueldervishii/hydra/releases/latest/download/`. That still works, but `apt.six9.uk` is the repository to use from now on. It is signed with the same key, so switching is the commands above, which replace `/etc/apt/sources.list.d/hydra.list`; then remove the old copy of the key with `sudo rm /usr/share/keyrings/hydra.gpg`.
 
 ## Install the .deb by hand
 
