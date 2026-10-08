@@ -96,7 +96,7 @@ describe('settings actions', () => {
   it('saves a Vibe key without ever putting it in the state, and removes it', () => {
     const key = 'sk-ant-api03-' + 'c'.repeat(40);
     expect(getSettingsState().vibe).toEqual({
-      hasKey: false, keyPersisted: false, keyProblem: null, keyStorage: 'GNOME Keyring (gnome_libsecret)', usedToday: 0, dailyLimit: 50,
+      hasKey: false, keyPersisted: false, keyProblem: null, keyStorage: 'GNOME Keyring (gnome_libsecret)', spentToday: 0, dailyBudget: 2,
     });
     expect(() => applySettingsAction({ type: 'vibeClearKey' })).toThrow('Invalid settings action');
     for (const value of ['', 'not-a-key', 42, `${key} extra`]) {
@@ -144,6 +144,23 @@ describe('settings actions', () => {
     // A hand-edited model id reads as the default.
     (Conf as unknown as { _data: Map<string, unknown> })._data.set('vibe.model', 'gpt');
     expect(getSettingsState().vibeModel).toBe('claude-haiku-5-5');
+  });
+
+  it('sets the Vibe daily budget within $0.10 to $100 in whole cents', () => {
+    const store = (Conf as unknown as { _data: Map<string, unknown> })._data;
+    expect(getSettingsState().vibe.dailyBudget).toBe(2);
+    applySettingsAction({ type: 'vibeDailyBudget', value: 0.5 });
+    expect(config.getVibeDailyBudget()).toBe(0.5);
+    expect(getSettingsState().vibe.dailyBudget).toBe(0.5);
+    applySettingsAction({ type: 'vibeDailyBudget', value: 100 });
+    expect(config.getVibeDailyBudget()).toBe(100);
+    for (const value of [0, 0.09, 100.01, 0.105, -1, Number.NaN, Infinity, '2', null]) {
+      expect(() => applySettingsAction({ type: 'vibeDailyBudget', value })).toThrow('Invalid settings action');
+    }
+    expect(config.getVibeDailyBudget()).toBe(100);
+    // A hand-edited budget Settings would refuse reads as the default.
+    store.set('vibe.dailyBudget', 5000);
+    expect(config.getVibeDailyBudget()).toBe(2);
   });
 
   it('refuses Connect while a connection is in progress', () => {

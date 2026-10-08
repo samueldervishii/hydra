@@ -36,7 +36,7 @@
   /** Artwork is drawn at 40px; twice that stays sharp at 200% zoom. */
   var ARTWORK_PX = 80;
   /** Errors that the user fixes in Settings. */
-  var SETTINGS_ERRORS = { "no-key": true, "key-refused": true, "key-unreadable": true };
+  var SETTINGS_ERRORS = { "no-key": true, "key-refused": true, "key-unreadable": true, budget: true };
 
   var STYLE = [
     ".backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); }",

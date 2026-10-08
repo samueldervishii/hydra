@@ -202,6 +202,8 @@ describe("Vibe requests", () => {
         { id: "111", title: "Song A", artist: "Artist A", album: "Album A", explicit: false, artwork: "" },
       ]);
       options.onProgress?.(1);
+      // A million Sonnet input tokens: $2.
+      options.onUsage?.({ input_tokens: 1_000_000, output_tokens: 0 } as never);
       return [PICK];
     });
 
@@ -223,7 +225,8 @@ describe("Vibe requests", () => {
       { status: "working", searches: 1, maxSearches: 15 },
       { status: "done", mode: "replace", picks: [PICK] },
     ]);
-    expect(store.get("vibe.usage")).toEqual({ day: h.vibe.localDay(), count: 1 });
+    // Sonnet: a million input tokens cost $2.
+    expect(store.get("vibe.spend")).toEqual({ day: h.vibe.localDay(), usd: 2 });
   });
 
   it("falls back to this session's songs when Apple's list is unavailable", async () => {
@@ -285,7 +288,6 @@ describe("Vibe requests", () => {
     for (let i = 0; i < 100; i += 1) h.vibe.handleRequest({ prompt: `q${i}`, mode: "next" });
     expect(h.agent.runVibe).toHaveBeenCalledOnce();
     expect(h.updates().at(-1)).toEqual({ status: "error", code: "cooldown" });
-    expect(store.get("vibe.usage")).toEqual({ day: h.vibe.localDay(), count: 1 });
   });
 
   it("logs no description, history, pick or key, on success or failure", async () => {
@@ -337,7 +339,7 @@ describe("Vibe requests", () => {
     await settle();
     expect(h.updates()).toEqual([{ status: "error", code: "disabled" }]);
     expect(h.agent.runVibe).not.toHaveBeenCalled();
-    expect(store.has("vibe.usage")).toBe(false);
+    expect(store.has("vibe.spend")).toBe(false);
     expect(safeStorage.decryptString).not.toHaveBeenCalled();
   });
 
@@ -372,7 +374,7 @@ describe("Vibe requests", () => {
       await settle();
       expect(h.updates()).toEqual([{ status: "error", code: "key-locked" }]);
       expect(h.agent.runVibe).not.toHaveBeenCalled();
-      expect(store.has("vibe.usage")).toBe(false);
+      expect(store.has("vibe.spend")).toBe(false);
       expect(store.has("vibe.apiKey")).toBe(true);
       expect(changed).not.toHaveBeenCalled();
 
@@ -384,8 +386,8 @@ describe("Vibe requests", () => {
       expect(h.agent.runVibe).toHaveBeenCalledOnce();
       expect(h.updates().at(-1)).toEqual({ status: "done", mode: "next", picks: [PICK] });
       expect(h.vibe.getStatus()).toMatchObject({ hasKey: true, keyProblem: null });
-      // Once for the key becoming readable, once for the usage count.
-      expect(changed).toHaveBeenCalledTimes(2);
+      // Once, for the key becoming readable; the run reported no usage.
+      expect(changed).toHaveBeenCalledOnce();
     } finally {
       vi.mocked(safeStorage.isEncryptionAvailable).mockReturnValue(true);
     }
@@ -406,34 +408,70 @@ describe("Vibe requests", () => {
   it("checks the limits before touching the keyring", async () => {
     const h = await load();
     store.set("vibe.apiKey", Buffer.from(`sealed:${KEY}`).toString("base64"));
-    store.set("vibe.usage", { day: h.vibe.localDay(), count: 50 });
+    store.set("vibe.spend", { day: h.vibe.localDay(), usd: 2 });
     h.vibe.handleRequest({ prompt: "chill", mode: "next" });
-    expect(h.updates()).toEqual([{ status: "error", code: "daily-limit" }]);
+    expect(h.updates()).toEqual([{ status: "error", code: "budget" }]);
     expect(safeStorage.decryptString).not.toHaveBeenCalled();
   });
 
-  it("stops at the daily cap, which the config can lower", async () => {
+  it("stops once today's spend reaches the budget, which Settings can raise", async () => {
     const h = await load();
     h.keys.saveApiKey(KEY);
-    store.set("vibe.usage", { day: h.vibe.localDay(), count: 50 });
-    expect(h.vibe.blockedReason()).toBe("daily-limit");
-    store.set("vibe.dailyLimit", 60);
+    store.set("vibe.spend", { day: h.vibe.localDay(), usd: 1.99 });
     expect(h.vibe.blockedReason()).toBeNull();
-    // Yesterday's count does not carry over.
-    store.set("vibe.dailyLimit", 2);
-    store.set("vibe.usage", { day: "2000-01-01", count: 99 });
+    store.set("vibe.spend", { day: h.vibe.localDay(), usd: 2 });
+    expect(h.vibe.blockedReason()).toBe("budget");
+    store.set("vibe.dailyBudget", 5);
+    expect(h.vibe.blockedReason()).toBeNull();
+    // Yesterday's spend does not carry over.
+    store.set("vibe.dailyBudget", 0.5);
+    store.set("vibe.spend", { day: "2000-01-01", usd: 99 });
     expect(h.vibe.blockedReason()).toBeNull();
     expect(h.vibe.getStatus()).toEqual({
       hasKey: true,
       keyPersisted: true,
       keyProblem: null,
       keyStorage: "GNOME Keyring (gnome_libsecret)",
-      usedToday: 0,
-      dailyLimit: 2,
+      spentToday: 0,
+      dailyBudget: 0.5,
     });
-    // A hand-edited limit outside 1 to 1000 reads as the default.
-    store.set("vibe.dailyLimit", 0);
-    expect(h.vibe.getStatus().dailyLimit).toBe(50);
+    // A malformed stored spend reads as none.
+    store.set("vibe.spend", { day: h.vibe.localDay(), usd: "lots" });
+    expect(h.vibe.getStatus().spentToday).toBe(0);
+  });
+
+  it("adds every response's cost to today's spend and lets the run stop when it runs out", async () => {
+    const h = await load();
+    h.keys.saveApiKey(KEY);
+    const changed = vi.fn();
+    h.vibe.setStateChangedCallback(changed);
+    store.set("vibe.model", "claude-sonnet-5-5");
+    store.set("vibe.dailyBudget", 0.2);
+    let budgetChecks: boolean[] = [];
+    vi.mocked(h.agent.runVibe).mockImplementation(async (options) => {
+      budgetChecks.push(options.withinBudget!());
+      options.onUsage?.({ input_tokens: 50_000, output_tokens: 0 } as never);
+      budgetChecks.push(options.withinBudget!());
+      options.onUsage?.({ input_tokens: 0, output_tokens: 10_000 } as never);
+      budgetChecks.push(options.withinBudget!());
+      throw new h.agent.VibeError("budget");
+    });
+    h.vibe.handleRequest({ prompt: "a", mode: "next" });
+    await settle();
+    // $0.10, then another $0.10 of output: the budget of $0.20 is spent.
+    expect(budgetChecks).toEqual([true, true, false]);
+    expect((store.get("vibe.spend") as { usd: number }).usd).toBeCloseTo(0.2);
+    expect(changed).toHaveBeenCalledTimes(2);
+    expect(h.updates().at(-1)).toEqual({ status: "error", code: "budget" });
+    budgetChecks = [];
+  });
+
+  it("deletes the request count 2.6 kept", async () => {
+    store.set("vibe.dailyLimit", 50);
+    store.set("vibe.usage", { day: "2026-10-08", count: 3 });
+    await load();
+    expect(store.has("vibe.dailyLimit")).toBe(false);
+    expect(store.has("vibe.usage")).toBe(false);
   });
 
   it("reports the run's error code and nothing else", async () => {

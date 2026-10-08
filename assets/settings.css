@@ -33,6 +33,7 @@ label { line-height: 1.4; }
 #vibe-privacy { margin: 12px 0 0; color: var(--systemSecondary, GrayText); line-height: 1.5; }
 select, button { font: inherit; color: var(--systemPrimary, CanvasText); background: var(--playerLCDBGFill, Canvas); border: 1px solid var(--border); border-radius: 6px; min-block-size: 36px; padding: 6px 10px; }
 select { inline-size: 54%; max-inline-size: 290px; min-inline-size: 0; }
+#vibeDailyBudget { inline-size: 120px; font: inherit; color: var(--systemPrimary, CanvasText); background: var(--playerLCDBGFill, Canvas); border: 1px solid var(--border); border-radius: 6px; min-block-size: 36px; padding: 6px 10px; }
 button { cursor: pointer; max-inline-size: 100%; }
 button:hover:not(:disabled) { background: var(--surface); }
 button:disabled { cursor: default; opacity: 0.6; }

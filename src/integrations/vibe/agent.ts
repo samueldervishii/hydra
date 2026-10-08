@@ -50,7 +50,7 @@ export type VibeErrorCode =
   | "catalog"
   | "busy"
   | "cooldown"
-  | "daily-limit"
+  | "budget"
   | "cancelled"
   | "failed";
 
@@ -90,6 +90,10 @@ export interface VibeRunOptions {
   signal: AbortSignal;
   /** Called after each search with the number made so far. */
   onProgress?: (searches: number) => void;
+  /** Called with each response's usage, for the daily budget. */
+  onUsage?: (usage: Anthropic.Usage) => void;
+  /** Whether today's budget allows another request; asked before every one after the first. */
+  withinBudget?: () => boolean;
 }
 
 const SYSTEM_PROMPT = `You are the music curator inside Hydra, an Apple Music app. The user describes a mood, a moment or a vibe, and you choose about 10 songs for it that they can play right away.
@@ -230,8 +234,17 @@ export function classifyError(err: unknown): VibeErrorCode {
  * each a song a search returned. Rejects with a VibeError.
  */
 export async function runVibe(options: VibeRunOptions): Promise<VibePick[]> {
-  const { createMessage, model, prompt, context, search, signal, onProgress } =
-    options;
+  const {
+    createMessage,
+    model,
+    prompt,
+    context,
+    search,
+    signal,
+    onProgress,
+    onUsage,
+    withinBudget,
+  } = options;
   const found = new Map<string, CatalogSong>();
   let searches = 0;
   let failedSearches = 0;
@@ -271,6 +284,7 @@ export async function runVibe(options: VibeRunOptions): Promise<VibePick[]> {
 
   for (let round = 1; round <= MAX_ROUNDS; round += 1) {
     if (signal.aborted) throw new VibeError("cancelled");
+    if (round > 1 && withinBudget && !withinBudget()) throw new VibeError("budget");
     let response: Anthropic.Message;
     try {
       response = await createMessage(
@@ -288,6 +302,7 @@ export async function runVibe(options: VibeRunOptions): Promise<VibePick[]> {
     } catch (err: unknown) {
       throw new VibeError(classifyError(err));
     }
+    onUsage?.(response.usage);
     if (response.stop_reason === "refusal") throw new VibeError("refusal");
     messages.push({ role: "assistant", content: response.content });
 

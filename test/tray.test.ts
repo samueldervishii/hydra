@@ -26,8 +26,8 @@ vi.mock("../src/config", () => ({
   getVibeModel: vi.fn(() => "claude-haiku-5-5"),
   getVibeEnabled: vi.fn(() => true),
   getVibeEncryptedApiKey: vi.fn(() => null),
-  getVibeUsage: vi.fn(() => null),
-  getVibeDailyLimit: vi.fn(() => 50),
+  getVibeSpend: vi.fn(() => null),
+  getVibeDailyBudget: vi.fn(() => 2),
   getMusicService: vi.fn(() => "music"),
   setMusicService: vi.fn(),
   getClassicalStartPage: vi.fn(() => "home"),
@@ -96,7 +96,8 @@ const mockTrayStrings: TrayStrings = {
   vibeKeyLocked: "Keyring locked: unlock it and restart Hydra, then retry",
   vibeKeyUnreadable: "The saved API key cannot be read with this keyring: save it again",
   vibeModel: "Model",
-  vibeUsage: "{used} of {limit} requests used today",
+  vibeDailyBudget: "Daily budget (US$)",
+  vibeSpend: "{spent} of {budget} today, estimated at list prices",
   vibePrivacy: "Each request sends your description to Anthropic.",
 };
 

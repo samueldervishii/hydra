@@ -36,6 +36,7 @@ export type SettingsAction =
   | { type: "vibeModel"; value: config.VibeModel }
   | { type: "vibeEnabled"; value: boolean }
   | { type: "vibeApiKey"; value: string }
+  | { type: "vibeDailyBudget"; value: number }
   | {
       type: "closeToTray" | "performanceMode" | "lastfmEnabled";
       value: boolean;
@@ -60,7 +61,7 @@ export interface SettingsState {
   vibeModel: config.VibeModel;
   /** Whether Vibe shows: its top bar item, its panel and its requests. */
   vibeEnabled: boolean;
-  /** Whether a key is saved and today's usage; never the key itself. */
+  /** Whether a key is saved and today's spend; never the key itself. */
   vibe: vibe.VibeStatus;
   options: {
     musicService: SettingsOption<MusicServiceId>[];
@@ -255,6 +256,8 @@ function isSettingsAction(
       );
     case "vibeApiKey":
       return vibe.isApiKeyFormat(data.value);
+    case "vibeDailyBudget":
+      return config.isVibeDailyBudget(data.value);
     case "vibeClearKey":
       return state.vibe.hasKey || state.vibe.keyProblem !== null;
     case "closeToTray":
@@ -362,6 +365,9 @@ export function applySettingsAction(action: unknown): SettingsState {
       break;
     case "vibeApiKey":
       vibe.saveApiKey(action.value);
+      break;
+    case "vibeDailyBudget":
+      config.setVibeDailyBudget(action.value);
       break;
     case "vibeClearKey":
       // Forget the key, then stop a request still running with it, so no

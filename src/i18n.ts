@@ -269,7 +269,8 @@ export interface TrayStrings {
   vibeKeyLocked: string;
   vibeKeyUnreadable: string;
   vibeModel: string;
-  vibeUsage: string;
+  vibeDailyBudget: string;
+  vibeSpend: string;
   vibePrivacy: string;
 }
 
@@ -337,7 +338,8 @@ const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   vibeKeyLocked: { en: 'Keyring locked: unlock it and restart Hydra, then retry' },
   vibeKeyUnreadable: { en: 'The saved API key cannot be read with this keyring: save it again' },
   vibeModel: { en: 'Model' },
-  vibeUsage: { en: '{used} of {limit} requests used today' },
+  vibeDailyBudget: { en: 'Daily budget (US$)' },
+  vibeSpend: { en: '{spent} of {budget} today, estimated at list prices' },
   vibePrivacy: {
     en: 'Each request sends your description and the artists and titles of your last 20 songs to Anthropic.',
   },
@@ -539,7 +541,7 @@ const VIBE_ERROR_TEXT: Record<VibeErrorCode, Record<string, string>> = {
   catalog: { en: 'Apple Music search is not available right now. Try again shortly.' },
   busy: { en: 'A Vibe request is already running.' },
   cooldown: { en: 'Wait a few seconds before the next request.' },
-  'daily-limit': { en: "Today's Vibe limit is reached. It resets at midnight." },
+  budget: { en: "Today's Vibe budget is spent. Raise it in Settings, or wait until midnight." },
   cancelled: { en: 'Cancelled.' },
   failed: { en: 'Something went wrong. Try again.' },
 };

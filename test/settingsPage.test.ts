@@ -33,7 +33,7 @@ function fixture(): SettingsState {
     lastfm: { available: true, connected: false, connecting: false, failed: false, username: '', enabled: false },
     vibeModel: 'claude-haiku-5-5',
     vibeEnabled: true,
-    vibe: { hasKey: false, keyPersisted: false, keyProblem: null, keyStorage: 'GNOME Keyring (gnome_libsecret)', usedToday: 0, dailyLimit: 50 },
+    vibe: { hasKey: false, keyPersisted: false, keyProblem: null, keyStorage: 'GNOME Keyring (gnome_libsecret)', spentToday: 0, dailyBudget: 2 },
     options: {
       musicService: [{ value: 'music', label: 'Apple Music' }, { value: 'classical', label: 'Apple Music Classical' }],
       startPage: [{ value: 'new', label: 'New' }],
@@ -125,7 +125,7 @@ describe('settings page', () => {
     const h = harness(state);
     await settle();
     expect(h.element('vibeClearKey').hidden).toBe(true);
-    expect(h.element('vibe-status').textContent).toBe('Key storage: GNOME Keyring (gnome_libsecret) · 0 of 50 requests used today');
+    expect(h.element('vibe-status').textContent).toBe('Key storage: GNOME Keyring (gnome_libsecret) · $0.00 of $2.00 today, estimated at list prices');
     h.element('vibe-key-form').fire('submit');
     await settle();
     expect(h.apply).not.toHaveBeenCalled();
@@ -134,8 +134,8 @@ describe('settings page', () => {
     expect(h.element('vibeApiKey').value).toBe('');
     await settle();
     expect(h.apply).toHaveBeenLastCalledWith({ type: 'vibeApiKey', value: 'sk-ant-api03-key' });
-    h.push({ ...state, vibe: { hasKey: true, keyPersisted: true, keyProblem: null, keyStorage: 'KWallet 5 (kwallet5)', usedToday: 3, dailyLimit: 50 } });
-    expect(h.element('vibe-status').textContent).toBe(`${state.labels.vibeKeySaved} · Key storage: KWallet 5 (kwallet5) · 3 of 50 requests used today`);
+    h.push({ ...state, vibe: { hasKey: true, keyPersisted: true, keyProblem: null, keyStorage: 'KWallet 5 (kwallet5)', spentToday: 0.004, dailyBudget: 2 } });
+    expect(h.element('vibe-status').textContent).toBe(`${state.labels.vibeKeySaved} · Key storage: KWallet 5 (kwallet5) · <$0.01 of $2.00 today, estimated at list prices`);
     expect(h.element('vibeClearKey').hidden).toBe(false);
     h.element('vibeClearKey').fire('click');
     await settle();
@@ -144,6 +144,28 @@ describe('settings page', () => {
     h.element('vibeModel').fire('change');
     await settle();
     expect(h.apply).toHaveBeenLastCalledWith({ type: 'vibeModel', value: 'claude-sonnet-5-5' });
+  });
+
+  it('shows the daily budget and sends a valid change, restoring an invalid one', async () => {
+    const state = fixture();
+    const h = harness(state);
+    await settle();
+    expect(h.element('vibeDailyBudget').value).toBe('2.00');
+    h.element('vibeDailyBudget').value = '0.456';
+    h.element('vibeDailyBudget').fire('change');
+    await settle();
+    expect(h.apply).toHaveBeenLastCalledWith({ type: 'vibeDailyBudget', value: 0.46 });
+    h.apply.mockClear();
+    for (const value of ['0.01', '250', 'abc']) {
+      h.element('vibeDailyBudget').value = value;
+      h.element('vibeDailyBudget').fire('change');
+      await settle();
+      expect(h.element('vibeDailyBudget').value).toBe('2.00');
+    }
+    expect(h.apply).not.toHaveBeenCalled();
+    h.push({ ...state, vibe: { ...state.vibe, spentToday: 1.234, dailyBudget: 5 } });
+    expect(h.element('vibeDailyBudget').value).toBe('5.00');
+    expect(h.element('vibe-status').textContent).toContain('$1.23 of $5.00 today');
   });
 
   it('shows and sends the Vibe switch', async () => {
@@ -165,7 +187,7 @@ describe('settings page', () => {
     await settle();
     h.push({ ...state, vibe: { ...state.vibe, keyProblem: 'locked' } });
     expect(h.element('vibe-status').textContent).toBe(
-      `${state.labels.vibeKeyLocked} · Key storage: GNOME Keyring (gnome_libsecret) · 0 of 50 requests used today`,
+      `${state.labels.vibeKeyLocked} · Key storage: GNOME Keyring (gnome_libsecret) · $0.00 of $2.00 today, estimated at list prices`,
     );
     expect(state.labels.vibeKeyLocked).toBe('Keyring locked: unlock it and restart Hydra, then retry');
     expect(h.element('vibeClearKey').hidden).toBe(false);

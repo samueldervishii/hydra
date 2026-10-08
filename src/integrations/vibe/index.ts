@@ -8,7 +8,8 @@
  * (./catalog.ts). Results go back the same way, and the panel queues them.
  *
  * One request runs at a time, a new one waits COOLDOWN_MS after the last, and
- * `vibe.dailyLimit` (50 by default) caps how many start each local day. The
+ * `vibe.dailyBudget` ($2 by default) caps what they may spend each local day,
+ * priced from the usage every response reports (./pricing.ts). The
  * description, the listening history and the picks are never logged.
  */
 import Anthropic from "@anthropic-ai/sdk";
@@ -37,6 +38,7 @@ import { getApiKey, getApiKeyStatus, knownApiKeyState } from "./apiKey";
 // Settings reaches the key store through this module only.
 export { clearApiKey, isApiKeyFormat, saveApiKey } from "./apiKey";
 import { keyringDescription } from "../../keyring";
+import { costOf, formatUsd } from "./pricing";
 
 const vibeLog = log.scope("vibe");
 
@@ -81,8 +83,9 @@ export interface VibeStatus {
   keyProblem: "locked" | "unreadable" | null;
   /** Where safeStorage keeps its key, such as "GNOME Keyring (gnome_libsecret)". */
   keyStorage: string;
-  usedToday: number;
-  dailyLimit: number;
+  /** US dollars spent today, at list prices. */
+  spentToday: number;
+  dailyBudget: number;
 }
 
 let context: IntegrationContext | null = null;
@@ -98,16 +101,28 @@ export function setStateChangedCallback(callback: (() => void) | null): void {
   stateChanged = callback;
 }
 
-/** The local day as YYYY-MM-DD, which `vibe.usage` is keyed by. */
+/** The local day as YYYY-MM-DD, which `vibe.spend` is keyed by. */
 export function localDay(now = new Date()): string {
   const pad = (n: number): string => String(n).padStart(2, "0");
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-/** Requests started today, reading a stored day other than today as none. */
-function usedToday(): number {
-  const usage = config.getVibeUsage();
-  return usage && usage.day === localDay() ? usage.count : 0;
+/** US dollars spent today, reading a stored day other than today as none. */
+function spentToday(): number {
+  const spend = config.getVibeSpend();
+  return spend && spend.day === localDay() ? spend.usd : 0;
+}
+
+/** Add one response's cost to today's spend, and tell Settings. */
+function addSpend(usd: number): void {
+  if (!(usd > 0)) return;
+  config.setVibeSpend({ day: localDay(), usd: spentToday() + usd });
+  stateChanged?.();
+}
+
+/** Whether today's spend is still under the budget. */
+function withinBudget(): boolean {
+  return spentToday() < config.getVibeDailyBudget();
 }
 
 /** Key presence and today's usage, for Settings. */
@@ -118,8 +133,8 @@ export function getStatus(): VibeStatus {
     keyPersisted: key.persisted,
     keyProblem: key.state === "locked" || key.state === "unreadable" ? key.state : null,
     keyStorage: keyringDescription(),
-    usedToday: usedToday(),
-    dailyLimit: config.getVibeDailyLimit(),
+    spentToday: spentToday(),
+    dailyBudget: config.getVibeDailyBudget(),
   };
 }
 
@@ -183,7 +198,7 @@ export function blockedReason(now = Date.now()): VibeErrorCode | null {
   if (!config.getVibeEnabled()) return "disabled";
   if (active) return "busy";
   if (now - lastFinishedAt < COOLDOWN_MS) return "cooldown";
-  if (usedToday() >= config.getVibeDailyLimit()) return "daily-limit";
+  if (!withinBudget()) return "budget";
   return null;
 }
 
@@ -283,8 +298,7 @@ async function run(request: VibeRequest, apiKey: string): Promise<void> {
   }, REQUEST_TIMEOUT_MS);
   const model = config.getVibeModel();
   const started = Date.now();
-  config.setVibeUsage({ day: localDay(), count: usedToday() + 1 });
-  stateChanged?.();
+  let cost = 0;
   update({ status: "working", searches: 0, maxSearches: MAX_SEARCHES });
   try {
     const client = createClient(apiKey);
@@ -297,10 +311,16 @@ async function run(request: VibeRequest, apiKey: string): Promise<void> {
       signal: controller.signal,
       onProgress: (searches) =>
         update({ status: "working", searches, maxSearches: MAX_SEARCHES }),
+      onUsage: (usage) => {
+        const usd = costOf(model, usage);
+        cost += usd;
+        addSpend(usd);
+      },
+      withinBudget,
     });
     if (controller.signal.aborted) throw new VibeError("cancelled");
     vibeLog.info(
-      `done model=${model} picks=${picks.length} mode=${request.mode} ms=${Date.now() - started}`,
+      `done model=${model} picks=${picks.length} mode=${request.mode} cost=${formatUsd(cost)} ms=${Date.now() - started}`,
     );
     update({ status: "done", mode: request.mode, picks });
   } catch (err: unknown) {
@@ -310,7 +330,9 @@ async function run(request: VibeRequest, apiKey: string): Promise<void> {
         ? err.code
         : "failed";
     // The code is a fixed word; the error itself could carry request data.
-    vibeLog.warn(`failed model=${model} code=${code} ms=${Date.now() - started}`);
+    vibeLog.warn(
+      `failed model=${model} code=${code} cost=${formatUsd(cost)} ms=${Date.now() - started}`,
+    );
     update({ status: "error", code });
   } finally {
     clearTimeout(deadline);
@@ -367,6 +389,7 @@ export function cancel(): void {
 export function init(ctx: IntegrationContext): void {
   if (context) return;
   context = ctx;
+  config.removeLegacyVibeUsage();
   ctx.player.on("nowPlayingItemDidChange", onNowPlaying);
   app.on("will-quit", () => {
     ctx.player.removeListener("nowPlayingItemDidChange", onNowPlaying);

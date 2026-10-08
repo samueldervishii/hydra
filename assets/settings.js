@@ -81,14 +81,22 @@
     else if (vibe.keyProblem === 'unreadable') lines.push(labels.vibeKeyUnreadable);
     else if (vibe.hasKey) lines.push(vibe.keyPersisted ? labels.vibeKeySaved : labels.vibeKeyMemoryOnly);
     lines.push(labels.vibeKeyStorage.replace('{backend}', () => vibe.keyStorage));
-    lines.push(labels.vibeUsage
-      .replace('{used}', () => String(vibe.usedToday))
-      .replace('{limit}', () => String(vibe.dailyLimit)));
+    lines.push(labels.vibeSpend
+      .replace('{spent}', () => formatUsd(vibe.spentToday))
+      .replace('{budget}', () => formatUsd(vibe.dailyBudget)));
     byId('vibe-status').textContent = lines.join(' · ');
     // A key that cannot be read can still be removed.
     const removable = vibe.hasKey || vibe.keyProblem !== null;
     byId('vibeClearKey').hidden = !removable;
     if (focusedId === 'vibeClearKey' && !removable) byId('vibeApiKey').focus();
+    // Left alone while it has focus, so a pushed state does not undo typing.
+    if (focusedId !== 'vibeDailyBudget') byId('vibeDailyBudget').value = vibe.dailyBudget.toFixed(2);
+  }
+
+  // Matches formatUsd() in src/integrations/vibe/pricing.ts.
+  function formatUsd(amount) {
+    if (amount > 0 && amount < 0.005) return '<$0.01';
+    return '$' + Math.max(0, amount).toFixed(2);
   }
 
   async function refresh() {
@@ -132,6 +140,12 @@
     apply({ type: 'vibeApiKey', value });
   });
   byId('vibeClearKey').addEventListener('click', () => apply({ type: 'vibeClearKey' }));
+  byId('vibeDailyBudget').addEventListener('change', () => {
+    const value = Math.round(Number(byId('vibeDailyBudget').value) * 100) / 100;
+    // Main refuses anything outside $0.10 to $100; the field then shows the budget again.
+    if (Number.isFinite(value) && value >= 0.1 && value <= 100) apply({ type: 'vibeDailyBudget', value });
+    else if (state) byId('vibeDailyBudget').value = state.vibe.dailyBudget.toFixed(2);
+  });
   for (const key of ['lastfmConnect', 'lastfmDisconnect']) {
     byId(key).addEventListener('click', () => apply({ type: key }));
   }

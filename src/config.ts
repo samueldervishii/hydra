@@ -38,10 +38,10 @@ export const VIBE_MODELS = ['claude-haiku-5-5', 'claude-sonnet-5-5'] as const;
 /** A model Vibe can ask. */
 export type VibeModel = (typeof VIBE_MODELS)[number];
 
-/** Vibe requests started on one local day, keyed by that day as YYYY-MM-DD. */
-export interface VibeUsage {
+/** What Vibe spent on one local day, in US dollars, keyed by that day as YYYY-MM-DD. */
+export interface VibeSpend {
   day: string;
-  count: number;
+  usd: number;
 }
 
 /** What a playlist page can be sorted by; 'playlist' is the playlist's own order. */
@@ -58,10 +58,11 @@ export const MAX_PLAYLIST_SORTS = 500;
 /** A library (p.) or catalogue (pl.) playlist id, as the page's route carries it. */
 export const PLAYLIST_ID_FORMAT = /^(?:p|pl)\.[A-Za-z0-9._-]{1,100}$/;
 
-/** Vibe requests a day when `vibe.dailyLimit` is absent or invalid. */
-export const DEFAULT_VIBE_DAILY_LIMIT = 50;
-/** The highest `vibe.dailyLimit` accepted, so a typo cannot lift the cap. */
-const MAX_VIBE_DAILY_LIMIT = 1000;
+/** Vibe's daily budget in US dollars when `vibe.dailyBudget` is absent or invalid. */
+export const DEFAULT_VIBE_DAILY_BUDGET = 2;
+/** The lowest and highest daily budget accepted, so a typo cannot lift the cap far. */
+export const MIN_VIBE_DAILY_BUDGET = 0.1;
+export const MAX_VIBE_DAILY_BUDGET = 100;
 
 interface StoreSchema {
   storefront: string;
@@ -84,8 +85,8 @@ interface StoreSchema {
   'vibe.enabled': boolean;
   'vibe.apiKey': string | null;
   'vibe.model': VibeModel;
-  'vibe.dailyLimit': number;
-  'vibe.usage': VibeUsage;
+  'vibe.dailyBudget': number;
+  'vibe.spend': VibeSpend;
   playlistSorts: Record<string, PlaylistSort>;
 }
 
@@ -292,33 +293,57 @@ export function setVibeModel(model: VibeModel): void {
   setConfigValue('vibe.model', model);
 }
 
-/**
- * Read `vibe.dailyLimit`, the Vibe requests allowed per local day. The file
- * can be edited by hand, so anything but a whole number from 1 to 1000 reads
- * as the default of 50.
- */
-export function getVibeDailyLimit(): number {
-  const stored: unknown = getConfigValue('vibe.dailyLimit', DEFAULT_VIBE_DAILY_LIMIT);
-  return typeof stored === 'number' && Number.isInteger(stored)
-    && stored >= 1 && stored <= MAX_VIBE_DAILY_LIMIT
-    ? stored
-    : DEFAULT_VIBE_DAILY_LIMIT;
+/** True when the value is a daily budget Settings accepts: whole cents from $0.10 to $100. */
+export function isVibeDailyBudget(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+    && value >= MIN_VIBE_DAILY_BUDGET && value <= MAX_VIBE_DAILY_BUDGET
+    && Math.abs(value * 100 - Math.round(value * 100)) < 1e-6;
 }
 
-/** Read `vibe.usage`, or null when absent or malformed. */
-export function getVibeUsage(): VibeUsage | null {
-  const stored: unknown = getConfigValueOptional('vibe.usage');
+/**
+ * Read `vibe.dailyBudget`, what Vibe may spend per local day in US dollars.
+ * The file can be edited by hand, so anything Settings would not accept reads
+ * as the default of $2.
+ */
+export function getVibeDailyBudget(): number {
+  const stored: unknown = getConfigValue('vibe.dailyBudget', DEFAULT_VIBE_DAILY_BUDGET);
+  return isVibeDailyBudget(stored) ? stored : DEFAULT_VIBE_DAILY_BUDGET;
+}
+
+/** Persist `vibe.dailyBudget`. */
+export function setVibeDailyBudget(usd: number): void {
+  setConfigValue('vibe.dailyBudget', usd);
+}
+
+/** Read `vibe.spend`, or null when absent or malformed. */
+export function getVibeSpend(): VibeSpend | null {
+  const stored: unknown = getConfigValueOptional('vibe.spend');
   if (typeof stored !== 'object' || stored === null) return null;
-  const usage = stored as Partial<VibeUsage>;
-  return typeof usage.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(usage.day)
-    && typeof usage.count === 'number' && Number.isInteger(usage.count) && usage.count >= 0
-    ? { day: usage.day, count: usage.count }
+  const spend = stored as Partial<VibeSpend>;
+  return typeof spend.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(spend.day)
+    && typeof spend.usd === 'number' && Number.isFinite(spend.usd) && spend.usd >= 0
+    ? { day: spend.day, usd: spend.usd }
     : null;
 }
 
-/** Persist `vibe.usage`. */
-export function setVibeUsage(usage: VibeUsage): void {
-  setConfigValue('vibe.usage', usage);
+/**
+ * Persist `vibe.spend`. Not logged: it changes after every response, and
+ * Vibe's own log line carries each turn's cost.
+ */
+export function setVibeSpend(spend: VibeSpend): void {
+  store.set('vibe.spend', spend);
+}
+
+/**
+ * Delete `vibe.dailyLimit` and `vibe.usage`, the request count 2.6 capped
+ * Vibe by before the spend budget replaced it.
+ */
+export function removeLegacyVibeUsage(): void {
+  for (const key of ['vibe.dailyLimit', 'vibe.usage']) {
+    if (!store.has(key)) continue;
+    store.delete(key);
+    configLog.info(`${key} removed: replaced by vibe.dailyBudget`);
+  }
 }
 
 /** True when the value is a stored playlist sort other than the default. */
