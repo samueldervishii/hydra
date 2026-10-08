@@ -11,6 +11,8 @@ name: Release (Linux)
 # tags the pushed commit with an annotated <version> tag and publishes the
 # .deb, SHA256SUMS, the repository files and the public key. Every release is
 # marked Latest, because apt reads the repository from releases/latest/download/.
+# Last, "apt" calls .github/workflows/apt-r2.yml to publish the same release
+# to the apt repository at https://apt.six9.uk, on Cloudflare R2.
 # No EVS/VMP signing or other targets are involved. From 2.0.0 versions
 # are plain MAJOR.MINOR.PATCH, and the check refuses anything else; the
 # 1.1.2-hydra.N tags and releases from before stay as they are.
@@ -236,3 +238,18 @@ jobs:
             gh api -X DELETE "repos/${GH_REPO}/git/refs/tags/${VERSION}" || true
             exit 1
           fi
+
+  # Publishes the release to the apt repository on R2. A release created with
+  # the workflow's token starts no other workflow, so `on: release` in
+  # apt-r2.yml would never fire; it is called here instead. Its job runs in
+  # the Release environment and takes the R2 credentials and the signing key
+  # from there, so nothing is passed down from this workflow.
+  apt:
+    name: Publish to apt.six9.uk
+    needs: [check, publish]
+    if: github.ref == 'refs/heads/main' && needs.check.outputs.release == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/apt-r2.yml
+    with:
+      tag: ${{ needs.check.outputs.version }}

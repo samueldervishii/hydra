@@ -1,0 +1,113 @@
+name: Publish apt repository (R2)
+
+# Publishes a release to the apt repository on Cloudflare R2, served at
+# https://apt.six9.uk. The release workflow calls it once a release is
+# published (a release made with the workflow's own token starts no other
+# workflow, so `on: release` would never fire); workflow_dispatch republishes
+# a release by hand, the latest unless a tag is given. Either way it runs
+# from main only: the job checks github.ref, and the Release environment,
+# which holds every secret it uses, admits main alone.
+#
+# The work is scripts/publish-apt-r2.sh, in four steps so that each holds only
+# the secret it needs: verify checks the release's own signed index and its
+# .deb against packaging/hydra.gpg, fetch reads the repository's state from
+# R2, build writes and signs the new index, and upload sends it in a safe
+# order and prunes to the last 5 versions. A failed verification or signature
+# stops the job before anything is uploaded. It runs no third-party code
+# beyond checkout: Ubuntu's apt-utils and gnupg, and the AWS CLI the runner
+# image ships.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: The release to publish.
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release to publish; empty for the latest.
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# One publish at a time, never cancelled midway: two runs uploading and
+# pruning together could each delete what the other just published.
+concurrency:
+  group: apt-r2
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to apt.six9.uk
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: Release
+    permissions:
+      contents: read
+    env:
+      APT_BUCKET: hydra-apt
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the apt repository tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends apt-utils gnupg
+          aws --version
+
+      - name: Download and verify the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [[ -z "$TAG" ]]; then
+            TAG=$(gh release view --json tagName --jq .tagName)
+          fi
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'${TAG}' is not a plain MAJOR.MINOR.PATCH release." >&2
+            exit 1
+          fi
+          export APT_WORK="$RUNNER_TEMP/apt" APT_TAG="$TAG"
+          mkdir -p "$APT_WORK/release"
+          gh release download "$TAG" --dir "$APT_WORK/release" \
+            --pattern '*.deb' --pattern InRelease --pattern Packages
+          scripts/publish-apt-r2.sh verify
+
+      - name: Read the repository on R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+        run: APT_WORK="$RUNNER_TEMP/apt" scripts/publish-apt-r2.sh fetch
+
+      # The signing key reaches this step only, in a keyring that the trap
+      # removes when the step ends, whether it succeeds or fails. The script
+      # checks both signatures against packaging/hydra.gpg before anything is
+      # uploaded.
+      - name: Build and sign the index
+        env:
+          HYDRA_GPG_PRIVATE_KEY: ${{ secrets.HYDRA_GPG_PRIVATE_KEY }}
+        run: |
+          GNUPGHOME=$(mktemp -d)
+          export GNUPGHOME
+          trap 'rm -rf "$GNUPGHOME"' EXIT
+          printf '%s\n' "$HYDRA_GPG_PRIVATE_KEY" | gpg --batch --quiet --import
+          key=$(gpg --with-colons --show-keys packaging/hydra.gpg | awk -F: '/^fpr/ {print $10; exit}')
+          APT_WORK="$RUNNER_TEMP/apt" scripts/publish-apt-r2.sh build "$key"
+
+      - name: Upload to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+        run: APT_WORK="$RUNNER_TEMP/apt" scripts/publish-apt-r2.sh upload
