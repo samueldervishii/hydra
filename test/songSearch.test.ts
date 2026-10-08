@@ -7,6 +7,7 @@ import vm from 'node:vm';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SEARCH_LABELS_TOKEN } from '../src/i18n';
+import { resetStubDom, StubElement, stubDom } from './mocks/stubDom';
 
 const source = fs.readFileSync(
   path.join(__dirname, '..', 'assets', 'songSearch.js'),
@@ -24,160 +25,6 @@ const LABELS = {
 };
 
 const script = source.replace(SEARCH_LABELS_TOKEN, () => JSON.stringify(LABELS));
-
-interface StubEvent {
-  type: string;
-  key?: string;
-  ctrlKey?: boolean;
-  metaKey?: boolean;
-  altKey?: boolean;
-  shiftKey?: boolean;
-  stopped: boolean;
-  preventDefault: ReturnType<typeof vi.fn>;
-  stopPropagation: () => void;
-}
-
-type Listener = (event: StubEvent) => void;
-
-class StubNode {
-  parentNode: StubNode | null = null;
-  children: StubNode[] = [];
-
-  appendChild<T extends StubNode>(child: T): T {
-    if (child.parentNode) {
-      child.parentNode.children = child.parentNode.children.filter((c) => c !== child);
-    }
-    child.parentNode = this;
-    this.children.push(child);
-    return child;
-  }
-
-  replaceChildren(...nodes: StubNode[]): void {
-    for (const child of this.children) child.parentNode = null;
-    this.children = [];
-    for (const node of nodes) this.appendChild(node);
-  }
-
-  /** The next node up, crossing from a shadow root to its host. */
-  get upward(): StubNode | null {
-    return this instanceof StubShadowRoot ? this.host : this.parentNode;
-  }
-
-  get isConnected(): boolean {
-    for (let node: StubNode | null = this; node; node = node.upward) {
-      if (node === body) return true;
-    }
-    return false;
-  }
-}
-
-class StubElement extends StubNode {
-  readonly tagName: string;
-  readonly attributes = new Map<string, string>();
-  readonly listeners: Array<{ type: string; listener: Listener }> = [];
-  readonly styles = new Map<string, string>();
-  readonly style = {
-    setProperty: (name: string, value: string, priority?: string) => {
-      this.styles.set(name, priority ? `${value} !${priority}` : value);
-    },
-  };
-  textContent = '';
-  value = '';
-  shadowRoot: StubShadowRoot | null = null;
-  readonly select = vi.fn();
-  readonly scrollIntoView = vi.fn();
-
-  constructor(tagName: string) {
-    super();
-    this.tagName = tagName;
-  }
-
-  get id(): string {
-    return this.attributes.get('id') ?? '';
-  }
-
-  setAttribute(name: string, value: string): void {
-    this.attributes.set(name, String(value));
-  }
-
-  getAttribute(name: string): string | null {
-    return this.attributes.get(name) ?? null;
-  }
-
-  removeAttribute(name: string): void {
-    this.attributes.delete(name);
-  }
-
-  addEventListener(type: string, listener: Listener): void {
-    this.listeners.push({ type, listener });
-  }
-
-  attachShadow(): StubShadowRoot {
-    this.shadowRoot = new StubShadowRoot(this);
-    return this.shadowRoot;
-  }
-
-  focus(): void {
-    for (let node: StubNode | null = this.parentNode; node; node = node.upward) {
-      if (node instanceof StubShadowRoot) {
-        node.activeElement = this;
-        document.activeElement = node.host;
-        return;
-      }
-    }
-    document.activeElement = this;
-  }
-
-  /** Dispatch an event here and bubble it, as far as stopPropagation() allows. */
-  dispatch(type: string, init: Partial<StubEvent> = {}): StubEvent {
-    const event: StubEvent = {
-      type,
-      stopped: false,
-      preventDefault: vi.fn(),
-      stopPropagation() {
-        event.stopped = true;
-      },
-      ...init,
-    };
-    for (let node: StubNode | null = this; node && !event.stopped; node = node.upward) {
-      if (node instanceof StubElement) {
-        for (const entry of node.listeners) if (entry.type === type) entry.listener(event);
-      }
-    }
-    if (!event.stopped) bubbledToBody.push(event);
-    return event;
-  }
-
-  /** Every descendant, depth first, without crossing into a shadow root. */
-  descendants(): StubElement[] {
-    const found: StubElement[] = [];
-    for (const child of this.children) {
-      if (child instanceof StubElement) found.push(child, ...child.descendants());
-    }
-    return found;
-  }
-
-  /** The text of this element and its descendants. */
-  get text(): string {
-    return this.textContent + this.descendants().map((d) => d.textContent).join('');
-  }
-}
-
-class StubShadowRoot extends StubNode {
-  activeElement: StubElement | null = null;
-  constructor(readonly host: StubElement) {
-    super();
-  }
-}
-
-let body: StubElement;
-let bubbledToBody: StubEvent[];
-const document = {
-  activeElement: null as StubElement | null,
-  body: null as StubElement | null,
-  documentElement: null as StubElement | null,
-  createElement: (tag: string) => new StubElement(tag),
-};
 
 /** A catalogue search answer with the shape mk.api.music() returns. */
 function answer(...items: unknown[]) {
@@ -207,11 +54,8 @@ function createHarness({
   pathname = '/al/new',
   playSongs = true,
 }: { hostname?: string; pathname?: string; playSongs?: boolean } = {}) {
-  body = new StubElement('body');
-  bubbledToBody = [];
-  document.body = body;
-  document.documentElement = body;
-  document.activeElement = body;
+  const body = resetStubDom();
+  const document = stubDom.document;
 
   const timeouts = new Map<number, () => void>();
   let nextTimeout = 0;
@@ -320,7 +164,7 @@ describe('songSearch.js', () => {
     window.__hydraSongSearch!.open();
     run();
     expect(isOpen()).toBe(false);
-    expect(body.children).toHaveLength(1);
+    expect(stubDom.body.children).toHaveLength(1);
   });
 
   it('opens with the field focused and its term selected', () => {
@@ -625,18 +469,18 @@ describe('songSearch.js', () => {
   it('queues every result from the clicked one and closes', async () => {
     const { window, music, type, runTimers, rows, isOpen, input } = createHarness();
     const before = new StubElement('button');
-    body.appendChild(before);
+    stubDom.body.appendChild(before);
     before.focus();
     window.__hydraSongSearch!.open();
     music.mockResolvedValueOnce(answer(song('1', 'One'), song('2', 'Two'), song('3', 'Three')));
     type('x');
     runTimers();
     await settle();
-    expect(document.activeElement).not.toBe(before);
+    expect(stubDom.document.activeElement).not.toBe(before);
     rows()[1].dispatch('click');
     expect(window.__hydraPlaySongs).toHaveBeenCalledExactlyOnceWith(['1', '2', '3'], 1);
     expect(isOpen()).toBe(false);
-    expect(document.activeElement).toBe(before);
+    expect(stubDom.document.activeElement).toBe(before);
     expect(input().value).toBe('x');
   });
 
@@ -727,7 +571,7 @@ describe('songSearch.js', () => {
     for (const type of ['keydown', 'keyup', 'keypress']) {
       input().dispatch(type, { key: ' ' });
     }
-    expect(bubbledToBody).toHaveLength(0);
+    expect(stubDom.bubbledToBody).toHaveLength(0);
   });
 
   it('opens Apple search for the term in-app and closes', () => {
