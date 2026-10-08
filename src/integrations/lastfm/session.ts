@@ -13,20 +13,13 @@ import {
   getLastfmUsername,
   setLastfmAccount,
 } from "../../config";
+import { keyringAvailable } from "../../keyring";
 import { errorMessage } from "../../utils";
 
 const sessionLog = log.scope("lastfm");
 
 // undefined until the stored session is first read; null for no session.
 let cached: string | null | undefined;
-
-/** True when safeStorage encrypts with an OS-protected key. */
-function keyringAvailable(): boolean {
-  if (!safeStorage.isEncryptionAvailable()) return false;
-  if (process.platform !== "linux") return true;
-  const backend = safeStorage.getSelectedStorageBackend();
-  return backend !== "basic_text" && backend !== "unknown";
-}
 
 /**
  * The session key, or null when no account is connected. The first call
