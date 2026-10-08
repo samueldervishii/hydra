@@ -38,6 +38,7 @@ import {
   SEARCH_LABELS_TOKEN,
   TOP_BAR_LABELS_TOKEN,
   VIBE_LABELS_TOKEN,
+  VIBE_SPEND_TOKEN,
 } from "./i18n";
 import { getAssetPath } from "./paths";
 import { Player, IntegrationContext } from "./player";
@@ -88,7 +89,9 @@ import {
   init as initVibe,
   cancel as cancelVibe,
   handleRequest as handleVibeRequest,
-  applyVibeEnabled,
+  resetChat as resetVibeChat,
+  pageLoaded as vibePageLoaded,
+  spendUpdate as vibeSpendUpdate,
 } from "./integrations/vibe";
 import { cleanArtworkCache } from "./artwork";
 import {
@@ -269,6 +272,7 @@ export interface Assets {
   PERFORMANCE_CSS: string;
   TOP_BAR_CSS: string;
   PLAYLIST_SORT_CSS: string;
+  VIBE_CSS: string;
   authFrameScript: string;
   navBarScript: string;
   hookScript: string;
@@ -518,9 +522,12 @@ function loadAssets(): Assets {
   const songSearchScript = fs
     .readFileSync(getAssetPath("assets", "songSearch.js"), "utf-8")
     .replace(SEARCH_LABELS_TOKEN, () => JSON.stringify(getSearchStrings()));
+  // The labels are fixed for the run; today's spend is filled in at every
+  // injection by injectRendererScripts().
   const vibeScript = fs
     .readFileSync(getAssetPath("assets", "vibe.js"), "utf-8")
     .replace(VIBE_LABELS_TOKEN, () => JSON.stringify(getVibeStrings()));
+  const VIBE_CSS = fs.readFileSync(getAssetPath("assets", "vibe.css"), "utf-8");
   const PLAYLIST_SORT_CSS = fs.readFileSync(
     getAssetPath("assets", "playlistSort.css"),
     "utf-8",
@@ -543,6 +550,7 @@ function loadAssets(): Assets {
     PERFORMANCE_CSS,
     TOP_BAR_CSS,
     PLAYLIST_SORT_CSS,
+    VIBE_CSS,
     authFrameScript,
     navBarScript,
     hookScript,
@@ -749,10 +757,10 @@ function isMusicOrigin(url: string): boolean {
 }
 
 /**
- * Accept the Vibe panel's requests from the main window's main frame on Apple
+ * Accept the Vibe panel's messages from the main window's main frame on Apple
  * Music's origin only. Any script in that page can still reach these
  * channels, so src/integrations/vibe/index.ts checks the payload and runs one
- * request at a time, with a cooldown and a daily cap.
+ * turn at a time, with a cooldown and a daily budget.
  */
 function setupVibeIPC(win: BrowserWindow): void {
   const fromPage = (event: Electron.IpcMainEvent): boolean =>
@@ -762,11 +770,14 @@ function setupVibeIPC(win: BrowserWindow): void {
     !!event.senderFrame &&
     isMusicOrigin(event.senderFrame.url);
   onSendChannels<VibeSendChannel>({
-    "vibe:request": (event, data) => {
+    "vibe:send": (event, data) => {
       if (fromPage(event)) handleVibeRequest(data);
     },
     "vibe:cancel": (event) => {
       if (fromPage(event)) cancelVibe();
+    },
+    "vibe:new-chat": (event) => {
+      if (fromPage(event)) resetVibeChat();
     },
   });
   // The sort chosen on a playlist page, remembered per playlist. A message
@@ -825,7 +836,11 @@ async function injectRendererScripts(
     mainLog.warn(`failed to inject songSearchScript ${context}:`, e);
   }
   try {
-    await win.webContents.executeJavaScript(assets.vibeScript);
+    await win.webContents.executeJavaScript(
+      assets.vibeScript.replace(VIBE_SPEND_TOKEN, () =>
+        JSON.stringify(vibeSpendUpdate()),
+      ),
+    );
     mainLog.debug("Vibe panel injected");
   } catch (e: unknown) {
     mainLog.warn(`failed to inject vibeScript ${context}:`, e);
@@ -1006,9 +1021,10 @@ function setupContentHandlers(
     await win.webContents.insertCSS(assets.PERFORMANCE_CSS);
     await win.webContents.insertCSS(assets.TOP_BAR_CSS);
     await win.webContents.insertCSS(assets.PLAYLIST_SORT_CSS);
+    await win.webContents.insertCSS(assets.VIBE_CSS);
     await applyPerformanceMode(win.webContents);
     await applyNavigation(win.webContents);
-    await applyVibeEnabled(win.webContents);
+    await vibePageLoaded(win.webContents);
     await injectThemeCss(win.webContents);
     await injectRendererScripts(win, assets, "on load");
   }

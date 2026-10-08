@@ -177,8 +177,9 @@ const SEND_CHANNELS = channelSet<SendChannel>({
   "nav:reload": true,
   "nav:settings": true,
   "nav:apple-sidebar": true,
-  "vibe:request": true,
+  "vibe:send": true,
   "vibe:cancel": true,
+  "vibe:new-chat": true,
   "playlist:sort": true,
 });
 

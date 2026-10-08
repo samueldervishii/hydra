@@ -1,16 +1,18 @@
 /**
- * Vibe: describe a mood and Claude queues songs for it. The panel
- * (assets/vibe.js) sends the description on vibe:request; everything that
- * touches the Anthropic API runs here, in the main process, so the API key
- * never reaches a renderer. Catalogue searches and the recently played list
- * need MusicKit, which lives in the page, so this module calls the panel's
- * functions with executeJavaScript() and re-checks every answer
- * (./catalog.ts). Results go back the same way, and the panel queues them.
+ * Vibe: a music chat with Claude in a side panel. The panel (assets/vibe.js)
+ * sends each message on vibe:send; everything that touches the Anthropic API
+ * runs here, in the main process, so the API key never reaches a renderer.
+ * Catalogue searches and the recently played list need MusicKit, which lives
+ * in the page, so this module calls the panel's functions with
+ * executeJavaScript() and re-checks every answer (./catalog.ts). The reply
+ * goes back the same way, streamed, and the user plays its songs from the
+ * panel.
  *
- * One request runs at a time, a new one waits COOLDOWN_MS after the last, and
- * `vibe.dailyBudget` ($2 by default) caps what they may spend each local day,
- * priced from the usage every response reports (./pricing.ts). The
- * description, the listening history and the picks are never logged.
+ * The chat lives in memory only: New chat, a full page load and quitting
+ * forget it. One turn runs at a time, a new one waits COOLDOWN_MS after the
+ * last, and `vibe.dailyBudget` ($2 by default) caps what they may spend each
+ * local day, priced from the usage every response reports (./pricing.ts).
+ * Messages, the listening history and the songs are never logged.
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { app, type WebContents } from "electron";
@@ -22,8 +24,12 @@ import { setRootAttribute } from "../../rootAttribute";
 import {
   MAX_PROMPT_LENGTH,
   MAX_SEARCHES,
-  runVibe,
+  newChat,
+  runTurn,
   VibeError,
+  type Chat,
+  type StreamMessage,
+  type TurnEvent,
   type VibeErrorCode,
   type VibePick,
 } from "./agent";
@@ -38,42 +44,46 @@ import { getApiKey, getApiKeyStatus, knownApiKeyState } from "./apiKey";
 // Settings reaches the key store through this module only.
 export { clearApiKey, isApiKeyFormat, saveApiKey } from "./apiKey";
 import { keyringDescription } from "../../keyring";
-import { costOf, formatUsd } from "./pricing";
+import { costOf, formatUsd, type TokenUsage } from "./pricing";
 
 const vibeLog = log.scope("vibe");
 
 /**
  * Attribute on `<html>` while Vibe is switched off in Settings: the top bar
- * (assets/topBar.js) hides its Vibe item and the panel (assets/vibe.js) will
- * not open.
+ * (assets/topBar.js) hides its Vibe item, and the panel (assets/vibe.js) takes
+ * its player bar button away and will not open.
  */
 export const VIBE_OFF_ATTRIBUTE = "data-hydra-vibe-off";
 
-/** The wait after one request ends before the next may start. */
-export const COOLDOWN_MS = 5000;
+/** The wait after one turn ends before the next may start. */
+export const COOLDOWN_MS = 1000;
 /** How long one catalogue search in the page may take. */
 const SEARCH_TIMEOUT_MS = 8000;
 /** How long the recently played list may take before the session's is used. */
 const RECENT_TIMEOUT_MS = 5000;
 /** How long one Messages API call may take, the SDK's own timeout. */
 const API_TIMEOUT_MS = 60_000;
-/** How long a whole request may take, every round and search included. */
-const REQUEST_TIMEOUT_MS = 180_000;
+/** How long a whole turn may take, every round and search included. */
+const TURN_TIMEOUT_MS = 180_000;
+/**
+ * Streamed text is gathered for this long before it goes to the page, so a
+ * reply costs a few dozen executeJavaScript() calls rather than one a token.
+ */
+const TEXT_FLUSH_MS = 60;
 
-/** Where the panel puts the songs: after the current one, or instead of the queue. */
-export type VibeQueueMode = "next" | "replace";
-
-/** A request the panel sent, once checked. */
+/** A message the panel sent, once checked. */
 export interface VibeRequest {
   prompt: string;
-  mode: VibeQueueMode;
 }
 
-/** What the panel is told, as one JSON value. */
+/** What the panel is told, as one JSON value each time. */
 export type VibeUpdate =
   | { status: "working"; searches: number; maxSearches: number }
-  | { status: "done"; mode: VibeQueueMode; picks: VibePick[] }
-  | { status: "error"; code: VibeErrorCode };
+  | { status: "text"; text: string }
+  | { status: "songs"; songs: VibePick[] }
+  | { status: "done" }
+  | { status: "error"; code: VibeErrorCode }
+  | { status: "spend"; spent: string; budget: string };
 
 /** Vibe's state for Settings: never the key itself. */
 export interface VibeStatus {
@@ -92,11 +102,16 @@ let context: IntegrationContext | null = null;
 let nowPlaying: ListenedTrack | null = null;
 /** Songs that started this session, newest first: the fallback history. */
 const sessionHistory: ListenedTrack[] = [];
+let chat: Chat = newChat();
+/** Advanced by New chat and a page load, so a turn from the chat before stays quiet. */
+let chatGeneration = 0;
 let active: AbortController | null = null;
 let lastFinishedAt = 0;
 let stateChanged: (() => void) | null = null;
+let pendingText = "";
+let textTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Tell Settings when the key state or today's usage changes; null to stop. */
+/** Tell Settings when the key state or today's spend changes; null to stop. */
 export function setStateChangedCallback(callback: (() => void) | null): void {
   stateChanged = callback;
 }
@@ -113,19 +128,12 @@ function spentToday(): number {
   return spend && spend.day === localDay() ? spend.usd : 0;
 }
 
-/** Add one response's cost to today's spend, and tell Settings. */
-function addSpend(usd: number): void {
-  if (!(usd > 0)) return;
-  config.setVibeSpend({ day: localDay(), usd: spentToday() + usd });
-  stateChanged?.();
-}
-
 /** Whether today's spend is still under the budget. */
 function withinBudget(): boolean {
   return spentToday() < config.getVibeDailyBudget();
 }
 
-/** Key presence and today's usage, for Settings. */
+/** Key presence and today's spend, for Settings. */
 export function getStatus(): VibeStatus {
   const key = getApiKeyStatus();
   return {
@@ -139,9 +147,9 @@ export function getStatus(): VibeStatus {
 }
 
 /**
- * The request in a vibe:request payload, or null when it is malformed. Any
+ * The request in a vibe:send payload, or null when it is malformed. Any
  * script in Apple's page can send one, so the shape is checked here and not
- * only in the panel: exactly a prompt and a mode, and a prompt of at most
+ * only in the panel: exactly a prompt, and a prompt of more than
  * MAX_PROMPT_LENGTH characters is refused rather than cut, before any work is
  * done on it.
  */
@@ -149,22 +157,21 @@ export function parseRequest(data: unknown): VibeRequest | null {
   if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
   const entry = data as Record<string, unknown>;
   const keys = Object.keys(entry);
-  if (keys.length !== 2 || !keys.includes("prompt") || !keys.includes("mode")) return null;
-  if (entry.mode !== "next" && entry.mode !== "replace") return null;
+  if (keys.length !== 1 || keys[0] !== "prompt") return null;
   if (typeof entry.prompt !== "string" || entry.prompt.length > MAX_PROMPT_LENGTH) return null;
   const prompt = cleanText(entry.prompt, MAX_PROMPT_LENGTH);
-  return prompt ? { prompt, mode: entry.mode } : null;
+  return prompt ? { prompt } : null;
 }
 
 /** Where Hydra sends the key; never taken from the environment. */
 export const ANTHROPIC_API_URL = "https://api.anthropic.com";
 
 /**
- * The SDK client for one request. Without these options the SDK would take
- * its endpoint from ANTHROPIC_BASE_URL, add ANTHROPIC_AUTH_TOKEN as a second
+ * The SDK client for one turn. Without these options the SDK would take its
+ * endpoint from ANTHROPIC_BASE_URL, add ANTHROPIC_AUTH_TOKEN as a second
  * credential, and with ANTHROPIC_LOG at info or debug print every request
- * body, the description and the listening history, to the console. Each is
- * pinned so the key goes to Anthropic alone and nothing is printed.
+ * body, the chat and the listening history, to the console. Each is pinned so
+ * the key goes to Anthropic alone and nothing is printed.
  */
 export function createClient(apiKey: string): Anthropic {
   return new Anthropic({
@@ -188,12 +195,12 @@ export function pageCall(name: "search" | "update", ...args: unknown[]): string 
 }
 
 /**
- * Why a request cannot start now, or null when it can. The key is not checked
+ * Why a turn cannot start now, or null when it can. The key is not checked
  * here: reading it may ask the keyring, so handleRequest() does that last,
- * once the limits allow a request.
+ * once the limits allow a turn.
  */
 export function blockedReason(now = Date.now()): VibeErrorCode | null {
-  // Switched off, the panel cannot open; a request still arriving came from
+  // Switched off, the panel cannot open; a message still arriving came from
   // some other script in the page.
   if (!config.getVibeEnabled()) return "disabled";
   if (active) return "busy";
@@ -203,7 +210,7 @@ export function blockedReason(now = Date.now()): VibeErrorCode | null {
 }
 
 /**
- * The key for a request, retrying a stored key that could not be read, or the
+ * The key for a turn, retrying a stored key that could not be read, or the
  * reason there is none. Settings hears when the outcome changes.
  */
 function keyForRequest(): { key: string } | { code: VibeErrorCode } {
@@ -234,7 +241,7 @@ function onNowPlaying(payload: NowPlayingPayload | null): void {
 /**
  * Run a script in the page and resolve with its value, rejecting after
  * timeoutMs. The window is read through liveWebContents() at the moment of the
- * call, since a request outlives any handle captured when it started.
+ * call, since a turn outlives any handle captured when it started.
  */
 async function inPage(script: string, timeoutMs: number): Promise<unknown> {
   const contents = liveWebContents(context?.getMainWindow() ?? null);
@@ -252,14 +259,65 @@ async function inPage(script: string, timeoutMs: number): Promise<unknown> {
   }
 }
 
-/** Tell the panel how the request is going; a page that cannot hear is ignored. */
-function update(state: VibeUpdate): void {
+/** Hand one state to the panel; a page that cannot hear is ignored. */
+function deliver(state: VibeUpdate): void {
   const contents: WebContents | null = liveWebContents(
     context?.getMainWindow() ?? null,
   );
   contents
     ?.executeJavaScript(`window.__hydraVibe && ${pageCall("update", state)}`)
     .catch(() => vibeLog.warn("panel update failed"));
+}
+
+/** Send the text gathered so far, if any. */
+function flushText(): void {
+  if (textTimer) clearTimeout(textTimer);
+  textTimer = null;
+  if (!pendingText) return;
+  const text = pendingText;
+  pendingText = "";
+  deliver({ status: "text", text });
+}
+
+/**
+ * Tell the panel how the turn is going. Text is gathered for TEXT_FLUSH_MS;
+ * anything else first sends the text before it, so the panel sees both in
+ * the order they happened.
+ */
+function update(state: VibeUpdate): void {
+  if (state.status === "text") {
+    pendingText += state.text;
+    textTimer ??= setTimeout(flushText, TEXT_FLUSH_MS);
+    return;
+  }
+  flushText();
+  deliver(state);
+}
+
+/**
+ * Today's spend and the budget as the panel shows them, "$X of $Y".
+ * src/main.ts writes it into assets/vibe.js at every injection, since the
+ * panel is not there yet when the page loads.
+ */
+export function spendUpdate(): VibeUpdate {
+  return {
+    status: "spend",
+    spent: formatUsd(spentToday()),
+    budget: formatUsd(config.getVibeDailyBudget()),
+  };
+}
+
+/** Show the panel today's spend, after a response or a budget change. */
+export function showSpend(): void {
+  update(spendUpdate());
+}
+
+/** Add one response's cost to today's spend, and tell Settings and the panel. */
+function addSpend(usd: number): void {
+  if (!(usd > 0)) return;
+  config.setVibeSpend({ day: localDay(), usd: spentToday() + usd });
+  stateChanged?.();
+  showSpend();
 }
 
 /**
@@ -288,41 +346,71 @@ async function search(artist: string, title: string) {
   return parseCatalogSongs(answer);
 }
 
+/**
+ * Bind streamed calls to the SDK client. A call that fails part way still
+ * charges the input the API reported when it started.
+ */
+export function streamWith(
+  client: Pick<Anthropic, "messages">,
+  charge: (usage: TokenUsage) => void,
+): StreamMessage {
+  return async (params, { signal, onText }) => {
+    const stream = client.messages.stream(params, { signal });
+    stream.on("text", (delta) => onText(delta));
+    try {
+      return await stream.finalMessage();
+    } catch (err: unknown) {
+      const partial = stream.currentMessage?.usage;
+      if (partial) charge(partial);
+      throw err;
+    }
+  };
+}
+
 async function run(request: VibeRequest, apiKey: string): Promise<void> {
   const controller = new AbortController();
   active = controller;
+  const generation = chatGeneration;
+  const current = (): boolean => generation === chatGeneration;
   let timedOut = false;
   const deadline = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, REQUEST_TIMEOUT_MS);
+  }, TURN_TIMEOUT_MS);
   const model = config.getVibeModel();
   const started = Date.now();
   let cost = 0;
+  let shown = 0;
+  const charge = (usage: TokenUsage): void => {
+    const usd = costOf(model, usage);
+    cost += usd;
+    addSpend(usd);
+  };
+  const onEvent = (event: TurnEvent): void => {
+    if (!current()) return;
+    if (event.type === "text") update({ status: "text", text: event.text });
+    else if (event.type === "songs") {
+      shown += event.songs.length;
+      update({ status: "songs", songs: event.songs });
+    } else update({ status: "working", searches: event.searches, maxSearches: MAX_SEARCHES });
+  };
   update({ status: "working", searches: 0, maxSearches: MAX_SEARCHES });
   try {
-    const client = createClient(apiKey);
-    const picks = await runVibe({
-      createMessage: (params, options) => client.messages.create(params, options),
+    await runTurn({
+      stream: streamWith(createClient(apiKey), charge),
       model,
+      chat,
       prompt: request.prompt,
-      context: { nowPlaying, recent: await recentTracks() },
-      search,
+      tools: { search, nowPlaying: () => nowPlaying, recent: recentTracks },
       signal: controller.signal,
-      onProgress: (searches) =>
-        update({ status: "working", searches, maxSearches: MAX_SEARCHES }),
-      onUsage: (usage) => {
-        const usd = costOf(model, usage);
-        cost += usd;
-        addSpend(usd);
-      },
+      onEvent,
+      onUsage: charge,
       withinBudget,
     });
-    if (controller.signal.aborted) throw new VibeError("cancelled");
     vibeLog.info(
-      `done model=${model} picks=${picks.length} mode=${request.mode} cost=${formatUsd(cost)} ms=${Date.now() - started}`,
+      `turn done model=${model} songs=${shown} cost=${formatUsd(cost)} ms=${Date.now() - started}`,
     );
-    update({ status: "done", mode: request.mode, picks });
+    if (current()) update({ status: "done" });
   } catch (err: unknown) {
     const code: VibeErrorCode = timedOut
       ? "unavailable"
@@ -331,19 +419,20 @@ async function run(request: VibeRequest, apiKey: string): Promise<void> {
         : "failed";
     // The code is a fixed word; the error itself could carry request data.
     vibeLog.warn(
-      `failed model=${model} code=${code} cost=${formatUsd(cost)} ms=${Date.now() - started}`,
+      `turn failed model=${model} code=${code} cost=${formatUsd(cost)} ms=${Date.now() - started}`,
     );
-    update({ status: "error", code });
+    if (current()) update({ status: "error", code });
   } finally {
     clearTimeout(deadline);
+    flushText();
     if (active === controller) active = null;
     lastFinishedAt = Date.now();
   }
 }
 
 /**
- * Start a request from the panel, or tell it why one cannot start. The caller
- * in src/main.ts has checked that the main window's main frame sent it.
+ * Start a turn from the panel, or tell it why one cannot start. The caller in
+ * src/main.ts has checked that the main window's main frame sent it.
  */
 export function handleRequest(data: unknown): void {
   const request = parseRequest(data);
@@ -361,6 +450,24 @@ export function handleRequest(data: unknown): void {
   void run(request, access.key);
 }
 
+/** Stop the running turn, if any; the panel hears "cancelled". */
+export function cancel(): void {
+  active?.abort();
+}
+
+/**
+ * Forget the chat and stop a turn still running in it, for New chat. The
+ * panel clears itself; the stopped turn tells it nothing more.
+ */
+export function resetChat(): void {
+  chatGeneration += 1;
+  cancel();
+  chat = newChat();
+  pendingText = "";
+  if (textTimer) clearTimeout(textTimer);
+  textTimer = null;
+}
+
 /**
  * Mirror the Vibe setting onto the page, then close the panel and let the top
  * bar show or hide its item, so a change from Settings applies without a
@@ -373,19 +480,24 @@ export async function applyVibeEnabled(contents: WebContents | null): Promise<vo
   if (!contents) return;
   try {
     await contents.executeJavaScript(
-      `${enabled ? "" : "window.__hydraVibe?.close(); "}window.__hydraTopBar?.refresh(); undefined`,
+      `${enabled ? "window.__hydraVibe?.refresh(); " : "window.__hydraVibe?.close(); window.__hydraVibe?.refresh(); "}window.__hydraTopBar?.refresh(); undefined`,
     );
   } catch (e: unknown) {
     vibeLog.warn("failed to update the page for the Vibe setting:", errorMessage(e));
   }
 }
 
-/** Stop the running request, if any; the panel hears "cancelled". */
-export function cancel(): void {
-  active?.abort();
+/**
+ * Prepare a freshly loaded page: the panel that showed the chat has gone with
+ * the old document, so the chat goes too, then the page gets the setting.
+ * Never rejects.
+ */
+export async function pageLoaded(contents: WebContents | null): Promise<void> {
+  resetChat();
+  await applyVibeEnabled(contents);
 }
 
-/** Track the current song for the request context and stop a request on quit. */
+/** Track the current song for get_now_playing and stop a turn on quit. */
 export function init(ctx: IntegrationContext): void {
   if (context) return;
   context = ctx;
@@ -393,7 +505,7 @@ export function init(ctx: IntegrationContext): void {
   ctx.player.on("nowPlayingItemDidChange", onNowPlaying);
   app.on("will-quit", () => {
     ctx.player.removeListener("nowPlayingItemDidChange", onNowPlaying);
-    cancel();
+    resetChat();
     context = null;
   });
 }

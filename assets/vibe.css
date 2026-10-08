@@ -1,0 +1,10 @@
+/* Vibe's side panel (assets/vibe.js) is fixed to the right edge of the window,
+   as Apple's Up Next drawer is. While it is open, the floating player moves
+   clear of it the way Apple's own drawer moves it (`.app-container.is-drawer-open
+   .player-bar`); the panel sets the attribute. Below 700px the panel takes the
+   whole width and covers the player, as Apple's drawer covers the page. */
+@media (min-width: 701px) {
+  html[data-hydra-vibe-open] .player-bar {
+    padding-inline-end: 380px !important;
+  }
+}

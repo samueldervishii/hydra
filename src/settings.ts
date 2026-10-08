@@ -368,6 +368,7 @@ export function applySettingsAction(action: unknown): SettingsState {
       break;
     case "vibeDailyBudget":
       config.setVibeDailyBudget(action.value);
+      vibe.showSpend();
       break;
     case "vibeClearKey":
       // Forget the key, then stop a request still running with it, so no

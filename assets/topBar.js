@@ -532,7 +532,8 @@
     else if (id === "search") {
       if (window.__hydraSongSearch) window.__hydraSongSearch.open();
     } else if (id === "vibe") {
-      if (window.__hydraVibe) window.__hydraVibe.open();
+      // The side panel opens and closes from here, as from its player bar button.
+      if (window.__hydraVibe) window.__hydraVibe.toggle();
     } else go(pathFor(id));
   }
 

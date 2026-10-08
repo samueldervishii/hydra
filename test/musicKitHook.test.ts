@@ -127,6 +127,7 @@ function createMusicKit(
     pause: vi.fn(),
     play: vi.fn(),
     playNext: vi.fn(() => Promise.resolve()),
+    playLater: vi.fn(() => Promise.resolve()),
     queue: { length: 1 },
     repeatMode: 0,
     seekToTime: vi.fn(),
@@ -200,6 +201,7 @@ function createHarness({
     __hydra?: Record<string, (...args: unknown[]) => unknown>;
     __hydraPlaySongs?: (ids: unknown, startIndex: unknown) => Promise<void>;
     __hydraPlayNext?: (ids: unknown) => Promise<boolean>;
+    __hydraPlayLater?: (ids: unknown) => Promise<boolean>;
     __hydraPlayTracks?: (items: unknown, startIndex: unknown) => Promise<boolean>;
   }
   const window: HarnessWindow = {
@@ -753,6 +755,68 @@ describe("MusicKit page play next", () => {
   it("is not a command on window.__hydra", () => {
     const { window } = createHarness();
     expect(Object.keys(window.__hydra!)).not.toContain("playNext");
+  });
+});
+
+// The Vibe panel's Add to queue appends through this page-only entry, which
+// shares play next's checks and its place behind a queue replacement.
+describe("MusicKit page add to queue", () => {
+  const ids = ["697195462"];
+
+  it("appends the songs to the queue, as a copy", async () => {
+    const { window, musicKit } = createHarness({
+      musicKitOverrides: { nowPlayingItem: { id: "song" } },
+    });
+    await expect(window.__hydraPlayLater!(ids)).resolves.toBe(true);
+    expect(musicKit.playLater).toHaveBeenCalledExactlyOnceWith({ songs: ids });
+    expect(musicKit.playNext).not.toHaveBeenCalled();
+    expect(musicKit.setQueue).not.toHaveBeenCalled();
+  });
+
+  it("plays the songs when nothing is playing", async () => {
+    const { window, musicKit } = createHarness();
+    await expect(window.__hydraPlayLater!(ids)).resolves.toBe(true);
+    expect(musicKit.playLater).not.toHaveBeenCalled();
+    expect(musicKit.setQueue).toHaveBeenCalledExactlyOnceWith({ songs: ids, startWith: 0, startPlaying: true });
+  });
+
+  it("waits for a queue replacement in progress", async () => {
+    let resolveQueue!: () => void;
+    const { window, musicKit } = createHarness({
+      musicKitOverrides: { nowPlayingItem: { id: "song" } },
+    });
+    musicKit.setQueue.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveQueue = resolve;
+      }),
+    );
+    const replacing = window.__hydraPlaySongs!(ids, 0);
+    await Promise.resolve();
+    const later = window.__hydraPlayLater!(ids);
+    await Promise.resolve();
+    expect(musicKit.playLater).not.toHaveBeenCalled();
+    resolveQueue();
+    await Promise.all([replacing, later]);
+    expect(musicKit.playLater).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ["no list", undefined],
+    ["an empty list", []],
+    ["more than one page of results", Array(26).fill("1")],
+    ["a library id", ["i.abc123"]],
+    ["a script", ["1); alert(1"]],
+  ])("ignores %s", async (_label, list) => {
+    const { window, musicKit } = createHarness({
+      musicKitOverrides: { nowPlayingItem: { id: "song" } },
+    });
+    await expect(window.__hydraPlayLater!(list)).resolves.toBe(false);
+    expect(musicKit.playLater).not.toHaveBeenCalled();
+  });
+
+  it("is not a command on window.__hydra", () => {
+    const { window } = createHarness();
+    expect(Object.keys(window.__hydra!)).not.toContain("playLater");
   });
 });
 

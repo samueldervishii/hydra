@@ -29,8 +29,9 @@ type SendChannel =
  | "nav:reload"
  | "nav:settings"
  | "nav:apple-sidebar"
- | "vibe:request"
+ | "vibe:send"
  | "vibe:cancel"
+ | "vibe:new-chat"
  | "playlist:sort";
 
 /**

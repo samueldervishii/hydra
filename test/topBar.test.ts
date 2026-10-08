@@ -200,6 +200,7 @@ function createHarness({
     AMWrapper: bridge ? { ipcRenderer: { send } } : undefined,
     __hydraHookedMk: (musicKitReady ? mk : undefined) as unknown,
     __hydraSongSearch: { open: vi.fn(), isOpen: vi.fn(() => false) },
+    __hydraVibe: { toggle: vi.fn(), isOpen: vi.fn(() => false) },
     navigation: (canGoBack === undefined ? undefined : { canGoBack, currentEntry: { key: 'entry-0' } }) as
       | { canGoBack: boolean; currentEntry: { key: string } }
       | undefined,
@@ -506,6 +507,15 @@ describe('topBar.js', () => {
     const h = createHarness();
     h.button('search').click();
     expect(h.window.__hydraSongSearch.open).toHaveBeenCalledOnce();
+    expect(h.window.history.pushState).not.toHaveBeenCalled();
+  });
+
+  // The Vibe item opens and closes the side panel, as its player bar button does.
+  it('toggles the Vibe panel from Vibe', () => {
+    const h = createHarness();
+    h.button('vibe').click();
+    h.button('vibe').click();
+    expect(h.window.__hydraVibe.toggle).toHaveBeenCalledTimes(2);
     expect(h.window.history.pushState).not.toHaveBeenCalled();
   });
 

@@ -341,7 +341,7 @@ const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   vibeDailyBudget: { en: 'Daily budget (US$)' },
   vibeSpend: { en: '{spent} of {budget} today, estimated at list prices' },
   vibePrivacy: {
-    en: 'Each request sends your description and the artists and titles of your last 20 songs to Anthropic.',
+    en: 'Your messages go to Anthropic. Claude can also ask for the song playing now and the artists and titles of your last 20 songs, which then go too. The chat is never saved.',
   },
 };
 
@@ -489,20 +489,32 @@ export function getTopBarStrings(): {
  * as NAV_LABELS_TOKEN is.
  */
 export const VIBE_LABELS_TOKEN = '__HYDRA_VIBE_LABELS__';
+/**
+ * Placeholder for today's spend in assets/vibe.js, substituted at every
+ * injection, since it changes while Hydra runs.
+ */
+export const VIBE_SPEND_TOKEN = '__HYDRA_VIBE_SPEND__';
 
 /** Labels for the injected Vibe panel. */
 export interface VibeStrings {
   vibe: string;
   placeholder: string;
-  playNext: string;
-  replaceQueue: string;
-  submit: string;
-  cancel: string;
+  send: string;
+  stop: string;
+  newChat: string;
+  close: string;
+  empty: string;
+  thinking: string;
   working: string;
-  openSettings: string;
+  playAll: string;
+  moreOptions: string;
+  playNext: string;
+  addToQueue: string;
   queuedNext: string;
-  queuedReplace: string;
+  queuedLater: string;
   queueFailed: string;
+  spend: string;
+  openSettings: string;
   explicit: string;
   errors: Record<VibeErrorCode, string>;
 }
@@ -512,16 +524,23 @@ export interface VibeStrings {
 // is picked up through getLocalizedString() with no other change.
 const VIBE_TEXT: Record<Exclude<keyof VibeStrings, 'errors' | 'explicit'>, Record<string, string>> = {
   vibe: { en: 'Vibe' },
-  placeholder: { en: 'Describe a mood, a moment or a vibe' },
+  placeholder: { en: 'Ask for music: a mood, a moment, an artist' },
+  send: { en: 'Send' },
+  stop: { en: 'Stop' },
+  newChat: { en: 'New chat' },
+  close: { en: 'Close' },
+  empty: { en: 'Tell Vibe what you want to hear, and it finds the songs in Apple Music.' },
+  thinking: { en: 'Thinking…' },
+  working: { en: 'Searching Apple Music… {count} of {max}' },
+  playAll: { en: 'Play all' },
+  moreOptions: { en: 'More options' },
   playNext: { en: 'Play next' },
-  replaceQueue: { en: 'Replace queue' },
-  submit: { en: 'Find songs' },
-  cancel: { en: 'Cancel' },
-  working: { en: 'Finding songs… {count} of {max} searches' },
+  addToQueue: { en: 'Add to queue' },
+  queuedNext: { en: 'Playing next' },
+  queuedLater: { en: 'Added to the queue' },
+  queueFailed: { en: 'The song could not be queued. Try again.' },
+  spend: { en: '{spent} of {budget} today' },
   openSettings: { en: 'Open Settings' },
-  queuedNext: { en: 'Added to play next' },
-  queuedReplace: { en: 'Now playing' },
-  queueFailed: { en: 'The songs could not be queued. Try again.' },
 };
 
 const VIBE_ERROR_TEXT: Record<VibeErrorCode, Record<string, string>> = {
@@ -535,14 +554,12 @@ const VIBE_ERROR_TEXT: Record<VibeErrorCode, Record<string, string>> = {
   'rate-limit': { en: "Anthropic's rate limit was reached. Try again in a minute." },
   unavailable: { en: 'Claude is busy or did not answer in time. Try again shortly.' },
   network: { en: 'Hydra could not reach Anthropic. Check your connection.' },
-  refusal: { en: 'Claude declined this request. Try describing it differently.' },
-  'nothing-found': { en: 'No matching songs were found on Apple Music. Try another description.' },
-  incomplete: { en: 'Claude did not finish choosing songs. Try again.' },
-  catalog: { en: 'Apple Music search is not available right now. Try again shortly.' },
-  busy: { en: 'A Vibe request is already running.' },
-  cooldown: { en: 'Wait a few seconds before the next request.' },
+  refusal: { en: 'Claude declined this message. Try asking differently.' },
+  incomplete: { en: 'Vibe ran out of steps for this message. Try asking again.' },
+  busy: { en: 'Vibe is still answering.' },
+  cooldown: { en: 'Wait a moment before sending again.' },
   budget: { en: "Today's Vibe budget is spent. Raise it in Settings, or wait until midnight." },
-  cancelled: { en: 'Cancelled.' },
+  cancelled: { en: 'Stopped.' },
   failed: { en: 'Something went wrong. Try again.' },
 };
 

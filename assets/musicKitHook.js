@@ -758,6 +758,39 @@
           return false;
         }
       };
+      /**
+       * Add catalogue songs to the end of the queue, for the Vibe panel's
+       * Add to queue (assets/vibe.js). Page-only, like __hydraPlayNext, and
+       * like it plays the songs instead when nothing is playing.
+       *
+       * @param {unknown} ids - Catalogue song ids, at most MAX_QUEUED_SONGS
+       * @returns {Promise<boolean>} Whether the songs were queued
+       */
+      window.__hydraPlayLater = async (ids) => {
+        if (
+          !Array.isArray(ids) ||
+          ids.length === 0 ||
+          ids.length > MAX_QUEUED_SONGS ||
+          !ids.every((id) => typeof id === "string" && /^\d{1,20}$/.test(id)) ||
+          !documentActive ||
+          window.__hydraHookedMk !== mk
+        )
+          return false;
+        try {
+          if (!mk.nowPlayingItem) {
+            await replaceQueue({ songs: ids.slice(), startWith: 0, startPlaying: true });
+            return true;
+          }
+          if (blockedQueue) return false;
+          const insert = queueTask.then(() => mk.playLater({ songs: ids.slice() }));
+          queueTask = insert.catch(() => {});
+          await insert;
+          return true;
+        } catch (_) {
+          console.warn("[Hydra] failed to queue requested media");
+          return false;
+        }
+      };
       sendToMain("hookReady", injectedDocumentGeneration);
     }
 

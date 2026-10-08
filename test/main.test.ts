@@ -110,8 +110,9 @@ const bootstrap = vi.hoisted(() => {
     toggleNavigation: vi.fn(),
     showAppleSidebar: vi.fn(),
     vibeCancel: vi.fn(),
-    applyVibeEnabled: vi.fn(() => Promise.resolve()),
+    vibePageLoaded: vi.fn(() => Promise.resolve()),
     vibeRequest: vi.fn(),
+    vibeNewChat: vi.fn(),
     getPlaylistSorts: vi.fn((): Record<string, unknown> => ({})),
     setPlaylistSort: vi.fn(),
     handlePlaybackCapabilitiesDidChange: vi.fn(),
@@ -223,6 +224,7 @@ vi.mock("../src/i18n", () => ({
   SEARCH_LABELS_TOKEN: "__SEARCH_LABELS__",
   TOP_BAR_LABELS_TOKEN: "__TOP_BAR_LABELS__",
   VIBE_LABELS_TOKEN: "__VIBE_LABELS__",
+  VIBE_SPEND_TOKEN: "__VIBE_SPEND__",
 }));
 
 vi.mock("../src/paths", () => ({
@@ -325,7 +327,9 @@ vi.mock("../src/integrations/vibe", () => ({
   init: bootstrap.integrations.vibe,
   cancel: bootstrap.vibeCancel,
   handleRequest: bootstrap.vibeRequest,
-  applyVibeEnabled: bootstrap.applyVibeEnabled,
+  resetChat: bootstrap.vibeNewChat,
+  pageLoaded: bootstrap.vibePageLoaded,
+  spendUpdate: () => ({ status: "spend", spent: "$0.00", budget: "$2.00" }),
 }));
 vi.mock("../src/artwork", () => ({ cleanArtworkCache: vi.fn() }));
 vi.mock("../src/windowState", () => ({
@@ -576,10 +580,10 @@ describe("main bootstrap", () => {
     const finish = bootstrap.mainWebListeners.get("did-finish-load");
     await finish?.();
     await finish?.();
-    // Each load inserts styleFix.css, performanceMode.css, topBar.css and
-    // playlistSort.css; the theme is mocked. fs is mocked to return "asset"
-    // for every file.
-    expect(bootstrap.webContents.insertCSS).toHaveBeenCalledTimes(8);
+    // Each load inserts styleFix.css, performanceMode.css, topBar.css,
+    // playlistSort.css and vibe.css; the theme is mocked. fs is mocked to
+    // return "asset" for every file.
+    expect(bootstrap.webContents.insertCSS).toHaveBeenCalledTimes(10);
     expect(bootstrap.applyPerformanceMode).toHaveBeenCalledTimes(2);
     expect(bootstrap.applyPerformanceMode).toHaveBeenCalledWith(
       bootstrap.webContents,
@@ -588,8 +592,8 @@ describe("main bootstrap", () => {
       bootstrap.webContents.insertCSS.mock.invocationCallOrder[1],
     ).toBeLessThan(bootstrap.applyPerformanceMode.mock.invocationCallOrder[0]);
     expect(bootstrap.applyNavigation).toHaveBeenCalledTimes(2);
-    expect(bootstrap.applyVibeEnabled).toHaveBeenCalledTimes(2);
-    expect(bootstrap.applyVibeEnabled).toHaveBeenCalledWith(bootstrap.webContents);
+    expect(bootstrap.vibePageLoaded).toHaveBeenCalledTimes(2);
+    expect(bootstrap.vibePageLoaded).toHaveBeenCalledWith(bootstrap.webContents);
     expect(bootstrap.applyNavigation).toHaveBeenCalledWith(bootstrap.webContents);
     expect(
       bootstrap.webContents.insertCSS.mock.invocationCallOrder[2],
@@ -615,20 +619,22 @@ describe("main bootstrap", () => {
 
   // Any script in Apple's page can reach these channels, so the sender is
   // checked here and the request handler adds its own limits.
-  it("accepts Vibe requests and cancels only from the main frame on Apple Music's origin", async () => {
+  it("accepts Vibe messages, cancels and new chats only from the main frame on Apple Music's origin", async () => {
     await startMain();
     const handler = (name: string) =>
       bootstrap.ipcOn.mock.calls.find(([channel]) => channel === name)?.[1];
-    const request = handler("vibe:request");
+    const request = handler("vibe:send");
     const cancel = handler("vibe:cancel");
+    const newChat = handler("vibe:new-chat");
     const mainFrame = bootstrap.webContents.mainFrame as { url: string };
     const event = { sender: bootstrap.webContents, senderFrame: mainFrame };
-    const payload = { prompt: "chill", mode: "next" };
+    const payload = { prompt: "chill" };
     const originalUrl = mainFrame.url;
     try {
       request?.({ ...event, sender: {} }, payload);
       request?.({ ...event, senderFrame: { url: "https://music.apple.com/us/new" } }, payload);
       cancel?.({ ...event, sender: {} });
+      newChat?.({ ...event, sender: {} });
       // Allowed navigation hosts that are not where the panel runs.
       for (const url of [
         "https://classical.music.apple.com/us/",
@@ -642,14 +648,19 @@ describe("main bootstrap", () => {
         mainFrame.url = url;
         request?.(event, payload);
         cancel?.(event);
+        newChat?.(event);
       }
       expect(bootstrap.vibeRequest).not.toHaveBeenCalled();
       expect(bootstrap.vibeCancel).not.toHaveBeenCalled();
+      expect(bootstrap.vibeNewChat).not.toHaveBeenCalled();
       mainFrame.url = "https://music.apple.com/us/new?l=en";
       request?.(event, payload);
       cancel?.(event);
+      newChat?.(event);
       expect(bootstrap.vibeRequest).toHaveBeenCalledExactlyOnceWith(payload);
       expect(bootstrap.vibeCancel).toHaveBeenCalledOnce();
+      expect(bootstrap.vibeNewChat).toHaveBeenCalledOnce();
+      expect(handler("vibe:request")).toBeUndefined();
     } finally {
       mainFrame.url = originalUrl;
     }

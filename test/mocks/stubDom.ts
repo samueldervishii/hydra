@@ -197,6 +197,16 @@ export class StubElement extends StubNode {
     stubDom.document.activeElement = this;
   }
 
+  /** A click, as element.click() sends one. */
+  click(): void {
+    this.dispatch('click');
+  }
+
+  /** The class attribute as a token list, for contains() only. */
+  get classList(): { contains: (name: string) => boolean } {
+    return { contains: (name: string) => (this.getAttribute('class') ?? '').split(/\s+/).includes(name) };
+  }
+
   /** Dispatch an event here and bubble it, as far as stopPropagation() allows. */
   dispatch(type: string, init: Partial<StubEvent> = {}): StubEvent {
     const event: StubEvent = {
