@@ -44,6 +44,12 @@
   var ALL_PLAYLISTS_PATH = "/library/all-playlists";
   /** Custom property on the host carrying the colour sampled below the strip. */
   var STRIP_PROPERTY = "--hydra-strip";
+  /** The pill and round buttons on a tinted page: the strip colour, 10% lighter in dark mode, 10% darker in light. */
+  var TINT_PROPERTY = "--hydra-tint";
+  /** Their icon colour on that tint: white or black, whichever contrasts more. */
+  var TINT_FG_PROPERTY = "--hydra-tint-fg";
+  /** How far the tint moves from the strip colour, towards white or black. */
+  var TINT_MIX = 0.1;
   /** How far below the strip the page colour is sampled, in CSS pixels. */
   var SAMPLE_BELOW_PX = 4;
   /** Space between an active item's icon and its label, in CSS pixels. */
@@ -89,6 +95,16 @@
     "  box-sizing: border-box; border-radius: 1000px;",
     "  background: linear-gradient(var(--glass), var(--glass)), var(--pageBG, #1f1f1f);",
     "  box-shadow: 0 10px 40px var(--glass-shadow), inset 0 0 0 0.5px var(--glass-stroke); }",
+    // On a page Apple tinted from its artwork, the pill and round buttons take
+    // the strip's colour instead of the neutral glass, and their icons switch
+    // to whichever of white or black reads better on it.
+    ".pill, .round { transition: background-color 0.25s ease; }",
+    ":host([data-tinted]) .pill, :host([data-tinted]) .round { background: var(" + TINT_PROPERTY + "); }",
+    ":host([data-tinted]) .pill .item, :host([data-tinted]) .round {",
+    "  color: color-mix(in srgb, var(" + TINT_FG_PROPERTY + ") 72%, transparent); }",
+    ":host([data-tinted]) .pill .item:hover, :host([data-tinted]) .round:hover,",
+    ":host([data-tinted]) .item[aria-current='page'] { color: var(" + TINT_FG_PROPERTY + "); }",
+    ":host([data-tinted]) .capsule { background: color-mix(in srgb, var(" + TINT_FG_PROPERTY + ") 16%, transparent); }",
     ".capsule { position: absolute; top: 4px; bottom: 4px; left: 0; width: 0; opacity: 0;",
     "  border-radius: 1000px; pointer-events: none;",
     "  transition: left 0.2s ease, width 0.2s ease, opacity 0.15s ease;",
@@ -117,7 +133,7 @@
     "  color: var(--systemPrimary, #ffffff); text-align: left; }",
     ".menuitem:hover, .menuitem:focus { background: var(--systemQuaternary, rgba(128, 128, 128, 0.2)); }",
     ".menuitem:focus-visible { outline-offset: -2px; }",
-    "@media (prefers-reduced-motion: reduce) { .bar, .label, .capsule { transition: none; } }",
+    "@media (prefers-reduced-motion: reduce) { .bar, .pill, .round, .label, .capsule { transition: none; } }",
   ].join("\n");
 
   // The account button's stand-in until Apple's avatar loads, and when there is
@@ -756,6 +772,68 @@
   }
 
   /**
+   * The red, green and blue of a computed rgb() or rgba() colour, or null.
+   * @param {string | null} colour - A computed colour
+   * @returns {number[] | null}
+   */
+  function parseRgb(colour) {
+    var match = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/.exec(colour || "");
+    return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+  }
+
+  /**
+   * WCAG relative luminance of an sRGB colour.
+   * @param {number[]} rgb - Red, green and blue, 0 to 255
+   * @returns {number}
+   */
+  function luminance(rgb) {
+    var c = rgb.map(function (v) {
+      var s = v / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+
+  /**
+   * Tint the pill and round buttons from the strip colour, or go back to the
+   * glass when the page is not tinted: its colour is the page's own, or not
+   * an rgb() Hydra can read.
+   * @param {string | null} colour - The sampled strip colour
+   * @returns {void}
+   */
+  function applyTint(colour) {
+    if (!host) return;
+    var strip = parseRgb(colour);
+    var pageColour = parseRgb(window.getComputedStyle(host).backgroundColor);
+    var plain =
+      !strip ||
+      (pageColour &&
+        Math.abs(strip[0] - pageColour[0]) +
+          Math.abs(strip[1] - pageColour[1]) +
+          Math.abs(strip[2] - pageColour[2]) <=
+          6);
+    if (plain) {
+      host.removeAttribute("data-tinted");
+      host.style.removeProperty(TINT_PROPERTY);
+      host.style.removeProperty(TINT_FG_PROPERTY);
+      return;
+    }
+    var dark =
+      typeof window.matchMedia !== "function" ||
+      window.matchMedia("(prefers-color-scheme: dark)").matches;
+    var towards = dark ? 255 : 0;
+    var tint = strip.map(function (v) {
+      return Math.round(v + (towards - v) * TINT_MIX);
+    });
+    // Contrast against white is 1.05 / (L + 0.05), against black (L + 0.05) / 0.05.
+    var l = luminance(tint);
+    var fg = 1.05 / (l + 0.05) >= (l + 0.05) / 0.05 ? "rgb(255, 255, 255)" : "rgb(0, 0, 0)";
+    host.style.setProperty(TINT_PROPERTY, "rgb(" + tint.join(", ") + ")");
+    host.style.setProperty(TINT_FG_PROPERTY, fg);
+    host.setAttribute("data-tinted", "");
+  }
+
+  /**
    * Match the strip to the colour Apple painted just below it: the first
    * element up from that point with a background, read from computed styles
    * so no Apple class is named. Album and playlist pages tint themselves from
@@ -787,6 +865,7 @@
     }
     if (colour) host.style.setProperty(STRIP_PROPERTY, colour);
     else host.style.removeProperty(STRIP_PROPERTY);
+    applyTint(colour);
     watchStrip(chain);
   }
 
@@ -835,6 +914,7 @@
     }
     stripFrame = null;
     if (host) host.style.removeProperty(STRIP_PROPERTY);
+    applyTint(null);
   }
 
   /**

@@ -304,6 +304,10 @@ function createHarness({
       hit = next;
     },
     strip: () => host()?.styles.get('--hydra-strip'),
+    tint: () =>
+      host()?.attributes.has('data-tinted')
+        ? { tint: host()?.styles.get('--hydra-tint'), fg: host()?.styles.get('--hydra-tint-fg') }
+        : null,
     shadowElements: () => (host() ? descendants(host()!.shadowRoot!) : []),
     activeItem: () =>
       (host() ? descendants(host()!.shadowRoot!).filter((e) => e.tagName === 'button') : [])
@@ -715,10 +719,70 @@ describe('topBar.js', () => {
       expect(h.strip()).toBeUndefined();
     });
 
+    // The pill and round buttons follow the page's tint, 10% lighter in dark
+    // mode and 10% darker in light mode, with icons in whichever of white or
+    // black reads better on the result.
+    describe('tinted buttons', () => {
+      it('tints from a dark strip in dark mode, with white icons', () => {
+        const { text } = page('rgb(73, 36, 0)');
+        const h = createHarness({ hitAt: () => text });
+        h.runFrames();
+        expect(h.tint()).toEqual({ tint: 'rgb(91, 58, 26)', fg: 'rgb(255, 255, 255)' });
+      });
+
+      it('darkens a light strip in light mode, with black icons', () => {
+        const { text } = page('rgb(240, 236, 228)');
+        const h = createHarness({ hitAt: () => text });
+        (h.window as unknown as { matchMedia: (q: string) => { matches: boolean } }).matchMedia = () => ({ matches: false });
+        h.window.__hydraTopBar?.update();
+        h.runFrames();
+        expect(h.tint()).toEqual({ tint: 'rgb(216, 212, 205)', fg: 'rgb(0, 0, 0)' });
+      });
+
+      // A mid-tone where white would read worse than black.
+      it('picks the icon colour by contrast, not by scheme', () => {
+        const { text } = page('rgb(150, 150, 150)');
+        const h = createHarness({ hitAt: () => text });
+        h.runFrames();
+        expect(h.tint()?.fg).toBe('rgb(0, 0, 0)');
+      });
+
+      it('keeps the glass on a page in its own colour, or one it cannot read', () => {
+        const { text } = page('rgb(31, 31, 31)');
+        const h = createHarness({ hitAt: () => text });
+        h.host()!.background = 'rgb(32, 31, 30)';
+        h.window.__hydraTopBar?.update();
+        h.runFrames();
+        expect(h.strip()).toBe('rgb(31, 31, 31)');
+        expect(h.tint()).toBeNull();
+
+        const other = page('color(srgb 0.1 0.2 0.3)');
+        h.setHit(() => other.text);
+        h.window.__hydraTopBar?.update();
+        h.runFrames();
+        expect(h.tint()).toBeNull();
+      });
+
+      it("goes back to the glass when Apple's sidebar takes over", () => {
+        const { text } = page('rgb(73, 36, 0)');
+        const h = createHarness({ hitAt: () => text });
+        h.runFrames();
+        expect(h.tint()).not.toBeNull();
+        h.signIn(false);
+        expect(h.tint()).toBeNull();
+        expect(h.host()!.styles.has('--hydra-tint')).toBe(false);
+      });
+
+      it('fades the tint in 250ms, and not at all with reduced motion', () => {
+        expect(source).toContain('".pill, .round { transition: background-color 0.25s ease; }"');
+        expect(source).toContain(':host([data-tinted]) .pill, :host([data-tinted]) .round { background: var(" + TINT_PROPERTY + "); }');
+        expect(source).toContain('@media (prefers-reduced-motion: reduce) { .bar, .pill, .round, .label, .capsule { transition: none; } }');
+      });
+    });
+
     it('fades the strip in 250ms, not at all with reduced motion, under buttons with their own fill', () => {
       expect(source).toContain('background-color: var(" + STRIP_PROPERTY + ", var(--pageBG, #1f1f1f));');
       expect(source).toContain('transition: background-color 0.25s ease;');
-      expect(source).toContain('@media (prefers-reduced-motion: reduce) { .bar, .label, .capsule { transition: none; } }');
       expect(source).toMatch(/\.round \{[^}]*\n\s*"\s*background: linear-gradient\(var\(--glass\), var\(--glass\)\), var\(--pageBG/);
     });
   });
@@ -798,7 +862,7 @@ describe('topBar.js', () => {
   it('animates the capsule over 200ms, not at all with reduced motion, with focus rings', () => {
     expect(source).toContain('transition: left 0.2s ease, width 0.2s ease, opacity 0.15s ease;');
     expect(source).toContain('transition: max-width 0.2s ease, margin-left 0.2s ease, opacity 0.2s ease;');
-    expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.bar, \.label, \.capsule \{ transition: none; \} \}/);
+    expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.bar, \.pill, \.round, \.label, \.capsule \{ transition: none; \} \}/);
     expect(source).toMatch(/button:focus-visible \{ outline: 2px solid/);
   });
 
