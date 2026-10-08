@@ -43,6 +43,21 @@
           </div>
         </div>
       </section>
+      <section aria-labelledby="vibe-heading">
+        <h2 id="vibe-heading" data-label="vibe"></h2>
+        <div class="group">
+          <div class="row"><label for="vibeModel" data-label="vibeModel"></label><select id="vibeModel"></select></div>
+          <form class="row" id="vibe-key-form">
+            <label for="vibeApiKey" data-label="vibeApiKey"></label>
+            <span class="key-entry"><input id="vibeApiKey" type="password" autocomplete="off" spellcheck="false" maxlength="320"><button id="vibeSaveKey" type="submit" data-label="vibeSaveKey"></button></span>
+          </form>
+          <div class="vibe-details">
+            <p id="vibe-status" role="status"></p>
+            <button id="vibeClearKey" type="button" data-label="vibeRemoveKey" hidden></button>
+            <p id="vibe-privacy" data-label="vibePrivacy"></p>
+          </div>
+        </div>
+      </section>
     </div>
   </main>
 </body>

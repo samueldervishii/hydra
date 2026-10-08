@@ -673,6 +673,40 @@
           console.warn("[Hydra] failed to open requested media");
         }
       };
+      /**
+       * Insert catalogue songs after the current one, in order, for the Vibe
+       * panel (assets/vibe.js). Page-only, like __hydraPlaySongs. With nothing
+       * playing there is no "next" to insert at, so it plays them instead.
+       * The insert waits behind any queue replacement, so the two never race.
+       *
+       * @param {unknown} ids - Catalogue song ids, at most MAX_QUEUED_SONGS
+       * @returns {Promise<boolean>} Whether the songs were queued
+       */
+      window.__hydraPlayNext = async (ids) => {
+        if (
+          !Array.isArray(ids) ||
+          ids.length === 0 ||
+          ids.length > MAX_QUEUED_SONGS ||
+          !ids.every((id) => typeof id === "string" && /^\d{1,20}$/.test(id)) ||
+          !documentActive ||
+          window.__hydraHookedMk !== mk
+        )
+          return false;
+        try {
+          if (!mk.nowPlayingItem) {
+            await replaceQueue({ songs: ids.slice(), startWith: 0, startPlaying: true });
+            return true;
+          }
+          if (blockedQueue) return false;
+          const insert = queueTask.then(() => mk.playNext({ songs: ids.slice() }));
+          queueTask = insert.catch(() => {});
+          await insert;
+          return true;
+        } catch (_) {
+          console.warn("[Hydra] failed to queue requested media");
+          return false;
+        }
+      };
       sendToMain("hookReady", injectedDocumentGeneration);
     }
 

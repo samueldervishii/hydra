@@ -27,9 +27,11 @@ import {
   getSearchStrings,
   getTopBarStrings,
   getTrayStrings,
+  getVibeStrings,
   NAV_LABELS_TOKEN,
   SEARCH_LABELS_TOKEN,
   TOP_BAR_LABELS_TOKEN,
+  VIBE_LABELS_TOKEN,
 } from "./i18n";
 import { getAssetPath } from "./paths";
 import { Player, IntegrationContext } from "./player";
@@ -76,6 +78,11 @@ import {
 import { init as initDock } from "./integrations/macos-dock";
 import { init as initWindowsTaskbar } from "./integrations/windows-taskbar";
 import { init as initLastfm } from "./integrations/lastfm";
+import {
+  init as initVibe,
+  cancel as cancelVibe,
+  handleRequest as handleVibeRequest,
+} from "./integrations/vibe";
 import { cleanArtworkCache } from "./artwork";
 import {
   init as initWedgeDetector,
@@ -259,6 +266,7 @@ export interface Assets {
   hookScript: string;
   songSearchScript: string;
   topBarScript: string;
+  vibeScript: string;
 }
 
 function createSplash(): {
@@ -359,12 +367,14 @@ function setupApplicationMenu(): void {
 }
 
 // The renderer→main channels split by owner: the nav: prefix is the navigation
-// bar's namespace, and every other channel is a MusicKit event for the Player.
+// bar's namespace, vibe: is the Vibe panel's, and every other channel is a
+// MusicKit event for the Player.
 // Each table below is a total record over its half, so a channel renamed in
 // src/types/hook.d.ts and a channel added there with no listener both fail tsc
 // here rather than compiling on and never firing.
 type NavSendChannel = Extract<SendChannel, `nav:${string}`>;
-type PlayerSendChannel = Exclude<SendChannel, NavSendChannel>;
+type VibeSendChannel = Extract<SendChannel, `vibe:${string}`>;
+type PlayerSendChannel = Exclude<SendChannel, NavSendChannel | VibeSendChannel>;
 type SendListener = Parameters<typeof ipcMain.on>[1];
 
 // Object.keys() preserves insertion order, so listeners register in the order
@@ -495,6 +505,9 @@ function loadAssets(): Assets {
   const songSearchScript = fs
     .readFileSync(getAssetPath("assets", "songSearch.js"), "utf-8")
     .replace(SEARCH_LABELS_TOKEN, () => JSON.stringify(getSearchStrings()));
+  const vibeScript = fs
+    .readFileSync(getAssetPath("assets", "vibe.js"), "utf-8")
+    .replace(VIBE_LABELS_TOKEN, () => JSON.stringify(getVibeStrings()));
   const hookPath = getAssetPath("assets", "musicKitHook.js");
   const hookScript = fs
     .readFileSync(hookPath, "utf-8")
@@ -510,6 +523,7 @@ function loadAssets(): Assets {
     hookScript,
     songSearchScript,
     topBarScript,
+    vibeScript,
   };
 }
 
@@ -694,11 +708,34 @@ function setupWindowZoomAndNav(win: BrowserWindow): void {
   );
 }
 
+/**
+ * Accept the Vibe panel's requests from the main window's main frame on a
+ * service host only. Any script in Apple's page can reach these channels, so
+ * src/integrations/vibe/index.ts also runs one request at a time, with a
+ * cooldown and a daily cap.
+ */
+function setupVibeIPC(win: BrowserWindow): void {
+  const fromPage = (event: Electron.IpcMainEvent): boolean =>
+    !win.isDestroyed() &&
+    event.sender === win.webContents &&
+    event.senderFrame === win.webContents.mainFrame &&
+    !!event.senderFrame &&
+    isAllowedNavigationUrl(event.senderFrame.url);
+  onSendChannels<VibeSendChannel>({
+    "vibe:request": (event, data) => {
+      if (fromPage(event)) handleVibeRequest(data);
+    },
+    "vibe:cancel": (event) => {
+      if (fromPage(event)) cancelVibe();
+    },
+  });
+}
+
 // Contain injection failures in both full-load and in-page navigation handlers.
 // The URL read can throw after WebContents destruction, so it stays inside the catch.
 // Separate catches let navigation controls load even when the MusicKit hook fails.
-// The song search panel and the top bar go last, on allowed hosts only, like
-// the hook the panel plays through; each has its own catch.
+// The song search panel, the Vibe panel and the top bar go last, on allowed
+// hosts only, like the hook the panels play through; each has its own catch.
 async function injectRendererScripts(
   win: BrowserWindow,
   assets: Assets,
@@ -736,6 +773,12 @@ async function injectRendererScripts(
     mainLog.debug("Song search injected");
   } catch (e: unknown) {
     mainLog.warn(`failed to inject songSearchScript ${context}:`, e);
+  }
+  try {
+    await win.webContents.executeJavaScript(assets.vibeScript);
+    mainLog.debug("Vibe panel injected");
+  } catch (e: unknown) {
+    mainLog.warn(`failed to inject vibeScript ${context}:`, e);
   }
   try {
     await win.webContents.executeJavaScript(assets.topBarScript);
@@ -948,6 +991,7 @@ function setupContentHandlers(
             },
           ],
           ["lastfm", () => initLastfm({ player, getMainWindow: () => win })],
+          ["vibe", () => initVibe({ player, getMainWindow: () => win })],
           [
             "wedgeDetector",
             () => initWedgeDetector({ player, getMainWindow: () => win }),
@@ -1067,6 +1111,7 @@ if (gotLock) {
       setupContentHandlers(win, player, markCssReady, assets);
       setupWindowEvents(win, markCssReady);
       setupNavigationHandlers(win, player);
+      setupVibeIPC(win);
       setupAuthFrameInjection(win, assets.authFrameScript);
       setupTopBarWarning(win);
       appTray = createTray();

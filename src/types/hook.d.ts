@@ -28,7 +28,9 @@ type SendChannel =
  | "nav:forward"
  | "nav:reload"
  | "nav:settings"
- | "nav:apple-sidebar";
+ | "nav:apple-sidebar"
+ | "vibe:request"
+ | "vibe:cancel";
 
 /**
  * Channels that the main process sends to the renderer (main → renderer).

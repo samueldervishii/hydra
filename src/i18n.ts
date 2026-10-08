@@ -2,6 +2,7 @@ import fs from 'fs';
 import { app } from 'electron';
 import log from 'electron-log/main';
 import { getAssetPath, getProductInfo } from './paths';
+import type { VibeErrorCode } from './integrations/vibe/agent';
 
 const i18nLog = log.scope('i18n');
 
@@ -257,6 +258,15 @@ export interface TrayStrings {
   lastfmConnected: string;
   lastfmConnectFailed: string;
   lastfmDisconnect: string;
+  vibe: string;
+  vibeApiKey: string;
+  vibeSaveKey: string;
+  vibeRemoveKey: string;
+  vibeKeySaved: string;
+  vibeKeyMemoryOnly: string;
+  vibeModel: string;
+  vibeUsage: string;
+  vibePrivacy: string;
 }
 
 // Map each TrayStrings field to its translation record. The keyed Record makes
@@ -311,6 +321,18 @@ const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   lastfmConnected: LASTFM_CONNECTED_TEXT,
   lastfmConnectFailed: LASTFM_CONNECT_FAILED_TEXT,
   lastfmDisconnect: LASTFM_DISCONNECT_TEXT,
+  // Vibe ships in English for now; getLocalizedString() falls back to it.
+  vibe: { en: 'Vibe' },
+  vibeApiKey: { en: 'Anthropic API key' },
+  vibeSaveKey: { en: 'Save key' },
+  vibeRemoveKey: { en: 'Remove key' },
+  vibeKeySaved: { en: 'API key saved' },
+  vibeKeyMemoryOnly: { en: 'API key kept until Hydra quits: no system keyring to store it' },
+  vibeModel: { en: 'Model' },
+  vibeUsage: { en: '{used} of {limit} requests used today' },
+  vibePrivacy: {
+    en: 'Each request sends your description and the artists and titles of your last 20 songs to Anthropic.',
+  },
 };
 
 // TRAY_TEXT is a Record literal, so excess property checking already rules out
@@ -431,6 +453,7 @@ export function getTopBarStrings(): {
   back: string;
   home: string;
   search: string;
+  vibe: string;
   allPlaylists: string;
   settings: string;
   account: string;
@@ -442,10 +465,82 @@ export function getTopBarStrings(): {
     back: getLocalizedString(BACK_TEXT, langs),
     home: getLocalizedString(START_PAGE_HOME_TEXT, langs),
     search: getLocalizedString(START_PAGE_SEARCH_TEXT, langs),
+    vibe: getLocalizedString(VIBE_TEXT.vibe, langs),
     allPlaylists: getLocalizedString(START_PAGE_ALL_PLAYLISTS_TEXT, langs),
     settings: getLocalizedString(SETTINGS_TEXT, langs),
     account: getLocalizedString(ACCOUNT_TEXT, langs),
     switchToSidebar: getLocalizedString(SWITCH_TO_APPLE_SIDEBAR_TEXT, langs),
     signOut: getLocalizedString(SIGN_OUT_TEXT, langs),
   };
+}
+
+/**
+ * Placeholder for JSON labels in assets/vibe.js, substituted by loadAssets()
+ * as NAV_LABELS_TOKEN is.
+ */
+export const VIBE_LABELS_TOKEN = '__HYDRA_VIBE_LABELS__';
+
+/** Labels for the injected Vibe panel. */
+export interface VibeStrings {
+  vibe: string;
+  placeholder: string;
+  playNext: string;
+  replaceQueue: string;
+  submit: string;
+  cancel: string;
+  working: string;
+  openSettings: string;
+  queuedNext: string;
+  queuedReplace: string;
+  queueFailed: string;
+  explicit: string;
+  errors: Record<VibeErrorCode, string>;
+}
+
+// Vibe ships in English for now. These tables are not exported, so the
+// consistency test does not ask for every language; a translation added here
+// is picked up through getLocalizedString() with no other change.
+const VIBE_TEXT: Record<Exclude<keyof VibeStrings, 'errors' | 'explicit'>, Record<string, string>> = {
+  vibe: { en: 'Vibe' },
+  placeholder: { en: 'Describe a mood, a moment or a vibe' },
+  playNext: { en: 'Play next' },
+  replaceQueue: { en: 'Replace queue' },
+  submit: { en: 'Find songs' },
+  cancel: { en: 'Cancel' },
+  working: { en: 'Finding songs… {count} of {max} searches' },
+  openSettings: { en: 'Open Settings' },
+  queuedNext: { en: 'Added to play next' },
+  queuedReplace: { en: 'Now playing' },
+  queueFailed: { en: 'The songs could not be queued. Try again.' },
+};
+
+const VIBE_ERROR_TEXT: Record<VibeErrorCode, Record<string, string>> = {
+  'no-key': { en: 'Add your Anthropic API key in Settings to use Vibe.' },
+  'key-refused': { en: 'Anthropic refused the API key. Check it in Settings.' },
+  'rate-limit': { en: "Anthropic's rate limit was reached. Try again in a minute." },
+  unavailable: { en: 'Claude is busy or did not answer in time. Try again shortly.' },
+  network: { en: 'Hydra could not reach Anthropic. Check your connection.' },
+  refusal: { en: 'Claude declined this request. Try describing it differently.' },
+  'nothing-found': { en: 'No matching songs were found on Apple Music. Try another description.' },
+  incomplete: { en: 'Claude did not finish choosing songs. Try again.' },
+  catalog: { en: 'Apple Music search is not available right now. Try again shortly.' },
+  busy: { en: 'A Vibe request is already running.' },
+  cooldown: { en: 'Wait a few seconds before the next request.' },
+  'daily-limit': { en: "Today's Vibe limit is reached. It resets at midnight." },
+  cancelled: { en: 'Cancelled.' },
+  failed: { en: 'Something went wrong. Try again.' },
+};
+
+/** Resolve the labels for the injected Vibe panel. */
+export function getVibeStrings(): VibeStrings {
+  const langs = getSystemLanguages();
+  const errors = {} as Record<VibeErrorCode, string>;
+  for (const code of Object.keys(VIBE_ERROR_TEXT) as VibeErrorCode[]) {
+    errors[code] = getLocalizedString(VIBE_ERROR_TEXT[code], langs);
+  }
+  const strings = { errors, explicit: getLocalizedString(EXPLICIT_TEXT, langs) } as VibeStrings;
+  for (const key of Object.keys(VIBE_TEXT) as (keyof typeof VIBE_TEXT)[]) {
+    strings[key] = getLocalizedString(VIBE_TEXT[key], langs);
+  }
+  return strings;
 }

@@ -23,6 +23,10 @@ vi.mock("../src/config", () => ({
   getCloseToTrayEnabled: vi.fn(() => false),
   setCloseToTrayEnabled: vi.fn(),
   getLastfmEnabled: vi.fn(() => false),
+  getVibeModel: vi.fn(() => "claude-haiku-5-5"),
+  getVibeEncryptedApiKey: vi.fn(() => null),
+  getVibeUsage: vi.fn(() => null),
+  getVibeDailyLimit: vi.fn(() => 50),
   getMusicService: vi.fn(() => "music"),
   setMusicService: vi.fn(),
   getClassicalStartPage: vi.fn(() => "home"),
@@ -80,6 +84,15 @@ const mockTrayStrings: TrayStrings = {
   lastfmConnected: "Connected to Last.fm as {name}",
   lastfmConnectFailed: "Could not connect to Last.fm",
   lastfmDisconnect: "Disconnect",
+  vibe: "Vibe",
+  vibeApiKey: "Anthropic API key",
+  vibeSaveKey: "Save key",
+  vibeRemoveKey: "Remove key",
+  vibeKeySaved: "API key saved",
+  vibeKeyMemoryOnly: "API key kept until Hydra quits",
+  vibeModel: "Model",
+  vibeUsage: "{used} of {limit} requests used today",
+  vibePrivacy: "Each request sends your description to Anthropic.",
 };
 
 // Expected menu label per registry page id. Typed over the union, so a new page

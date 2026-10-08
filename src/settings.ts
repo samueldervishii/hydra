@@ -17,6 +17,12 @@ import { applyPerformanceMode } from "./performanceMode";
 import { applyNavigation } from "./navigation";
 import { liveWebContents } from "./utils";
 import * as lastfm from "./integrations/lastfm";
+import * as vibe from "./integrations/vibe";
+import {
+  clearApiKey as clearVibeApiKey,
+  isApiKeyFormat,
+  saveApiKey as saveVibeApiKey,
+} from "./integrations/vibe/apiKey";
 
 /** Zoom levels that Settings accepts. */
 export type ZoomFactor = 1 | 1.25 | 1.5 | 1.75 | 2;
@@ -32,11 +38,13 @@ export type SettingsAction =
   | { type: "theme"; value: ThemeName }
   | { type: "zoomFactor"; value: ZoomFactor }
   | { type: "navigation"; value: config.NavigationMode }
+  | { type: "vibeModel"; value: config.VibeModel }
+  | { type: "vibeApiKey"; value: string }
   | {
       type: "closeToTray" | "performanceMode" | "lastfmEnabled";
       value: boolean;
     }
-  | { type: "lastfmConnect" | "lastfmDisconnect" };
+  | { type: "lastfmConnect" | "lastfmDisconnect" | "vibeClearKey" };
 
 /** A stored option value paired with its display label. */
 export interface SettingsOption<T> {
@@ -53,12 +61,16 @@ export interface SettingsState {
   navigation: config.NavigationMode;
   closeToTray: boolean;
   lastfm: lastfm.LastfmStatus & { enabled: boolean };
+  vibeModel: config.VibeModel;
+  /** Whether a key is saved and today's usage; never the key itself. */
+  vibe: vibe.VibeStatus;
   options: {
     musicService: SettingsOption<MusicServiceId>[];
     startPage: SettingsOption<AnyStartPageId | "last">[];
     theme: SettingsOption<ThemeName>[];
     zoomFactor: SettingsOption<ZoomFactor>[];
     navigation: SettingsOption<config.NavigationMode>[];
+    vibeModel: SettingsOption<config.VibeModel>[];
   };
   labels: TrayStrings;
   lang: string;
@@ -149,6 +161,8 @@ export function getSettingsState(): SettingsState {
     navigation: config.getNavigation(),
     closeToTray: config.getCloseToTrayEnabled(),
     lastfm: { ...lastfm.getStatus(), enabled: config.getLastfmEnabled() },
+    vibeModel: config.getVibeModel(),
+    vibe: vibe.getStatus(),
     options: {
       musicService: allServices().map((service) => ({
         value: service.id,
@@ -166,6 +180,10 @@ export function getSettingsState(): SettingsState {
       navigation: [
         { value: "top-bar", label: labels.navigationTopBar },
         { value: "apple-sidebar", label: labels.navigationAppleSidebar },
+      ],
+      vibeModel: [
+        { value: "claude-haiku-5-5", label: "Claude Haiku 5.5" },
+        { value: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
       ],
     },
     labels,
@@ -200,7 +218,9 @@ function isSettingsAction(
   const keys =
     data.type === "startPage"
       ? ["type", "value", "serviceId"]
-      : data.type === "lastfmConnect" || data.type === "lastfmDisconnect"
+      : data.type === "lastfmConnect" ||
+          data.type === "lastfmDisconnect" ||
+          data.type === "vibeClearKey"
         ? ["type"]
         : ["type", "value"];
   if (
@@ -228,6 +248,14 @@ function isSettingsAction(
       return state.options.navigation.some(
         (option) => option.value === data.value,
       );
+    case "vibeModel":
+      return state.options.vibeModel.some(
+        (option) => option.value === data.value,
+      );
+    case "vibeApiKey":
+      return isApiKeyFormat(data.value);
+    case "vibeClearKey":
+      return state.vibe.hasKey;
     case "closeToTray":
     case "performanceMode":
       return typeof data.value === "boolean";
@@ -320,6 +348,15 @@ export function applySettingsAction(action: unknown): SettingsState {
       break;
     case "lastfmDisconnect":
       lastfm.disconnect();
+      break;
+    case "vibeModel":
+      config.setVibeModel(action.value);
+      break;
+    case "vibeApiKey":
+      saveVibeApiKey(action.value);
+      break;
+    case "vibeClearKey":
+      clearVibeApiKey();
       break;
   }
   runtime.refreshTray();

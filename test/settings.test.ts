@@ -86,6 +86,31 @@ describe('settings actions', () => {
   });
 
   // A second Connect while the browser approval is pending would start a second flow.
+  it('saves a Vibe key without ever putting it in the state, and removes it', () => {
+    const key = 'sk-ant-api03-' + 'c'.repeat(40);
+    expect(getSettingsState().vibe).toEqual({ hasKey: false, keyPersisted: false, usedToday: 0, dailyLimit: 50 });
+    expect(() => applySettingsAction({ type: 'vibeClearKey' })).toThrow('Invalid settings action');
+    for (const value of ['', 'not-a-key', 42, `${key} extra`]) {
+      expect(() => applySettingsAction({ type: 'vibeApiKey', value })).toThrow('Invalid settings action');
+    }
+    const state = applySettingsAction({ type: 'vibeApiKey', value: key });
+    expect(state.vibe).toMatchObject({ hasKey: true, keyPersisted: true });
+    expect(JSON.stringify(state)).not.toContain(key);
+    expect(refreshTray).toHaveBeenCalled();
+    expect(applySettingsAction({ type: 'vibeClearKey' }).vibe.hasKey).toBe(false);
+  });
+
+  it('switches the Vibe model between the two offered', () => {
+    expect(getSettingsState().vibeModel).toBe('claude-haiku-5-5');
+    expect(getSettingsState().options.vibeModel.map((option) => option.value)).toEqual(['claude-haiku-5-5', 'claude-sonnet-5-5']);
+    applySettingsAction({ type: 'vibeModel', value: 'claude-sonnet-5-5' });
+    expect(config.getVibeModel()).toBe('claude-sonnet-5-5');
+    expect(() => applySettingsAction({ type: 'vibeModel', value: 'claude-opus-5-5' })).toThrow('Invalid settings action');
+    // A hand-edited model id reads as the default.
+    (Conf as unknown as { _data: Map<string, unknown> })._data.set('vibe.model', 'gpt');
+    expect(getSettingsState().vibeModel).toBe('claude-haiku-5-5');
+  });
+
   it('refuses Connect while a connection is in progress', () => {
     Object.assign(lastfmStatus, { available: true, connecting: true });
     expect(() => applySettingsAction({ type: 'lastfmConnect' })).toThrow('Invalid settings action');

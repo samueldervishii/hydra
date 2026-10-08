@@ -31,7 +31,7 @@
   }
 
   // loadAssets() in src/main.ts replaces TOP_BAR_LABELS_TOKEN from src/i18n.ts with JSON.
-  /** @type {{ back: string, home: string, search: string, allPlaylists: string, settings: string, account: string, switchToSidebar: string, signOut: string }} */
+  /** @type {{ back: string, home: string, search: string, vibe: string, allPlaylists: string, settings: string, account: string, switchToSidebar: string, signOut: string }} */
   var LABELS = __HYDRA_TOP_BAR_LABELS__;
 
   var REQUEST_ATTRIBUTE = "data-hydra-top-bar-requested";
@@ -158,6 +158,16 @@
       icon: [
         ["circle", { cx: "10.5", cy: "10.5", r: "6" }],
         ["line", { x1: "15", y1: "15", x2: "20", y2: "20" }],
+      ],
+    },
+    {
+      id: "vibe",
+      label: LABELS.vibe,
+      place: "pill",
+      box: [5, 3, 16, 17.5],
+      icon: [
+        ["path", { d: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" }],
+        ["path", { d: "M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" }],
       ],
     },
     {
@@ -353,7 +363,7 @@
   }
 
   /**
-   * The page item to mark. Search while the search panel is open; otherwise
+   * The page item to mark. Search or Vibe while its panel is open; otherwise
    * the open page's section; and on a page outside every section (an album,
    * an artist) the section it was opened from, so the capsule never leaves the
    * pill. That section is remembered for the page's history entry, so Back
@@ -363,6 +373,8 @@
   function activeItem() {
     var search = window.__hydraSongSearch;
     if (search && typeof search.isOpen === "function" && search.isOpen()) return "search";
+    var vibe = window.__hydraVibe;
+    if (vibe && typeof vibe.isOpen === "function" && vibe.isOpen()) return "vibe";
     var key = entryKey();
     var section = sectionOf(currentPath());
     if (!section) {
@@ -494,6 +506,8 @@
     } else if (id === "settings") sendToMain("nav:settings");
     else if (id === "search") {
       if (window.__hydraSongSearch) window.__hydraSongSearch.open();
+    } else if (id === "vibe") {
+      if (window.__hydraVibe) window.__hydraVibe.open();
     } else go(pathFor(id));
   }
 

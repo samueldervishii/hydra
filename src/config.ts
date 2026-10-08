@@ -33,6 +33,22 @@ export interface PendingScrobble {
 /** How Hydra navigates Apple Music: its own top bar, or Apple's sidebar. */
 export type NavigationMode = 'top-bar' | 'apple-sidebar';
 
+/** The Claude models Vibe can ask, the first being the default. */
+export const VIBE_MODELS = ['claude-haiku-5-5', 'claude-sonnet-5-5'] as const;
+/** A model Vibe can ask. */
+export type VibeModel = (typeof VIBE_MODELS)[number];
+
+/** Vibe requests started on one local day, keyed by that day as YYYY-MM-DD. */
+export interface VibeUsage {
+  day: string;
+  count: number;
+}
+
+/** Vibe requests a day when `vibe.dailyLimit` is absent or invalid. */
+export const DEFAULT_VIBE_DAILY_LIMIT = 50;
+/** The highest `vibe.dailyLimit` accepted, so a typo cannot lift the cap. */
+const MAX_VIBE_DAILY_LIMIT = 1000;
+
 interface StoreSchema {
   storefront: string;
   language: string | null;
@@ -51,6 +67,10 @@ interface StoreSchema {
   'lastfm.username': string | null;
   'lastfm.session': string | null;
   'lastfm.pendingScrobbles': PendingScrobble[];
+  'vibe.apiKey': string | null;
+  'vibe.model': VibeModel;
+  'vibe.dailyLimit': number;
+  'vibe.usage': VibeUsage;
 }
 
 const store = new Conf<StoreSchema>();
@@ -213,6 +233,61 @@ export function getPendingScrobbles(): PendingScrobble[] {
 export function setPendingScrobbles(entries: PendingScrobble[]): void {
   store.set('lastfm.pendingScrobbles', entries);
   configLog.info('lastfm.pendingScrobbles set, queued:', entries.length);
+}
+
+/**
+ * Read `vibe.apiKey`: the Anthropic API key encrypted by the system keyring,
+ * as base64. src/integrations/vibe/apiKey.ts is the only reader and the only
+ * place that decrypts it.
+ */
+export function getVibeEncryptedApiKey(): string | null {
+  return getConfigValue('vibe.apiKey', null);
+}
+
+/** Store the encrypted key, or null to forget it. The value is never logged. */
+export function setVibeEncryptedApiKey(encrypted: string | null): void {
+  store.set('vibe.apiKey', encrypted);
+  configLog.info(`vibe.apiKey ${encrypted ? 'stored encrypted' : 'removed from config'}`);
+}
+
+/** Read `vibe.model`, falling back to the default for an unknown id. */
+export function getVibeModel(): VibeModel {
+  const stored: unknown = getConfigValue('vibe.model', VIBE_MODELS[0]);
+  return VIBE_MODELS.find((model) => model === stored) ?? VIBE_MODELS[0];
+}
+
+/** Persist `vibe.model`. */
+export function setVibeModel(model: VibeModel): void {
+  setConfigValue('vibe.model', model);
+}
+
+/**
+ * Read `vibe.dailyLimit`, the Vibe requests allowed per local day. The file
+ * can be edited by hand, so anything but a whole number from 1 to 1000 reads
+ * as the default of 50.
+ */
+export function getVibeDailyLimit(): number {
+  const stored: unknown = getConfigValue('vibe.dailyLimit', DEFAULT_VIBE_DAILY_LIMIT);
+  return typeof stored === 'number' && Number.isInteger(stored)
+    && stored >= 1 && stored <= MAX_VIBE_DAILY_LIMIT
+    ? stored
+    : DEFAULT_VIBE_DAILY_LIMIT;
+}
+
+/** Read `vibe.usage`, or null when absent or malformed. */
+export function getVibeUsage(): VibeUsage | null {
+  const stored: unknown = getConfigValueOptional('vibe.usage');
+  if (typeof stored !== 'object' || stored === null) return null;
+  const usage = stored as Partial<VibeUsage>;
+  return typeof usage.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(usage.day)
+    && typeof usage.count === 'number' && Number.isInteger(usage.count) && usage.count >= 0
+    ? { day: usage.day, count: usage.count }
+    : null;
+}
+
+/** Persist `vibe.usage`. */
+export function setVibeUsage(usage: VibeUsage): void {
+  setConfigValue('vibe.usage', usage);
 }
 
 /** Read `theme`, defaulting to `'apple-music'` when absent. */

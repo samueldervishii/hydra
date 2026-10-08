@@ -10,7 +10,7 @@
   document.documentElement.dir = /^(ar|he)(-|$)/i.test(lang) ? 'rtl' : 'ltr';
   document.title = params.get('settings') || 'Settings';
   document.querySelector('[data-label="settings"]').textContent = document.title;
-  const selects = ['musicService', 'startPage', 'theme', 'zoomFactor', 'navigation'];
+  const selects = ['musicService', 'startPage', 'theme', 'zoomFactor', 'navigation', 'vibeModel'];
   const toggles = ['performanceMode', 'closeToTray', 'lastfmEnabled'];
   let state;
   // Pushed state supersedes pending replies from getState() and apply().
@@ -53,6 +53,7 @@
       byId(key).checked = key === 'lastfmEnabled' ? state.lastfm.enabled : state[key];
     }
     renderLastfm(focusedId);
+    renderVibe(focusedId);
     byId('preferences').hidden = false;
   }
 
@@ -70,6 +71,19 @@
     byId('lastfmDisconnect').hidden = !lastfm.connected;
     if (focusedId === 'lastfmConnect' && lastfm.connected) byId('lastfmDisconnect').focus();
     if (focusedId === 'lastfmDisconnect' && !lastfm.connected) byId('lastfmConnect').focus();
+  }
+
+  function renderVibe(focusedId) {
+    const { vibe, labels } = state;
+    // Settings never receives the key: only whether one is saved.
+    const lines = [];
+    if (vibe.hasKey) lines.push(vibe.keyPersisted ? labels.vibeKeySaved : labels.vibeKeyMemoryOnly);
+    lines.push(labels.vibeUsage
+      .replace('{used}', () => String(vibe.usedToday))
+      .replace('{limit}', () => String(vibe.dailyLimit)));
+    byId('vibe-status').textContent = lines.join(' · ');
+    byId('vibeClearKey').hidden = !vibe.hasKey;
+    if (focusedId === 'vibeClearKey' && !vibe.hasKey) byId('vibeApiKey').focus();
   }
 
   async function refresh() {
@@ -104,6 +118,15 @@
   for (const key of toggles) {
     byId(key).addEventListener('change', () => apply({ type: key, value: byId(key).checked }));
   }
+  byId('vibe-key-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const value = byId('vibeApiKey').value.trim();
+    if (!value) return;
+    // Clear the field at once, so the key does not stay on screen or in the DOM.
+    byId('vibeApiKey').value = '';
+    apply({ type: 'vibeApiKey', value });
+  });
+  byId('vibeClearKey').addEventListener('click', () => apply({ type: 'vibeClearKey' }));
   for (const key of ['lastfmConnect', 'lastfmDisconnect']) {
     byId(key).addEventListener('click', () => apply({ type: key }));
   }

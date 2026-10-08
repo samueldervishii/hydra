@@ -86,6 +86,7 @@ const bootstrap = vi.hoisted(() => {
     dock: vi.fn(),
     windowsTaskbar: vi.fn(),
     wedgeDetector: vi.fn(),
+    vibe: vi.fn(),
     trayState: vi.fn(() => vi.fn()),
   };
   const resetForDocumentReplacement = vi.fn();
@@ -108,6 +109,8 @@ const bootstrap = vi.hoisted(() => {
     teardownShortcuts: vi.fn(),
     toggleNavigation: vi.fn(),
     showAppleSidebar: vi.fn(),
+    vibeCancel: vi.fn(),
+    vibeRequest: vi.fn(),
     handlePlaybackCapabilitiesDidChange: vi.fn(),
     browserWindow: vi.fn(),
     savedWindowBounds: vi.fn((): unknown => null),
@@ -204,9 +207,11 @@ vi.mock("../src/i18n", () => ({
   getSearchStrings: vi.fn(() => ({})),
   getTopBarStrings: vi.fn(() => ({})),
   getTrayStrings: vi.fn(() => ({ about: "À propos de Hydra" })),
+  getVibeStrings: vi.fn(() => ({})),
   NAV_LABELS_TOKEN: "__NAV_LABELS__",
   SEARCH_LABELS_TOKEN: "__SEARCH_LABELS__",
   TOP_BAR_LABELS_TOKEN: "__TOP_BAR_LABELS__",
+  VIBE_LABELS_TOKEN: "__VIBE_LABELS__",
 }));
 
 vi.mock("../src/paths", () => ({
@@ -301,6 +306,11 @@ vi.mock("../src/integrations/macos-dock", () => ({
 }));
 vi.mock("../src/integrations/windows-taskbar", () => ({
   init: bootstrap.integrations.windowsTaskbar,
+}));
+vi.mock("../src/integrations/vibe", () => ({
+  init: bootstrap.integrations.vibe,
+  cancel: bootstrap.vibeCancel,
+  handleRequest: bootstrap.vibeRequest,
 }));
 vi.mock("../src/artwork", () => ({ cleanArtworkCache: vi.fn() }));
 vi.mock("../src/windowState", () => ({
@@ -585,6 +595,50 @@ describe("main bootstrap", () => {
     expect(bootstrap.showAppleSidebar).toHaveBeenCalledOnce();
   });
 
+  // Any script in Apple's page can reach these channels, so the sender is
+  // checked here and the request handler adds its own limits.
+  it("accepts Vibe requests and cancels only from the main frame on a service host", async () => {
+    const { isAllowedNavigationUrl } = await import("../src/musicService");
+    await startMain();
+    const handler = (name: string) =>
+      bootstrap.ipcOn.mock.calls.find(([channel]) => channel === name)?.[1];
+    const request = handler("vibe:request");
+    const cancel = handler("vibe:cancel");
+    const event = {
+      sender: bootstrap.webContents,
+      senderFrame: bootstrap.webContents.mainFrame,
+    };
+    const payload = { prompt: "chill", mode: "next" };
+    request?.({ ...event, sender: {} }, payload);
+    request?.({ ...event, senderFrame: { url: event.senderFrame.url } }, payload);
+    vi.mocked(isAllowedNavigationUrl).mockReturnValueOnce(false);
+    request?.(event, payload);
+    cancel?.({ ...event, sender: {} });
+    expect(bootstrap.vibeRequest).not.toHaveBeenCalled();
+    expect(bootstrap.vibeCancel).not.toHaveBeenCalled();
+    request?.(event, payload);
+    cancel?.(event);
+    expect(bootstrap.vibeRequest).toHaveBeenCalledExactlyOnceWith(payload);
+    expect(bootstrap.vibeCancel).toHaveBeenCalledOnce();
+  });
+
+  it("logs a failed Vibe injection without failing the load", async () => {
+    await startMain();
+    bootstrap.webContents.executeJavaScript
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockRejectedValueOnce(new Error("vibe unavailable"));
+    await expect(
+      Promise.resolve(bootstrap.mainWebListeners.get("did-finish-load")?.()),
+    ).resolves.toBeUndefined();
+    expect(bootstrap.log.warn).toHaveBeenCalledWith(
+      "failed to inject vibeScript on load:",
+      expect.any(Error),
+    );
+    expect(bootstrap.log.debug).toHaveBeenCalledWith("Top bar injected");
+  });
+
   it("registers no sidebar toggle channel", async () => {
     await startMain();
     expect(
@@ -746,7 +800,7 @@ describe("main bootstrap", () => {
     expect(bootstrap.webContents.executeJavaScript).not.toHaveBeenCalled();
 
     await finish?.();
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(4);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(5);
     for (const initialise of Object.values(bootstrap.integrations)) {
       expect(initialise.mock.invocationCallOrder[0]).toBeLessThan(
         bootstrap.webContents.executeJavaScript.mock.invocationCallOrder[0],
@@ -754,18 +808,19 @@ describe("main bootstrap", () => {
     }
 
     await navigate?.({}, "https://music.apple.com/gb/new", true);
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(8);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(10);
     for (const initialise of Object.values(bootstrap.integrations))
       expect(initialise).toHaveBeenCalledOnce();
   });
 
   // The song search plays through the hook, so it is injected on the same
   // allowed hosts only, after the navigation bar, and a failure is contained.
-  it("injects the song search and the top bar only where the hook is injected", async () => {
+  it("injects the song search, Vibe and the top bar only where the hook is injected", async () => {
     await startMain();
     await bootstrap.mainWebListeners.get("did-finish-load")?.();
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(4);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(5);
     expect(bootstrap.log.debug).toHaveBeenCalledWith("Song search injected");
+    expect(bootstrap.log.debug).toHaveBeenCalledWith("Vibe panel injected");
     expect(bootstrap.log.debug).toHaveBeenCalledWith("Top bar injected");
 
     const { isAllowedNavigationUrl } = await import("../src/musicService");
@@ -783,6 +838,7 @@ describe("main bootstrap", () => {
   it("logs a failed top bar injection without failing the load", async () => {
     await startMain();
     bootstrap.webContents.executeJavaScript
+      .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
@@ -880,9 +936,9 @@ describe("main bootstrap", () => {
       expect.any(Error),
     );
     expect(bootstrap.integrations.trayState).toHaveBeenCalledOnce();
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(4);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(5);
     await navigate?.({}, "https://music.apple.com/gb/new", true);
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(8);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(10);
     expect(bootstrap.integrations.dock).toHaveBeenCalledOnce();
   });
 

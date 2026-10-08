@@ -18,12 +18,12 @@ class Element {
   disabled = false;
   options: Element[] = [];
   dataset: { label?: string } = {};
-  listeners = new Map<string, () => void>();
+  listeners = new Map<string, (event: { preventDefault(): void }) => void>();
   focus = vi.fn();
   constructor(readonly id = '') {}
   replaceChildren(...children: Element[]): void { this.options = children; }
-  addEventListener(event: string, listener: () => void): void { this.listeners.set(event, listener); }
-  fire(event: string): void { this.listeners.get(event)?.(); }
+  addEventListener(event: string, listener: (event: { preventDefault(): void }) => void): void { this.listeners.set(event, listener); }
+  fire(event: string): void { this.listeners.get(event)?.({ preventDefault: vi.fn() }); }
 }
 
 function fixture(): SettingsState {
@@ -31,12 +31,15 @@ function fixture(): SettingsState {
     musicService: 'music', startPage: 'new', theme: 'apple-music', zoomFactor: 1,
     performanceMode: true, navigation: 'top-bar', closeToTray: false,
     lastfm: { available: true, connected: false, connecting: false, failed: false, username: '', enabled: false },
+    vibeModel: 'claude-haiku-5-5',
+    vibe: { hasKey: false, keyPersisted: false, usedToday: 0, dailyLimit: 50 },
     options: {
       musicService: [{ value: 'music', label: 'Apple Music' }, { value: 'classical', label: 'Apple Music Classical' }],
       startPage: [{ value: 'new', label: 'New' }],
       theme: [{ value: 'apple-music', label: 'Apple Music' }],
       zoomFactor: [{ value: 1, label: '100%' }, { value: 1.25, label: '125%' }],
       navigation: [{ value: 'top-bar', label: 'Hydra top bar' }, { value: 'apple-sidebar', label: 'Apple sidebar' }],
+      vibeModel: [{ value: 'claude-haiku-5-5', label: 'Claude Haiku 5.5' }, { value: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5' }],
     },
     labels: getTrayStrings(), lang: 'en',
   };
@@ -114,6 +117,32 @@ describe('settings page', () => {
     h.push({ ...state, lastfm: { ...state.lastfm, failed: true } });
     expect(h.element('lastfmConnect').disabled).toBe(false);
     expect(h.element('lastfm-status').textContent).toBe(state.labels.lastfmConnectFailed);
+  });
+
+  it('sends a Vibe key once, clears the field, and shows only whether a key is saved', async () => {
+    const state = fixture();
+    const h = harness(state);
+    await settle();
+    expect(h.element('vibeClearKey').hidden).toBe(true);
+    expect(h.element('vibe-status').textContent).toBe('0 of 50 requests used today');
+    h.element('vibe-key-form').fire('submit');
+    await settle();
+    expect(h.apply).not.toHaveBeenCalled();
+    h.element('vibeApiKey').value = '  sk-ant-api03-key  ';
+    h.element('vibe-key-form').fire('submit');
+    expect(h.element('vibeApiKey').value).toBe('');
+    await settle();
+    expect(h.apply).toHaveBeenLastCalledWith({ type: 'vibeApiKey', value: 'sk-ant-api03-key' });
+    h.push({ ...state, vibe: { hasKey: true, keyPersisted: true, usedToday: 3, dailyLimit: 50 } });
+    expect(h.element('vibe-status').textContent).toBe(`${state.labels.vibeKeySaved} · 3 of 50 requests used today`);
+    expect(h.element('vibeClearKey').hidden).toBe(false);
+    h.element('vibeClearKey').fire('click');
+    await settle();
+    expect(h.apply).toHaveBeenLastCalledWith({ type: 'vibeClearKey' });
+    h.element('vibeModel').value = 'claude-sonnet-5-5';
+    h.element('vibeModel').fire('change');
+    await settle();
+    expect(h.apply).toHaveBeenLastCalledWith({ type: 'vibeModel', value: 'claude-sonnet-5-5' });
   });
 
   it('sends Connect and Disconnect as bare actions', async () => {

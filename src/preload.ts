@@ -177,6 +177,8 @@ const SEND_CHANNELS = channelSet<SendChannel>({
   "nav:reload": true,
   "nav:settings": true,
   "nav:apple-sidebar": true,
+  "vibe:request": true,
+  "vibe:cancel": true,
 });
 
 // Channels the main process is allowed to send to the renderer.

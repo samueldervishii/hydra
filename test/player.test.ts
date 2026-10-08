@@ -819,7 +819,9 @@ describe('Channel contract', () => {
       | 'nav:forward'
       | 'nav:reload'
       | 'nav:settings'
-      | 'nav:apple-sidebar';
+      | 'nav:apple-sidebar'
+      | 'vibe:request'
+      | 'vibe:cancel';
 
     expectTypeOf<SendChannel>().toEqualTypeOf<ExpectedSend>();
   });

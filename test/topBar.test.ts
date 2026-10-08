@@ -19,6 +19,7 @@ const LABELS = {
   back: 'Zurück',
   home: 'Startseite',
   search: 'Suchen',
+  vibe: 'Stimmung',
   allPlaylists: 'Alle Playlists',
   settings: 'Einstellungen',
   account: 'Konto',
@@ -336,6 +337,7 @@ describe('topBar.js', () => {
       LABELS.back,
       LABELS.home,
       LABELS.search,
+      LABELS.vibe,
       LABELS.allPlaylists,
       LABELS.settings,
       LABELS.account,
@@ -458,7 +460,7 @@ describe('topBar.js', () => {
   it('shows labels only inside the page items, and names every button', () => {
     const h = createHarness();
     const labelOf = (id: string) => descendants(h.button(id)).find((e) => e.getAttribute('class') === 'label');
-    for (const id of ['home', 'search', 'all-playlists']) {
+    for (const id of ['home', 'search', 'vibe', 'all-playlists']) {
       expect(labelOf(id)?.textContent).toBe(h.button(id).getAttribute('aria-label'));
       expect(labelOf(id)?.getAttribute('aria-hidden')).toBe('true');
       expect(h.button(id).getAttribute('class')).toBe('item');
