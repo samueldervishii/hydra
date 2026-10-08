@@ -8,12 +8,19 @@
  * goes back the same way, streamed, and the user plays its songs from the
  * panel.
  *
+ * Claude can propose a new playlist, which the panel shows as a preview. Only
+ * the user's click creates it: the panel sends vibe:create-playlist with the
+ * one-use token this module gave the proposal, and this module asks the page
+ * to create exactly the playlist it holds under that token. Nothing here can
+ * change or delete an existing playlist.
+ *
  * The chat lives in memory only: New chat, a full page load and quitting
  * forget it. One turn runs at a time, a new one waits COOLDOWN_MS after the
  * last, and `vibe.dailyBudget` ($2 by default) caps what they may spend each
  * local day, priced from the usage every response reports (./pricing.ts).
  * Messages, the listening history and the songs are never logged.
  */
+import { randomUUID } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { app, type WebContents } from "electron";
 import log from "electron-log/main";
@@ -22,6 +29,8 @@ import type { IntegrationContext, NowPlayingPayload } from "../../player";
 import { liveWebContents, errorMessage } from "../../utils";
 import { setRootAttribute } from "../../rootAttribute";
 import {
+  MAX_PLAYLIST_NAME,
+  MAX_PLAYLIST_SONGS,
   MAX_PROMPT_LENGTH,
   MAX_SEARCHES,
   newChat,
@@ -38,6 +47,7 @@ import {
   MAX_RECENT_TRACKS,
   parseCatalogSongs,
   parseListenedTracks,
+  type CatalogSong,
   type ListenedTrack,
 } from "./catalog";
 import { getApiKey, getApiKeyStatus, knownApiKeyState } from "./apiKey";
@@ -70,17 +80,33 @@ const TURN_TIMEOUT_MS = 180_000;
  * reply costs a few dozen executeJavaScript() calls rather than one a token.
  */
 const TEXT_FLUSH_MS = 60;
+/** How long creating a playlist in the page may take. */
+const CREATE_TIMEOUT_MS = 15_000;
+/** Proposals a chat keeps open; the oldest is forgotten first. */
+const MAX_PROPOSALS = 20;
+/** The token a proposal is created by: a random UUID from this module. */
+const PROPOSAL_TOKEN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** A library playlist id, as Apple answers a created playlist with. */
+const LIBRARY_PLAYLIST_ID = /^p\.[A-Za-z0-9._-]{1,100}$/;
+/** Catalogue song ids are digits only. */
+const SONG_ID = /^\d{1,20}$/;
 
 /** A message the panel sent, once checked. */
 export interface VibeRequest {
   prompt: string;
 }
 
+/** Why a playlist was not created, for the panel to explain. */
+export type PlaylistErrorCode = "signed-out" | "disabled" | "failed";
+
 /** What the panel is told, as one JSON value each time. */
 export type VibeUpdate =
   | { status: "working"; searches: number; maxSearches: number }
   | { status: "text"; text: string }
   | { status: "songs"; songs: VibePick[] }
+  | { status: "playlist"; proposal: string; name: string; songs: CatalogSong[] }
+  | { status: "playlist-created"; proposal: string; playlist: string }
+  | { status: "playlist-failed"; proposal: string; code: PlaylistErrorCode }
   | { status: "done" }
   | { status: "error"; code: VibeErrorCode }
   | { status: "spend"; spent: string; budget: string };
@@ -108,6 +134,8 @@ let chatGeneration = 0;
 let active: AbortController | null = null;
 let lastFinishedAt = 0;
 let stateChanged: (() => void) | null = null;
+/** Playlists Claude proposed in this chat, by their one-use token. */
+let proposals = new Map<string, { name: string; ids: string[]; creating: boolean }>();
 let pendingText = "";
 let textTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -190,7 +218,10 @@ export function createClient(apiKey: string): Anthropic {
  * (quotes, backticks, ${}, </script>, line separators) can end the call or
  * start code of its own.
  */
-export function pageCall(name: "search" | "update", ...args: unknown[]): string {
+export function pageCall(
+  name: "search" | "update" | "createPlaylist",
+  ...args: unknown[]
+): string {
   return `window.__hydraVibe.${name}(${args.map((arg) => JSON.stringify(arg)).join(", ")})`;
 }
 
@@ -392,6 +423,16 @@ async function run(request: VibeRequest, apiKey: string): Promise<void> {
     else if (event.type === "songs") {
       shown += event.songs.length;
       update({ status: "songs", songs: event.songs });
+    } else if (event.type === "playlist") {
+      const { name, songs } = event.proposal;
+      const proposal = randomUUID();
+      proposals.set(proposal, { name, ids: songs.map((song) => song.id), creating: false });
+      while (proposals.size > MAX_PROPOSALS) {
+        const oldest = proposals.keys().next().value;
+        if (oldest === undefined) break;
+        proposals.delete(oldest);
+      }
+      update({ status: "playlist", proposal, name, songs });
     } else update({ status: "working", searches: event.searches, maxSearches: MAX_SEARCHES });
   };
   update({ status: "working", searches: 0, maxSearches: MAX_SEARCHES });
@@ -463,9 +504,101 @@ export function resetChat(): void {
   chatGeneration += 1;
   cancel();
   chat = newChat();
+  proposals = new Map();
   pendingText = "";
   if (textTimer) clearTimeout(textTimer);
   textTimer = null;
+}
+
+/**
+ * The proposal token in a vibe:create-playlist payload, or null when it is
+ * malformed: exactly `{ proposal }`, a UUID.
+ */
+export function parseCreateRequest(data: unknown): string | null {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
+  const entry = data as Record<string, unknown>;
+  const keys = Object.keys(entry);
+  if (keys.length !== 1 || keys[0] !== "proposal") return null;
+  return typeof entry.proposal === "string" && PROPOSAL_TOKEN.test(entry.proposal)
+    ? entry.proposal
+    : null;
+}
+
+/** The id of the playlist a page answer reports created, or why there is none. */
+function createdPlaylist(answer: unknown): { playlist: string } | { code: PlaylistErrorCode } {
+  if (typeof answer !== "object" || answer === null) return { code: "failed" };
+  const entry = answer as { id?: unknown; error?: unknown };
+  if (typeof entry.id === "string" && LIBRARY_PLAYLIST_ID.test(entry.id)) {
+    return { playlist: entry.id };
+  }
+  return { code: entry.error === "signed-out" ? "signed-out" : "failed" };
+}
+
+/**
+ * Create a playlist Claude proposed, for the user's click on Create playlist.
+ * The caller in src/main.ts has checked that the main window's main frame
+ * sent it. The payload names a proposal by its token and nothing else, so
+ * what is created is exactly what this module holds: a name and song ids a
+ * search in this chat returned, checked again here. A token works once; a
+ * failed attempt can be tried again. The page only ever creates a new
+ * playlist (assets/vibe.js createPlaylist()).
+ */
+export async function handleCreatePlaylist(data: unknown): Promise<void> {
+  const token = parseCreateRequest(data);
+  if (!token) {
+    vibeLog.warn("malformed playlist request ignored");
+    return;
+  }
+  const stored = proposals.get(token);
+  if (!stored) {
+    // Created already, or from a chat that has gone: nothing to create, and
+    // the card says so rather than waiting.
+    vibeLog.info("playlist request refused: unknown proposal");
+    update({ status: "playlist-failed", proposal: token, code: "failed" });
+    return;
+  }
+  if (stored.creating) return;
+  if (!config.getVibeEnabled()) {
+    update({ status: "playlist-failed", proposal: token, code: "disabled" });
+    return;
+  }
+  const { name, ids } = stored;
+  if (
+    !name ||
+    name.length > MAX_PLAYLIST_NAME ||
+    !ids.length ||
+    ids.length > MAX_PLAYLIST_SONGS ||
+    !ids.every((id) => SONG_ID.test(id))
+  ) {
+    proposals.delete(token);
+    update({ status: "playlist-failed", proposal: token, code: "failed" });
+    return;
+  }
+  stored.creating = true;
+  const generation = chatGeneration;
+  let outcome: { playlist: string } | { code: PlaylistErrorCode };
+  try {
+    outcome = createdPlaylist(
+      await inPage(pageCall("createPlaylist", name, ids), CREATE_TIMEOUT_MS),
+    );
+  } catch {
+    outcome = { code: "failed" };
+  }
+  if ("playlist" in outcome) {
+    // Never the name: it is the user's library.
+    vibeLog.info(`playlist created songs=${ids.length}`);
+    if (generation !== chatGeneration) return;
+    proposals.delete(token);
+    chat.notes.push(
+      `(The user created the playlist you proposed, ${JSON.stringify(name)}, with ${ids.length} ${ids.length === 1 ? "song" : "songs"}.)`,
+    );
+    update({ status: "playlist-created", proposal: token, playlist: outcome.playlist });
+    return;
+  }
+  vibeLog.warn(`playlist not created code=${outcome.code}`);
+  if (generation !== chatGeneration) return;
+  stored.creating = false;
+  update({ status: "playlist-failed", proposal: token, code: outcome.code });
 }
 
 /**

@@ -823,6 +823,7 @@ describe('Channel contract', () => {
       | 'vibe:send'
       | 'vibe:cancel'
       | 'vibe:new-chat'
+      | 'vibe:create-playlist'
       | 'playlist:sort';
 
     expectTypeOf<SendChannel>().toEqualTypeOf<ExpectedSend>();

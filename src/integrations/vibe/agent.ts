@@ -3,9 +3,11 @@
  * as many rounds of tool calls as it needs up to MAX_ROUNDS. The tools look
  * songs up in the real Apple Music catalogue (search_catalog), read what is
  * playing and what was played (get_now_playing, get_recent_tracks, only when
- * Claude asks), and put songs in the reply as rows (show_songs). Only an id one
- * of this chat's searches returned can be shown, so Claude never invents one,
- * and no tool starts playback: the user does that from the rows.
+ * Claude asks), put songs in the reply as rows (show_songs), and preview a new
+ * playlist (propose_playlist). Only an id one of this chat's searches returned
+ * can be shown or proposed, so Claude never invents one, and no tool plays or
+ * creates anything: the user plays from the rows, and only the user's click
+ * creates a proposed playlist (src/integrations/vibe/index.ts).
  *
  * Each turn is bounded: at most MAX_ROUNDS requests, MAX_SEARCHES searches and
  * max_tokens on every request, plus the daily budget, asked before every
@@ -33,6 +35,10 @@ export const MAX_SEARCHES = 15;
 export const MAX_SHOWN = 20;
 /** The longest message accepted. */
 export const MAX_PROMPT_LENGTH = 500;
+/** The most songs a proposed playlist holds. */
+export const MAX_PLAYLIST_SONGS = 100;
+/** The longest playlist name accepted. */
+export const MAX_PLAYLIST_NAME = 100;
 /** The most search results a chat remembers as showable; the oldest go first. */
 export const MAX_FOUND = 500;
 /** A prompt this large, in tokens, trims the oldest turns before the next one. */
@@ -50,6 +56,7 @@ const SEARCH_TOOL = "search_catalog";
 const NOW_PLAYING_TOOL = "get_now_playing";
 const RECENT_TOOL = "get_recent_tracks";
 const SHOW_TOOL = "show_songs";
+const PLAYLIST_TOOL = "propose_playlist";
 
 /** What went wrong, for the panel to explain. */
 export type VibeErrorCode =
@@ -82,10 +89,17 @@ export interface VibePick extends CatalogSong {
   reason: string;
 }
 
+/** A new playlist Claude proposed: nothing exists until the user creates it. */
+export interface PlaylistProposal {
+  name: string;
+  songs: CatalogSong[];
+}
+
 /** Something the panel shows while a turn runs, in order. */
 export type TurnEvent =
   | { type: "text"; text: string }
   | { type: "songs"; songs: VibePick[] }
+  | { type: "playlist"; proposal: PlaylistProposal }
   | { type: "searching"; searches: number };
 
 /** One chat: what Claude has been sent so far, and the songs it may show. */
@@ -95,11 +109,13 @@ export interface Chat {
   found: Map<string, CatalogSong>;
   /** The size of the last prompt sent, in tokens, which decides trimming. */
   lastPromptTokens: number;
+  /** What happened since the last turn, such as a playlist created, for the next prompt. */
+  notes: string[];
 }
 
 /** A fresh, empty chat. */
 export function newChat(): Chat {
-  return { messages: [], found: new Map(), lastPromptTokens: 0 };
+  return { messages: [], found: new Map(), lastPromptTokens: 0, notes: [] };
 }
 
 /** The parameters of one streamed Messages API call. */
@@ -150,6 +166,7 @@ Songs:
 - Make several searches in one turn, to keep things quick. You have ${MAX_SEARCHES} searches per message, so search only for songs you mean to show.
 - Show about 10 songs for a mood or a set, fewer when asked for fewer, in an order that flows well. Give each a reason of at most 15 words, addressed to the user, saying why it fits.
 - You cannot play, queue or save anything yourself. The user plays songs from the rows.
+- When the user wants a playlist, show its songs, then call propose_playlist with a short name and the song ids in order. The user sees a preview with a Create playlist button; only the user can create it. You can only propose new playlists: you cannot add to, change or delete existing ones.
 - Call get_now_playing or get_recent_tracks only when the answer depends on what the user is playing or has played, such as "more like this" or "something I haven't heard".
 
 Style:
@@ -187,6 +204,25 @@ export const TOOLS: Anthropic.Tool[] = [
       "The songs the user played most recently, newest first, as artist and title: up to 20.",
     strict: true,
     input_schema: { type: "object", properties: {}, additionalProperties: false },
+  },
+  {
+    name: PLAYLIST_TOOL,
+    description:
+      `Propose a new playlist in the user's Apple Music library: shows a preview with a Create playlist button. Nothing is created unless the user presses it. Only ids that search_catalog returned in this chat are included; at most ${MAX_PLAYLIST_SONGS}.`,
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "A short name for the playlist." },
+        ids: {
+          type: "array",
+          items: { type: "string", description: "A song id from search_catalog." },
+          description: "The songs, in play order.",
+        },
+      },
+      required: ["name", "ids"],
+      additionalProperties: false,
+    },
   },
   {
     name: SHOW_TOOL,
@@ -258,6 +294,35 @@ export function picksFrom(
     picks.push({ ...song, reason: cleanText(entry?.reason, MAX_REASON_LENGTH) });
   }
   return { picks, rejected };
+}
+
+/**
+ * The playlist a propose_playlist input describes: a cleaned name and the
+ * songs a search returned, in order and without repeats, or null when there
+ * is no name or no such song.
+ */
+export function proposalFrom(
+  input: unknown,
+  found: ReadonlyMap<string, CatalogSong>,
+): { proposal: PlaylistProposal | null; rejected: number } {
+  const entry = input as { name?: unknown; ids?: unknown } | null;
+  const name = cleanText(entry?.name, MAX_PLAYLIST_NAME);
+  const raw = Array.isArray(entry?.ids) ? entry.ids : [];
+  const songs: CatalogSong[] = [];
+  const seen = new Set<string>();
+  let rejected = 0;
+  for (const id of raw) {
+    if (songs.length >= MAX_PLAYLIST_SONGS) break;
+    if (typeof id === "string" && seen.has(id)) continue;
+    const song = typeof id === "string" ? found.get(id) : undefined;
+    if (!song) {
+      rejected += 1;
+      continue;
+    }
+    seen.add(song.id);
+    songs.push(song);
+  }
+  return { proposal: name && songs.length ? { name, songs } : null, rejected };
 }
 
 /** What a search answers Claude: its matches, or that none were found. */
@@ -354,7 +419,10 @@ export async function runTurn(options: TurnOptions): Promise<void> {
     options;
   // Built on a copy: the chat only takes it once the turn has finished.
   const messages = trimHistory(chat.messages, chat.lastPromptTokens).slice();
-  messages.push({ role: "user", content: prompt });
+  // Notes come first, so the user's own words are the last thing Claude reads.
+  // A note added while this turn runs waits for the next one.
+  const notes = chat.notes.length;
+  messages.push({ role: "user", content: [...chat.notes, prompt].join("\n\n") });
   let searches = 0;
   let lastPromptTokens = chat.lastPromptTokens;
 
@@ -426,6 +494,28 @@ export async function runTurn(options: TurnOptions): Promise<void> {
     };
   }
 
+  function runProposal(use: Anthropic.ToolUseBlock): Anthropic.ToolResultBlockParam {
+    const { proposal, rejected } = proposalFrom(use.input, chat.found);
+    if (!proposal) {
+      return {
+        type: "tool_result",
+        tool_use_id: use.id,
+        is_error: true,
+        content:
+          "Nothing was proposed: a playlist needs a name and songs that search_catalog returned in this chat.",
+      };
+    }
+    onEvent({ type: "playlist", proposal });
+    const skipped = rejected
+      ? ` ${rejected} ${rejected === 1 ? "id was" : "ids were"} not from search_catalog and left out.`
+      : "";
+    return {
+      type: "tool_result",
+      tool_use_id: use.id,
+      content: `The user sees a preview of the playlist with ${proposal.songs.length} ${proposal.songs.length === 1 ? "song" : "songs"} and a Create playlist button. It is not created unless they press it.${skipped}`,
+    };
+  }
+
   /** Run the round's tool calls; searches run together, the rest in order. */
   async function runTools(uses: Anthropic.ToolUseBlock[]): Promise<Anthropic.ToolResultBlockParam[]> {
     const searched = new Map<string, Promise<Anthropic.ToolResultBlockParam>>();
@@ -453,6 +543,9 @@ export async function runTurn(options: TurnOptions): Promise<void> {
           break;
         case SHOW_TOOL:
           results.push(runShow(use));
+          break;
+        case PLAYLIST_TOOL:
+          results.push(runProposal(use));
           break;
         default:
           results.push({
@@ -509,9 +602,10 @@ export async function runTurn(options: TurnOptions): Promise<void> {
       (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
     );
     if (!uses.length) {
-      // The turn is finished: keep it.
+      // The turn is finished: keep it, and the notes it carried are spent.
       chat.messages = messages;
       chat.lastPromptTokens = lastPromptTokens;
+      chat.notes = chat.notes.slice(notes);
       return;
     }
     if (round === MAX_ROUNDS) break;

@@ -5,11 +5,13 @@ import {
   classifyError,
   cleanReplyText,
   MAX_FOUND,
+  MAX_PLAYLIST_SONGS,
   MAX_ROUNDS,
   MAX_SEARCHES,
   MAX_SHOWN,
   newChat,
   picksFrom,
+  proposalFrom,
   runTurn,
   SYSTEM_PROMPT,
   TOOLS,
@@ -171,6 +173,7 @@ describe("runTurn", () => {
       "search_catalog",
       "get_now_playing",
       "get_recent_tracks",
+      "propose_playlist",
       "show_songs",
     ]);
     for (const tool of TOOLS as Anthropic.Tool[]) {
@@ -187,6 +190,8 @@ describe("runTurn", () => {
     expect(SYSTEM_PROMPT).toMatch(/Never name a song as a recommendation in your text unless a search_catalog call in this chat returned it/);
     expect(SYSTEM_PROMPT).toMatch(/Keep replies short/);
     expect(SYSTEM_PROMPT).toMatch(/cannot play, queue or save anything yourself/);
+    expect(SYSTEM_PROMPT).toMatch(/only the user can create it/);
+    expect(SYSTEM_PROMPT).toMatch(/cannot add to, change or delete existing ones/);
   });
 
   it("sends the listening history only when Claude asks for it", async () => {
@@ -382,6 +387,95 @@ describe("runTurn", () => {
     const { turn, events } = options(stream);
     await runTurn(turn);
     expect(events).toEqual([{ type: "text", text: "xy" }]);
+  });
+});
+
+describe("propose_playlist", () => {
+  it("proposes only searched songs under a cleaned name, creating nothing, and says so", async () => {
+    const { stream, calls } = scripted(
+      message([
+        toolUse("search_catalog", { artist: "Artist A", title: "Song A" }),
+        toolUse("search_catalog", { artist: "Artist B", title: "Song B" }),
+      ]),
+      message([
+        toolUse("propose_playlist", { name: "  Late\nnight\u202e drive ", ids: ["222", "999", "111", "222"] }),
+      ]),
+      message([text("Press Create playlist if you like it.")]),
+    );
+    const { turn, events } = options(stream);
+    await runTurn(turn);
+    expect(events).toContainEqual({
+      type: "playlist",
+      proposal: { name: "Late night drive", songs: [SONGS["222"], SONGS["111"]] },
+    });
+    expect(toolResults(calls[2])[0].content).toBe(
+      "The user sees a preview of the playlist with 2 songs and a Create playlist button. It is not created unless they press it. 1 id was not from search_catalog and left out.",
+    );
+  });
+
+  it("proposes nothing without a name or a searched song", async () => {
+    const found = new Map(Object.entries(SONGS));
+    expect(proposalFrom({ name: "  ", ids: ["111"] }, found).proposal).toBeNull();
+    expect(proposalFrom({ name: "Mix", ids: ["999"] }, found)).toEqual({ proposal: null, rejected: 1 });
+    expect(proposalFrom({ name: "Mix", ids: "111" }, found).proposal).toBeNull();
+    expect(proposalFrom(null, found).proposal).toBeNull();
+    const { stream, calls } = scripted(
+      message([toolUse("propose_playlist", { name: "Mix", ids: ["999"] })]),
+      message([text("Sorry.")]),
+    );
+    const { turn, events } = options(stream);
+    await runTurn(turn);
+    expect(events.some((event) => event.type === "playlist")).toBe(false);
+    expect(toolResults(calls[1])[0]).toMatchObject({ is_error: true });
+  });
+
+  it(`keeps at most ${MAX_PLAYLIST_SONGS} songs and a 100-character name`, () => {
+    const many = new Map<string, CatalogSong>();
+    for (let i = 0; i < 150; i += 1) many.set(String(i), { ...SONGS["111"], id: String(i) });
+    const { proposal } = proposalFrom({ name: "n".repeat(300), ids: [...many.keys()] }, many);
+    expect(proposal!.songs).toHaveLength(MAX_PLAYLIST_SONGS);
+    expect(proposal!.name).toHaveLength(100);
+  });
+
+  // index.ts adds a note when the user creates a proposed playlist; the next
+  // turn carries it before the user's words, then it is spent.
+  it("puts the chat's notes before the next prompt, once", async () => {
+    const chat = newChat();
+    chat.notes.push('(The user created the playlist you proposed, "Mix", with 2 songs.)');
+    const first = scripted(message([text("Nice.")]));
+    await runTurn(options(first.stream, { chat, prompt: "thanks" }).turn);
+    expect(first.calls[0].messages.at(-1)!.content).toBe(
+      '(The user created the playlist you proposed, "Mix", with 2 songs.)\n\nthanks',
+    );
+    expect(chat.notes).toEqual([]);
+    const second = scripted(message([text("Ok.")]));
+    await runTurn(options(second.stream, { chat, prompt: "more" }).turn);
+    expect(second.calls[0].messages.at(-1)!.content).toBe("more");
+  });
+
+  it("keeps a note added while the turn runs for the next turn", async () => {
+    const chat = newChat();
+    chat.notes.push("(first)");
+    const { stream, calls } = scripted(
+      message([toolUse("get_now_playing", {})]),
+      message([text("ok")]),
+    );
+    const { turn } = options(stream, { chat, prompt: "go" });
+    vi.mocked(turn.tools.nowPlaying).mockImplementation(() => {
+      chat.notes.push("(created mid-turn)");
+      return null;
+    });
+    await runTurn(turn);
+    expect(calls[0].messages.at(-1)!.content).toBe("(first)\n\ngo");
+    expect(chat.notes).toEqual(["(created mid-turn)"]);
+  });
+
+  it("keeps the notes for the next turn when a turn fails", async () => {
+    const chat = newChat();
+    chat.notes.push("(note)");
+    const { stream } = scripted(new Anthropic.InternalServerError(529, {}, "overloaded", new Headers()));
+    await expect(runTurn(options(stream, { chat }).turn)).rejects.toMatchObject({ code: "unavailable" });
+    expect(chat.notes).toEqual(["(note)"]);
   });
 });
 

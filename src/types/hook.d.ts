@@ -32,6 +32,7 @@ type SendChannel =
  | "vibe:send"
  | "vibe:cancel"
  | "vibe:new-chat"
+ | "vibe:create-playlist"
  | "playlist:sort";
 
 /**

@@ -6,6 +6,9 @@
 // window.__hydraVibe.update(). Claude's songs appear as rows: a row plays the
 // set from that song, its menu offers Play next and Add to queue, and Play all
 // plays the set. Claude never starts playback; only the user does, here.
+// Claude can also propose a new playlist, shown as a preview card: only the
+// user's click on Create playlist creates it, through the main process, which
+// calls createPlaylist() here with the playlist it holds for that card.
 //
 // Claude looks songs up through window.__hydraVibe.search() and reads the
 // recently played list through recent(), which the main process calls with
@@ -37,7 +40,7 @@
   }
 
   // loadAssets() in src/main.ts replaces VIBE_LABELS_TOKEN from src/i18n.ts with JSON.
-  /** @type {{ vibe: string, placeholder: string, send: string, stop: string, newChat: string, close: string, empty: string, thinking: string, working: string, playAll: string, moreOptions: string, playNext: string, addToQueue: string, queuedNext: string, queuedLater: string, queueFailed: string, spend: string, openSettings: string, explicit: string, errors: Record<string, string> }} */
+  /** @type {{ vibe: string, placeholder: string, send: string, stop: string, newChat: string, close: string, empty: string, thinking: string, working: string, playAll: string, moreOptions: string, playNext: string, addToQueue: string, queuedNext: string, queuedLater: string, queueFailed: string, spend: string, openSettings: string, newPlaylist: string, songCount: string, andMore: string, createPlaylist: string, creating: string, created: string, openPlaylist: string, createSignedOut: string, createFailed: string, explicit: string, errors: Record<string, string> }} */
   var LABELS = __HYDRA_VIBE_LABELS__;
 
   /** Matches src/integrations/vibe/agent.ts MAX_PROMPT_LENGTH. */
@@ -50,6 +53,15 @@
   var RECENT_LIMIT = 20;
   /** Matches MAX_QUEUED_SONGS in assets/musicKitHook.js. */
   var MAX_QUEUED = 25;
+  /** Matches src/integrations/vibe/agent.ts MAX_PLAYLIST_SONGS and MAX_PLAYLIST_NAME. */
+  var MAX_PLAYLIST_SONGS = 100;
+  var MAX_PLAYLIST_NAME = 100;
+  /** Songs a playlist preview lists before "and N more". */
+  var PREVIEW_SONGS = 5;
+  /** A proposal's token, as the main process makes them. */
+  var PROPOSAL_TOKEN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  /** A library playlist id, as Apple answers a created playlist with. */
+  var PLAYLIST_ID = /^p\.[A-Za-z0-9._-]{1,100}$/;
   /** Artwork is drawn at 40px; twice that stays sharp at 200% zoom. */
   var ARTWORK_PX = 80;
   /** How long a queue notice stays under the field. */
@@ -117,6 +129,18 @@
     ".songs-footer { display: flex; padding: 4px 6px 2px; }",
     ".play-all { padding: 5px 12px; border-radius: 999px; font-weight: 600; color: #ffffff;",
     "  background: var(--keyColor, #fa586a); }",
+    ".playlist { margin: 4px 0 10px; padding: 10px 12px; border-radius: 10px;",
+    "  border: 1px solid var(--labelDivider, rgba(128, 128, 128, 0.3)); }",
+    ".playlist-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;",
+    "  color: var(--systemSecondary, rgba(128, 128, 128, 0.9)); }",
+    ".playlist-name { margin-top: 2px; font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }",
+    ".playlist-count, .playlist-more, .playlist-status { margin-top: 2px;",
+    "  color: var(--systemSecondary, rgba(128, 128, 128, 0.9)); }",
+    ".playlist-songs { list-style: none; margin: 8px 0 0; padding: 0; line-height: 1.5; }",
+    ".playlist-songs li { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }",
+    ".playlist-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }",
+    ".create, .open { padding: 5px 12px; border-radius: 999px; font-weight: 600; color: #ffffff;",
+    "  background: var(--keyColor, #fa586a); }",
     ".status { padding: 2px 0; font-size: 12px; color: var(--systemSecondary, rgba(128, 128, 128, 0.9)); }",
     ".error { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px 0;",
     "  color: var(--systemSecondary, rgba(128, 128, 128, 0.9)); }",
@@ -170,6 +194,11 @@
   var drawerWatch = null;
   /** @type {{ id: string, anchor: HTMLElement } | null} The row whose menu is open. */
   var menuFor = null;
+  /**
+   * Playlist preview cards by proposal token, for the outcome of Create playlist.
+   * @type {Record<string, { create: HTMLElement, status: HTMLElement, actions: HTMLElement, busy: boolean, done: boolean }>}
+   */
+  var cards = {};
   var noticeTimer = 0;
 
   /**
@@ -850,6 +879,176 @@
   }
 
   /**
+   * Create a new playlist in the user's library: the one Claude proposed and
+   * the user chose to create. Called by the main process with the name and
+   * song ids it holds for the card that was clicked. This is the only write to
+   * the library here, and it can only add a playlist: it posts to Apple's
+   * create endpoint, the one Apple's own New Playlist uses, and to nothing else.
+   * @param {unknown} name - The playlist's name
+   * @param {unknown} ids - Catalogue song ids, in order
+   * @returns {Promise<{ id: string } | { error: string }>}
+   */
+  function createPlaylist(name, ids) {
+    var mk = musicKit();
+    if (!mk || !mk.api || typeof mk.api.music !== "function") {
+      return Promise.resolve({ error: "failed" });
+    }
+    if (!mk.isAuthorized) return Promise.resolve({ error: "signed-out" });
+    if (
+      typeof name !== "string" ||
+      !name ||
+      name.length > MAX_PLAYLIST_NAME ||
+      !Array.isArray(ids) ||
+      !ids.length ||
+      ids.length > MAX_PLAYLIST_SONGS ||
+      !ids.every(function (id) {
+        return typeof id === "string" && /^\d{1,20}$/.test(id);
+      })
+    ) {
+      return Promise.resolve({ error: "failed" });
+    }
+    // MusicKit takes the method and body as its third argument and sends the
+    // body as JSON; measured, it ignores a fetchOptions object and sends a GET.
+    // It answers an error status without rejecting, so the status is checked
+    // as Apple's own create does.
+    return Promise.resolve(
+      mk.api.music("/v1/me/library/playlists", undefined, {
+        method: "POST",
+        body: {
+          attributes: { name: name, isPublic: false },
+          relationships: {
+            tracks: {
+              data: ids.map(function (id) {
+                return { id: id, type: "songs" };
+              }),
+            },
+          },
+        },
+      }),
+    ).then(
+      function (response) {
+        var status = response && response.status;
+        var data = response && response.data && response.data.data;
+        var id = Array.isArray(data) && data[0] && data[0].id;
+        return (status === 200 || status === 201) && typeof id === "string"
+          ? { id: id }
+          : { error: "failed" };
+      },
+      function () {
+        return { error: "failed" };
+      },
+    );
+  }
+
+  /**
+   * Open a library playlist in the page, as the top bar opens its pages, so
+   * playback carries on.
+   * @param {string} id - A library playlist id
+   * @returns {void}
+   */
+  function openPlaylist(id) {
+    if (!PLAYLIST_ID.test(id) || !window.history) return;
+    window.history.pushState({}, "", "/library/playlist/" + id);
+    if (typeof PopStateEvent === "function") {
+      window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+    }
+  }
+
+  /**
+   * A preview of a playlist Claude proposed, with Create playlist. Nothing
+   * exists until the user clicks it; the click sends the card's token, and
+   * the main process creates the playlist it holds under that token.
+   * @param {string} token - The proposal's token
+   * @param {string} name - The playlist's name
+   * @param {unknown[]} songs - Its songs, as the main process checked them
+   * @returns {HTMLElement | null}
+   */
+  function createCard(token, name, songs) {
+    if (!PROPOSAL_TOKEN.test(token) || !name || !songs.length) return null;
+    var card = el("div", { class: "playlist", role: "group", "aria-label": LABELS.newPlaylist });
+    var label = el("div", { class: "playlist-label" });
+    label.textContent = LABELS.newPlaylist;
+    var title = el("div", { class: "playlist-name" });
+    title.textContent = name;
+    var count = el("div", { class: "playlist-count" });
+    count.textContent = LABELS.songCount.replace("{count}", function () {
+      return String(songs.length);
+    });
+    var list = el("ul", { class: "playlist-songs" });
+    songs.slice(0, PREVIEW_SONGS).forEach(function (song) {
+      var item = el("li", {});
+      item.textContent = String((song && song.title) || "") + " \u2014 " + String((song && song.artist) || "");
+      list.appendChild(item);
+    });
+    card.appendChild(label);
+    card.appendChild(title);
+    card.appendChild(count);
+    card.appendChild(list);
+    if (songs.length > PREVIEW_SONGS) {
+      var more = el("div", { class: "playlist-more" });
+      more.textContent = LABELS.andMore.replace("{count}", function () {
+        return String(songs.length - PREVIEW_SONGS);
+      });
+      card.appendChild(more);
+    }
+    var actions = el("div", { class: "playlist-actions" });
+    var create = el("button", { class: "create", type: "button" });
+    create.textContent = LABELS.createPlaylist;
+    var status = el("span", { class: "playlist-status", role: "status" });
+    actions.appendChild(create);
+    actions.appendChild(status);
+    card.appendChild(actions);
+    var entry = { create: create, status: status, actions: actions, busy: false, done: false };
+    cards[token] = entry;
+    create.addEventListener("click", function (event) {
+      // A click a script made is not the user's.
+      if ((event && event.isTrusted === false) || entry.busy || entry.done) return;
+      if (!sendToMain("vibe:create-playlist", { proposal: token })) {
+        status.textContent = LABELS.createFailed;
+        return;
+      }
+      entry.busy = true;
+      create.disabled = true;
+      create.textContent = LABELS.creating;
+      status.textContent = "";
+    });
+    return card;
+  }
+
+  /**
+   * Show how Create playlist went on its card.
+   * @param {any} state - A playlist-created or playlist-failed update
+   * @returns {void}
+   */
+  function settleCard(state) {
+    var entry = cards[String(state.proposal)];
+    // A created playlist stays created, whatever arrives for its card later.
+    if (!entry || entry.done) return;
+    entry.busy = false;
+    if (state.status === "playlist-created" && PLAYLIST_ID.test(String(state.playlist))) {
+      entry.done = true;
+      var id = String(state.playlist);
+      entry.actions.removeChild(entry.create);
+      entry.status.textContent = LABELS.created;
+      var open = el("button", { class: "open", type: "button" });
+      open.textContent = LABELS.openPlaylist;
+      open.addEventListener("click", function () {
+        openPlaylist(id);
+      });
+      entry.actions.insertBefore(open, entry.status);
+      return;
+    }
+    entry.create.disabled = false;
+    entry.create.textContent = LABELS.createPlaylist;
+    entry.status.textContent =
+      state.code === "signed-out"
+        ? LABELS.createSignedOut
+        : state.code === "disabled"
+          ? LABELS.errors.disabled
+          : LABELS.createFailed;
+  }
+
+  /**
    * Show a turn's error under the reply, with Open Settings for errors fixed there.
    * @param {string} code - The error code
    * @returns {void}
@@ -926,6 +1125,18 @@
         addToReply(block);
         return;
       }
+      case "playlist": {
+        if (typeof state.name !== "string" || !Array.isArray(state.songs)) return;
+        var card = createCard(String(state.proposal), state.name, state.songs);
+        if (!card) return;
+        currentReply().segment = null;
+        addToReply(card);
+        return;
+      }
+      case "playlist-created":
+      case "playlist-failed":
+        settleCard(state);
+        return;
       case "done":
         if (reply) setStatus("");
         reply = null;
@@ -977,6 +1188,7 @@
     closeMenu(false);
     reply = null;
     pending = false;
+    cards = {};
     log.replaceChildren(empty);
     render();
     input.focus();
@@ -1181,6 +1393,7 @@
     refresh: refresh,
     search: search,
     recent: recent,
+    createPlaylist: createPlaylist,
     update: update,
   };
 })();

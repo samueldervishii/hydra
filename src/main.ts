@@ -90,6 +90,7 @@ import {
   cancel as cancelVibe,
   handleRequest as handleVibeRequest,
   resetChat as resetVibeChat,
+  handleCreatePlaylist as handleVibeCreatePlaylist,
   pageLoaded as vibePageLoaded,
   spendUpdate as vibeSpendUpdate,
 } from "./integrations/vibe";
@@ -778,6 +779,12 @@ function setupVibeIPC(win: BrowserWindow): void {
     },
     "vibe:new-chat": (event) => {
       if (fromPage(event)) resetVibeChat();
+    },
+    // The panel sends this when the user clicks a proposal's Create
+    // playlist; the token names a playlist the Vibe module holds, and nothing
+    // else, so a sender can only create what Claude proposed.
+    "vibe:create-playlist": (event, data) => {
+      if (fromPage(event)) void handleVibeCreatePlaylist(data);
     },
   });
   // The sort chosen on a playlist page, remembered per playlist. A message

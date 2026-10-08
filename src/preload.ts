@@ -180,6 +180,7 @@ const SEND_CHANNELS = channelSet<SendChannel>({
   "vibe:send": true,
   "vibe:cancel": true,
   "vibe:new-chat": true,
+  "vibe:create-playlist": true,
   "playlist:sort": true,
 });
 

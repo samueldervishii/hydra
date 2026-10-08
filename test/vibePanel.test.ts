@@ -45,6 +45,7 @@ interface VibeApi {
   refresh(): void;
   search(artist: unknown, title: unknown): Promise<unknown[]>;
   recent(): Promise<unknown[]>;
+  createPlaylist(name: unknown, ids: unknown): Promise<unknown>;
   update(state: unknown): void;
 }
 
@@ -96,6 +97,8 @@ function createHarness({ hostname = 'music.apple.com', authorized = true } = {})
     __hydraPlaySongs: vi.fn(async (_ids: string[], _start: number) => undefined),
     __hydraTopBar: { refresh: vi.fn() },
     __hydraVibe: undefined as VibeApi | undefined,
+    history: { state: null, pushState: vi.fn() },
+    dispatchEvent: vi.fn(),
   };
   const document = Object.assign(stubDom.document, {
     querySelector: (selector: string) => body.querySelector(selector),
@@ -108,6 +111,9 @@ function createHarness({ hostname = 'music.apple.com', authorized = true } = {})
     URL,
     console,
     MutationObserver: FakeMutationObserver,
+    PopStateEvent: class {
+      constructor(readonly type: string) {}
+    },
     setInterval: (callback: () => void) => intervals.push(callback),
     setTimeout: (callback: () => void) => setTimeout(callback, 0),
     clearTimeout,
@@ -512,5 +518,129 @@ describe('vibe.js panel', () => {
     h.vibe().open();
     h.findAll('icon')[1].dispatch('click');
     expect(h.isOpen()).toBe(false);
+  });
+
+  describe('playlist proposals', () => {
+    const TOKEN = '0b7e4a52-3f7c-4d1e-9a6b-2c8d5e1f0a93';
+    const many = Array.from({ length: 8 }, (_, i) => ({ ...SONGS[0], id: String(100 + i), title: `Track ${i}` }));
+
+    it('shows a preview card as text, and creates nothing until Create playlist is clicked', () => {
+      const h = createHarness();
+      h.vibe().update({ status: 'playlist', proposal: TOKEN, name: '<b>Night</b> drive', songs: many });
+      const card = h.find('playlist');
+      expect(h.find('playlist-name').textContent).toBe('<b>Night</b> drive');
+      expect(h.find('playlist-count').textContent).toBe('8 songs');
+      expect(h.find('playlist-songs').children).toHaveLength(5);
+      expect((h.find('playlist-songs').children[0] as StubElement).textContent).toBe('Track 0 \u2014 Artist A');
+      expect(h.find('playlist-more').textContent).toBe('and 3 more');
+      expect(card.descendants().some((e) => e.tagName === 'b')).toBe(false);
+      expect(h.send).not.toHaveBeenCalled();
+
+      h.find('create').dispatch('click');
+      expect(h.send).toHaveBeenCalledExactlyOnceWith('vibe:create-playlist', { proposal: TOKEN });
+      expect(h.find('create').disabled).toBe(true);
+      expect(h.find('create').textContent).toBe(LABELS.creating);
+      // A second click while it is being created sends nothing more.
+      h.find('create').dispatch('click');
+      expect(h.send).toHaveBeenCalledOnce();
+    });
+
+    it('ignores a click a script made', () => {
+      const h = createHarness();
+      h.vibe().update({ status: 'playlist', proposal: TOKEN, name: 'Mix', songs: many });
+      h.find('create').dispatch('click', { isTrusted: false } as never);
+      expect(h.send).not.toHaveBeenCalled();
+    });
+
+    it('shows nothing for a malformed proposal', () => {
+      const h = createHarness();
+      h.vibe().update({ status: 'playlist', proposal: 'p.x"); alert(1', name: 'Mix', songs: many });
+      h.vibe().update({ status: 'playlist', proposal: TOKEN, name: '', songs: many });
+      h.vibe().update({ status: 'playlist', proposal: TOKEN, name: 'Mix', songs: [] });
+      expect(h.findAll('playlist')).toHaveLength(0);
+    });
+
+    it('says when it was created and opens the new playlist in the page', () => {
+      const h = createHarness();
+      h.vibe().update({ status: 'playlist', proposal: TOKEN, name: 'Mix', songs: many });
+      h.find('create').dispatch('click');
+      h.vibe().update({ status: 'playlist-created', proposal: TOKEN, playlist: 'p.AbC123' });
+      expect(h.findAll('create')).toHaveLength(0);
+      expect(h.find('playlist-status').textContent).toBe(LABELS.created);
+      h.find('open').dispatch('click');
+      expect(h.window.history.pushState).toHaveBeenCalledExactlyOnceWith({}, '', '/library/playlist/p.AbC123');
+      expect(h.window.dispatchEvent).toHaveBeenCalledOnce();
+      h.vibe().update({ status: 'playlist-failed', proposal: TOKEN, code: 'failed' });
+      expect(h.find('playlist-status').textContent).toBe(LABELS.created);
+    });
+
+    it('explains a failure and lets the user try again', () => {
+      const h = createHarness();
+      h.vibe().update({ status: 'playlist', proposal: TOKEN, name: 'Mix', songs: many });
+      h.find('create').dispatch('click');
+      h.vibe().update({ status: 'playlist-failed', proposal: TOKEN, code: 'signed-out' });
+      expect(h.find('playlist-status').textContent).toBe(LABELS.createSignedOut);
+      expect(h.find('create').disabled).toBe(false);
+      h.find('create').dispatch('click');
+      h.vibe().update({ status: 'playlist-failed', proposal: TOKEN, code: 'failed' });
+      expect(h.find('playlist-status').textContent).toBe(LABELS.createFailed);
+      expect(h.send).toHaveBeenCalledTimes(2);
+      // A created answer with an id that is not a library playlist is a failure.
+      h.find('create').dispatch('click');
+      h.vibe().update({ status: 'playlist-created', proposal: TOKEN, playlist: 'javascript:alert(1)' });
+      expect(h.findAll('open')).toHaveLength(0);
+      expect(h.find('playlist-status').textContent).toBe(LABELS.createFailed);
+    });
+
+    it('forgets its cards on New chat', () => {
+      const h = createHarness();
+      h.vibe().update({ status: 'playlist', proposal: TOKEN, name: 'Mix', songs: many });
+      h.findAll('icon')[0].dispatch('click');
+      h.vibe().update({ status: 'playlist-created', proposal: TOKEN, playlist: 'p.AbC123' });
+      expect(h.findAll('open')).toHaveLength(0);
+    });
+
+    it('creates only a new playlist, by POST to the create endpoint, with the ids as catalogue songs', async () => {
+      const h = createHarness();
+      h.music.mockResolvedValueOnce({ status: 201, data: { data: [{ id: 'p.New1', type: 'library-playlists' }] } } as unknown);
+      await expect(h.vibe().createPlaylist('Mix', ['111', '222'])).resolves.toEqual({ id: 'p.New1' });
+      // MusicKit's own form: method and body in the third argument, the body as an object it sends as JSON.
+      expect(h.music).toHaveBeenCalledExactlyOnceWith('/v1/me/library/playlists', undefined, {
+        method: 'POST',
+        body: {
+          attributes: { name: 'Mix', isPublic: false },
+          relationships: { tracks: { data: [{ id: '111', type: 'songs' }, { id: '222', type: 'songs' }] } },
+        },
+      });
+      // The panel has no other write to the library.
+      expect(source.match(/method: "[A-Z]+"/g)).toEqual(['method: "POST"']);
+      expect(source).not.toMatch(/"(?:DELETE|PATCH|PUT)"/);
+    });
+
+    it('refuses bad input and a signed-out page before calling Apple', async () => {
+      const h = createHarness();
+      for (const [name, ids] of [
+        ['', ['1']],
+        ['x'.repeat(101), ['1']],
+        ['Mix', []],
+        ['Mix', ['i.abc']],
+        ['Mix', '111'],
+        ['Mix', Array(101).fill('1')],
+        [5, ['1']],
+      ]) {
+        await expect(h.vibe().createPlaylist(name, ids)).resolves.toEqual({ error: 'failed' });
+      }
+      const signedOut = createHarness({ authorized: false });
+      await expect(signedOut.vibe().createPlaylist('Mix', ['1'])).resolves.toEqual({ error: 'signed-out' });
+      expect(h.music).not.toHaveBeenCalled();
+      expect(signedOut.music).not.toHaveBeenCalled();
+      h.music.mockRejectedValueOnce(new Error('403'));
+      await expect(h.vibe().createPlaylist('Mix', ['1'])).resolves.toEqual({ error: 'failed' });
+      h.music.mockResolvedValueOnce({ data: {} } as unknown);
+      await expect(h.vibe().createPlaylist('Mix', ['1'])).resolves.toEqual({ error: 'failed' });
+      // MusicKit resolves an error status rather than rejecting.
+      h.music.mockResolvedValueOnce({ status: 403, data: { data: [{ id: 'p.Nope' }] } } as unknown);
+      await expect(h.vibe().createPlaylist('Mix', ['1'])).resolves.toEqual({ error: 'failed' });
+    });
   });
 });

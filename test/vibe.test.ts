@@ -37,7 +37,13 @@ interface Harness {
 }
 
 /** Load fresh copies of the module and its state, wired to a stand-in window. */
-async function load(page: { recent?: () => unknown; search?: (artist: string, title: string) => unknown } = {}): Promise<Harness> {
+async function load(
+  page: {
+    recent?: () => unknown;
+    search?: (artist: string, title: string) => unknown;
+    create?: (name: unknown, ids: unknown) => unknown;
+  } = {},
+): Promise<Harness> {
   vi.resetModules();
   const vibe = await import("../src/integrations/vibe");
   const agent = await import("../src/integrations/vibe/agent");
@@ -46,6 +52,8 @@ async function load(page: { recent?: () => unknown; search?: (artist: string, ti
     if (script.includes("__hydraVibe.recent()")) return page.recent ? page.recent() : [];
     const search = /__hydraVibe\.search\((.*), (.*)\)$/.exec(script);
     if (search && page.search) return page.search(JSON.parse(search[1]), JSON.parse(search[2]));
+    const create = /__hydraVibe\.createPlaylist\((.*), (\[.*\])\)$/.exec(script);
+    if (create && page.create) return page.create(JSON.parse(create[1]), JSON.parse(create[2]));
     return undefined;
   });
   const win = {
@@ -626,5 +634,169 @@ describe("Vibe messages", () => {
     expect(h.player.listenerCount("nowPlayingItemDidChange")).toBe(1);
     quit();
     expect(h.player.listenerCount("nowPlayingItemDidChange")).toBe(0);
+  });
+});
+
+describe("Vibe playlist proposals", () => {
+  const SONG_B = { ...SONG, id: "222", title: "Song B", reason: "" };
+  // Each turn here starts a minute after the last, clear of the cooldown,
+  // since a turn's finish time is read from the mocked clock.
+  let clock = 0;
+
+  /** Run a turn in which Claude proposes a playlist, and return its token. */
+  async function propose(h: Harness, name = "Late night", songs = [SONG, SONG_B]): Promise<string> {
+    h.keys.saveApiKey(KEY);
+    vi.mocked(h.agent.runTurn).mockImplementationOnce(async (options) => {
+      options.onEvent({ type: "playlist", proposal: { name, songs } });
+    });
+    clock += 60_000;
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + clock);
+    h.vibe.handleRequest({ prompt: "make it a playlist" });
+    await settle();
+    vi.mocked(Date.now).mockRestore();
+    const shown = h.updates().filter((u) => (u as { status: string }).status === "playlist").at(-1) as {
+      proposal: string;
+      name: string;
+      songs: unknown[];
+    };
+    return shown.proposal;
+  }
+
+  const creates = (h: Harness) =>
+    h.executeJavaScript.mock.calls.filter(([script]) => String(script).includes("createPlaylist"));
+
+  it("shows a proposal with a token and creates nothing until the panel asks", async () => {
+    const create = vi.fn(() => ({ id: "p.NewOne" }));
+    const h = await load({ create });
+    const token = await propose(h);
+    expect(token).toMatch(/^[0-9a-f-]{36}$/);
+    expect(h.updates()).toContainEqual({ status: "playlist", proposal: token, name: "Late night", songs: [SONG, SONG_B] });
+    expect(creates(h)).toHaveLength(0);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("creates exactly the proposed playlist on the token, once, and tells Claude next turn", async () => {
+    const create = vi.fn(() => ({ id: "p.NewOne" }));
+    const h = await load({ create });
+    const token = await propose(h);
+    await h.vibe.handleCreatePlaylist({ proposal: token });
+    expect(create).toHaveBeenCalledExactlyOnceWith("Late night", ["111", "222"]);
+    expect(h.updates().at(-1)).toEqual({ status: "playlist-created", proposal: token, playlist: "p.NewOne" });
+    // A token works once.
+    await h.vibe.handleCreatePlaylist({ proposal: token });
+    expect(create).toHaveBeenCalledOnce();
+
+    let notes: string[] = [];
+    vi.mocked(h.agent.runTurn).mockImplementationOnce(async (options) => {
+      notes = [...options.chat.notes];
+    });
+    clock += 60_000;
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + clock);
+    h.vibe.handleRequest({ prompt: "thanks" });
+    await settle();
+    vi.mocked(Date.now).mockRestore();
+    expect(notes).toEqual(['(The user created the playlist you proposed, "Late night", with 2 songs.)']);
+  });
+
+  it("refuses malformed and unknown tokens without touching the page", async () => {
+    const create = vi.fn(() => ({ id: "p.NewOne" }));
+    const h = await load({ create });
+    const token = await propose(h);
+    for (const data of [
+      null,
+      token,
+      { proposal: "not-a-token" },
+      { proposal: token, name: "Other" },
+      { proposal: token, ids: ["999"] },
+      { proposal: "00000000-0000-4000-8000-000000000000" },
+      { proposal: token.toUpperCase() },
+    ]) {
+      await h.vibe.handleCreatePlaylist(data);
+    }
+    expect(create).not.toHaveBeenCalled();
+    expect(h.vibe.parseCreateRequest({ proposal: token })).toBe(token);
+    // Only a well-formed token is answered, and an unknown one as a failure.
+    expect(h.updates().filter((u) => (u as { status: string }).status === "playlist-failed")).toEqual([
+      { status: "playlist-failed", proposal: "00000000-0000-4000-8000-000000000000", code: "failed" },
+    ]);
+  });
+
+  it("voids every proposal on New chat and on a page load", async () => {
+    const create = vi.fn(() => ({ id: "p.NewOne" }));
+    const h = await load({ create });
+    const first = await propose(h);
+    h.vibe.resetChat();
+    await h.vibe.handleCreatePlaylist({ proposal: first });
+    const second = await propose(h);
+    await h.vibe.pageLoaded({ executeJavaScript: vi.fn(async () => undefined) } as unknown as Electron.WebContents);
+    await h.vibe.handleCreatePlaylist({ proposal: second });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("passes a hostile name to the page as one exact string", async () => {
+    const hostile = '"); window.pwned(); ("';
+    const create = vi.fn(() => ({ id: "p.NewOne" }));
+    const h = await load({ create });
+    const token = await propose(h, hostile);
+    await h.vibe.handleCreatePlaylist({ proposal: token });
+    expect(create).toHaveBeenCalledExactlyOnceWith(hostile, ["111", "222"]);
+    const script = String(creates(h)[0][0]);
+    const calls: unknown[][] = [];
+    const pwned = vi.fn();
+    vm.runInNewContext(script, { window: { pwned, __hydraVibe: { createPlaylist: (...args: unknown[]) => calls.push(args) } } });
+    expect(calls).toEqual([[hostile, ["111", "222"]]]);
+    expect(pwned).not.toHaveBeenCalled();
+  });
+
+  it("reports a signed-out page or a failed create, and lets the user try again", async () => {
+    const create = vi
+      .fn()
+      .mockReturnValueOnce({ error: "signed-out" })
+      .mockReturnValueOnce({ id: "pl.catalogue-id" })
+      .mockReturnValueOnce({ id: "p.Good" });
+    const h = await load({ create });
+    const token = await propose(h);
+    await h.vibe.handleCreatePlaylist({ proposal: token });
+    expect(h.updates().at(-1)).toEqual({ status: "playlist-failed", proposal: token, code: "signed-out" });
+    // Only a library playlist id counts as created.
+    await h.vibe.handleCreatePlaylist({ proposal: token });
+    expect(h.updates().at(-1)).toEqual({ status: "playlist-failed", proposal: token, code: "failed" });
+    await h.vibe.handleCreatePlaylist({ proposal: token });
+    expect(h.updates().at(-1)).toEqual({ status: "playlist-created", proposal: token, playlist: "p.Good" });
+    expect(create).toHaveBeenCalledTimes(3);
+  });
+
+  it("runs one create at a time for a token, however often the page asks", async () => {
+    let finish!: (value: unknown) => void;
+    const create = vi.fn(() => new Promise((resolve) => (finish = resolve)));
+    const h = await load({ create });
+    const token = await propose(h);
+    const first = h.vibe.handleCreatePlaylist({ proposal: token });
+    for (let i = 0; i < 20; i += 1) void h.vibe.handleCreatePlaylist({ proposal: token });
+    await settle();
+    expect(create).toHaveBeenCalledOnce();
+    finish({ id: "p.NewOne" });
+    await first;
+  });
+
+  it("refuses to create while Vibe is switched off", async () => {
+    const create = vi.fn(() => ({ id: "p.NewOne" }));
+    const h = await load({ create });
+    const token = await propose(h);
+    store.set("vibe.enabled", false);
+    await h.vibe.handleCreatePlaylist({ proposal: token });
+    expect(create).not.toHaveBeenCalled();
+    expect(h.updates().at(-1)).toEqual({ status: "playlist-failed", proposal: token, code: "disabled" });
+  });
+
+  it("logs no playlist name or id", async () => {
+    const create = vi.fn(() => ({ id: "p.SENTINELID" }));
+    const h = await load({ create });
+    const log = (await import("electron-log/main")).default.scope("vibe");
+    const token = await propose(h, "SENTINEL-NAME");
+    await h.vibe.handleCreatePlaylist({ proposal: token });
+    const logged = JSON.stringify([vi.mocked(log.info).mock.calls, vi.mocked(log.warn).mock.calls]);
+    expect(logged).toContain("playlist created songs=2");
+    expect(logged).not.toMatch(/SENTINEL/);
   });
 });

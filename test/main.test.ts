@@ -113,6 +113,7 @@ const bootstrap = vi.hoisted(() => {
     vibePageLoaded: vi.fn(() => Promise.resolve()),
     vibeRequest: vi.fn(),
     vibeNewChat: vi.fn(),
+    vibeCreatePlaylist: vi.fn(async () => undefined),
     getPlaylistSorts: vi.fn((): Record<string, unknown> => ({})),
     setPlaylistSort: vi.fn(),
     handlePlaybackCapabilitiesDidChange: vi.fn(),
@@ -328,6 +329,7 @@ vi.mock("../src/integrations/vibe", () => ({
   cancel: bootstrap.vibeCancel,
   handleRequest: bootstrap.vibeRequest,
   resetChat: bootstrap.vibeNewChat,
+  handleCreatePlaylist: bootstrap.vibeCreatePlaylist,
   pageLoaded: bootstrap.vibePageLoaded,
   spendUpdate: () => ({ status: "spend", spent: "$0.00", budget: "$2.00" }),
 }));
@@ -626,6 +628,8 @@ describe("main bootstrap", () => {
     const request = handler("vibe:send");
     const cancel = handler("vibe:cancel");
     const newChat = handler("vibe:new-chat");
+    const create = handler("vibe:create-playlist");
+    const proposal = { proposal: "0b7e4a52-3f7c-4d1e-9a6b-2c8d5e1f0a93" };
     const mainFrame = bootstrap.webContents.mainFrame as { url: string };
     const event = { sender: bootstrap.webContents, senderFrame: mainFrame };
     const payload = { prompt: "chill" };
@@ -635,6 +639,8 @@ describe("main bootstrap", () => {
       request?.({ ...event, senderFrame: { url: "https://music.apple.com/us/new" } }, payload);
       cancel?.({ ...event, sender: {} });
       newChat?.({ ...event, sender: {} });
+      create?.({ ...event, sender: {} }, proposal);
+      create?.({ ...event, senderFrame: { url: "https://music.apple.com/us/new" } }, proposal);
       // Allowed navigation hosts that are not where the panel runs.
       for (const url of [
         "https://classical.music.apple.com/us/",
@@ -649,15 +655,19 @@ describe("main bootstrap", () => {
         request?.(event, payload);
         cancel?.(event);
         newChat?.(event);
+        create?.(event, proposal);
       }
       expect(bootstrap.vibeRequest).not.toHaveBeenCalled();
       expect(bootstrap.vibeCancel).not.toHaveBeenCalled();
       expect(bootstrap.vibeNewChat).not.toHaveBeenCalled();
+      expect(bootstrap.vibeCreatePlaylist).not.toHaveBeenCalled();
       mainFrame.url = "https://music.apple.com/us/new?l=en";
       request?.(event, payload);
       cancel?.(event);
       newChat?.(event);
+      create?.(event, proposal);
       expect(bootstrap.vibeRequest).toHaveBeenCalledExactlyOnceWith(payload);
+      expect(bootstrap.vibeCreatePlaylist).toHaveBeenCalledExactlyOnceWith(proposal);
       expect(bootstrap.vibeCancel).toHaveBeenCalledOnce();
       expect(bootstrap.vibeNewChat).toHaveBeenCalledOnce();
       expect(handler("vibe:request")).toBeUndefined();

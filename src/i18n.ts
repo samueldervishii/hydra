@@ -515,6 +515,15 @@ export interface VibeStrings {
   queueFailed: string;
   spend: string;
   openSettings: string;
+  newPlaylist: string;
+  songCount: string;
+  andMore: string;
+  createPlaylist: string;
+  creating: string;
+  created: string;
+  openPlaylist: string;
+  createSignedOut: string;
+  createFailed: string;
   explicit: string;
   errors: Record<VibeErrorCode, string>;
 }
@@ -541,6 +550,15 @@ const VIBE_TEXT: Record<Exclude<keyof VibeStrings, 'errors' | 'explicit'>, Recor
   queueFailed: { en: 'The song could not be queued. Try again.' },
   spend: { en: '{spent} of {budget} today' },
   openSettings: { en: 'Open Settings' },
+  newPlaylist: { en: 'New playlist' },
+  songCount: { en: '{count} songs' },
+  andMore: { en: 'and {count} more' },
+  createPlaylist: { en: 'Create playlist' },
+  creating: { en: 'Creating…' },
+  created: { en: 'Playlist created' },
+  openPlaylist: { en: 'Open' },
+  createSignedOut: { en: 'Sign in to Apple Music to create playlists.' },
+  createFailed: { en: 'The playlist could not be created. Try again.' },
 };
 
 const VIBE_ERROR_TEXT: Record<VibeErrorCode, Record<string, string>> = {
