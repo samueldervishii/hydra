@@ -91,6 +91,8 @@ const mockTrayStrings: TrayStrings = {
   vibeKeySaved: "API key saved",
   vibeKeyMemoryOnly: "API key kept until Hydra quits",
   vibeKeyStorage: "Key storage: {backend}",
+  vibeKeyLocked: "Keyring locked: unlock it and restart Hydra, then retry",
+  vibeKeyUnreadable: "The saved API key cannot be read with this keyring: save it again",
   vibeModel: "Model",
   vibeUsage: "{used} of {limit} requests used today",
   vibePrivacy: "Each request sends your description to Anthropic.",

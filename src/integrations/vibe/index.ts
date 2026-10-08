@@ -32,7 +32,9 @@ import {
   parseListenedTracks,
   type ListenedTrack,
 } from "./catalog";
-import { getApiKey, getApiKeyStatus } from "./apiKey";
+import { getApiKey, getApiKeyStatus, knownApiKeyState } from "./apiKey";
+// Settings reaches the key store through this module only.
+export { clearApiKey, isApiKeyFormat, saveApiKey } from "./apiKey";
 import { keyringDescription } from "../../keyring";
 
 const vibeLog = log.scope("vibe");
@@ -67,6 +69,8 @@ export type VibeUpdate =
 export interface VibeStatus {
   hasKey: boolean;
   keyPersisted: boolean;
+  /** A stored key that could not be read: the keyring is locked, or decryption failed. */
+  keyProblem: "locked" | "unreadable" | null;
   /** Where safeStorage keeps its key, such as "GNOME Keyring (gnome_libsecret)". */
   keyStorage: string;
   usedToday: number;
@@ -79,6 +83,12 @@ let nowPlaying: ListenedTrack | null = null;
 const sessionHistory: ListenedTrack[] = [];
 let active: AbortController | null = null;
 let lastFinishedAt = 0;
+let stateChanged: (() => void) | null = null;
+
+/** Tell Settings when the key state or today's usage changes; null to stop. */
+export function setStateChangedCallback(callback: (() => void) | null): void {
+  stateChanged = callback;
+}
 
 /** The local day as YYYY-MM-DD, which `vibe.usage` is keyed by. */
 export function localDay(now = new Date()): string {
@@ -98,6 +108,7 @@ export function getStatus(): VibeStatus {
   return {
     hasKey: key.hasKey,
     keyPersisted: key.persisted,
+    keyProblem: key.state === "locked" || key.state === "unreadable" ? key.state : null,
     keyStorage: keyringDescription(),
     usedToday: usedToday(),
     dailyLimit: config.getVibeDailyLimit(),
@@ -154,15 +165,30 @@ export function pageCall(name: "search" | "update", ...args: unknown[]): string 
 }
 
 /**
- * Why a request cannot start now, or null when it can. The order is the one
- * the user can act on: wait for the running one, add a key, then the limits.
+ * Why a request cannot start now, or null when it can. The key is not checked
+ * here: reading it may ask the keyring, so handleRequest() does that last,
+ * once the limits allow a request.
  */
 export function blockedReason(now = Date.now()): VibeErrorCode | null {
   if (active) return "busy";
-  if (getApiKey() === null) return "no-key";
   if (now - lastFinishedAt < COOLDOWN_MS) return "cooldown";
   if (usedToday() >= config.getVibeDailyLimit()) return "daily-limit";
   return null;
+}
+
+/**
+ * The key for a request, retrying a stored key that could not be read, or the
+ * reason there is none. Settings hears when the outcome changes.
+ */
+function keyForRequest(): { key: string } | { code: VibeErrorCode } {
+  const before = knownApiKeyState();
+  const key = getApiKey();
+  const after = knownApiKeyState();
+  if (after !== before) stateChanged?.();
+  if (key) return { key };
+  return {
+    code: after === "locked" ? "key-locked" : after === "unreadable" ? "key-unreadable" : "no-key",
+  };
 }
 
 function onNowPlaying(payload: NowPlayingPayload | null): void {
@@ -236,12 +262,7 @@ async function search(artist: string, title: string) {
   return parseCatalogSongs(answer);
 }
 
-async function run(request: VibeRequest): Promise<void> {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    update({ status: "error", code: "no-key" });
-    return;
-  }
+async function run(request: VibeRequest, apiKey: string): Promise<void> {
   const controller = new AbortController();
   active = controller;
   let timedOut = false;
@@ -252,6 +273,7 @@ async function run(request: VibeRequest): Promise<void> {
   const model = config.getVibeModel();
   const started = Date.now();
   config.setVibeUsage({ day: localDay(), count: usedToday() + 1 });
+  stateChanged?.();
   update({ status: "working", searches: 0, maxSearches: MAX_SEARCHES });
   try {
     const client = createClient(apiKey);
@@ -297,12 +319,13 @@ export function handleRequest(data: unknown): void {
     return;
   }
   const blocked = blockedReason();
-  if (blocked) {
-    vibeLog.info(`request refused code=${blocked}`);
-    update({ status: "error", code: blocked });
+  const access = blocked ? { code: blocked } : keyForRequest();
+  if ("code" in access) {
+    vibeLog.info(`request refused code=${access.code}`);
+    update({ status: "error", code: access.code });
     return;
   }
-  void run(request);
+  void run(request, access.key);
 }
 
 /** Stop the running request, if any; the panel hears "cancelled". */

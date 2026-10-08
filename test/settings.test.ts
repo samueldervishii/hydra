@@ -96,7 +96,7 @@ describe('settings actions', () => {
   it('saves a Vibe key without ever putting it in the state, and removes it', () => {
     const key = 'sk-ant-api03-' + 'c'.repeat(40);
     expect(getSettingsState().vibe).toEqual({
-      hasKey: false, keyPersisted: false, keyStorage: 'GNOME Keyring (gnome_libsecret)', usedToday: 0, dailyLimit: 50,
+      hasKey: false, keyPersisted: false, keyProblem: null, keyStorage: 'GNOME Keyring (gnome_libsecret)', usedToday: 0, dailyLimit: 50,
     });
     expect(() => applySettingsAction({ type: 'vibeClearKey' })).toThrow('Invalid settings action');
     for (const value of ['', 'not-a-key', 42, `${key} extra`]) {

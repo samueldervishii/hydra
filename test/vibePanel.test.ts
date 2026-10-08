@@ -201,6 +201,13 @@ describe('vibe.js', () => {
     expect(h.send).toHaveBeenLastCalledWith('nav:settings', undefined);
     expect(h.isOpen()).toBe(false);
 
+    h.vibe().update({ status: 'error', code: 'key-locked' });
+    expect(h.status().text).toContain('Keyring locked: unlock it and restart Hydra, then retry.');
+    expect(h.settingsButton().hidden).toBe(true);
+    h.vibe().update({ status: 'error', code: 'key-unreadable' });
+    expect(h.status().text).toContain(LABELS.errors['key-unreadable']);
+    expect(h.settingsButton().hidden).toBe(false);
+
     h.vibe().update({ status: 'error', code: 'rate-limit' });
     expect(h.status().text).toContain(LABELS.errors['rate-limit']);
     expect(h.settingsButton().hidden).toBe(true);

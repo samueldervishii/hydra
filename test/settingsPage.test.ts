@@ -32,7 +32,7 @@ function fixture(): SettingsState {
     performanceMode: true, navigation: 'top-bar', closeToTray: false,
     lastfm: { available: true, connected: false, connecting: false, failed: false, username: '', enabled: false },
     vibeModel: 'claude-haiku-5-5',
-    vibe: { hasKey: false, keyPersisted: false, keyStorage: 'GNOME Keyring (gnome_libsecret)', usedToday: 0, dailyLimit: 50 },
+    vibe: { hasKey: false, keyPersisted: false, keyProblem: null, keyStorage: 'GNOME Keyring (gnome_libsecret)', usedToday: 0, dailyLimit: 50 },
     options: {
       musicService: [{ value: 'music', label: 'Apple Music' }, { value: 'classical', label: 'Apple Music Classical' }],
       startPage: [{ value: 'new', label: 'New' }],
@@ -133,7 +133,7 @@ describe('settings page', () => {
     expect(h.element('vibeApiKey').value).toBe('');
     await settle();
     expect(h.apply).toHaveBeenLastCalledWith({ type: 'vibeApiKey', value: 'sk-ant-api03-key' });
-    h.push({ ...state, vibe: { hasKey: true, keyPersisted: true, keyStorage: 'KWallet 5 (kwallet5)', usedToday: 3, dailyLimit: 50 } });
+    h.push({ ...state, vibe: { hasKey: true, keyPersisted: true, keyProblem: null, keyStorage: 'KWallet 5 (kwallet5)', usedToday: 3, dailyLimit: 50 } });
     expect(h.element('vibe-status').textContent).toBe(`${state.labels.vibeKeySaved} · Key storage: KWallet 5 (kwallet5) · 3 of 50 requests used today`);
     expect(h.element('vibeClearKey').hidden).toBe(false);
     h.element('vibeClearKey').fire('click');
@@ -143,6 +143,21 @@ describe('settings page', () => {
     h.element('vibeModel').fire('change');
     await settle();
     expect(h.apply).toHaveBeenLastCalledWith({ type: 'vibeModel', value: 'claude-sonnet-5-5' });
+  });
+
+  it('says when the keyring is locked or cannot read the key, and still offers Remove', async () => {
+    const state = fixture();
+    const h = harness(state);
+    await settle();
+    h.push({ ...state, vibe: { ...state.vibe, keyProblem: 'locked' } });
+    expect(h.element('vibe-status').textContent).toBe(
+      `${state.labels.vibeKeyLocked} · Key storage: GNOME Keyring (gnome_libsecret) · 0 of 50 requests used today`,
+    );
+    expect(state.labels.vibeKeyLocked).toBe('Keyring locked: unlock it and restart Hydra, then retry');
+    expect(h.element('vibeClearKey').hidden).toBe(false);
+    h.push({ ...state, vibe: { ...state.vibe, keyProblem: 'unreadable' } });
+    expect(h.element('vibe-status').textContent).toContain(state.labels.vibeKeyUnreadable);
+    expect(h.element('vibeClearKey').hidden).toBe(false);
   });
 
   it('sends Connect and Disconnect as bare actions', async () => {

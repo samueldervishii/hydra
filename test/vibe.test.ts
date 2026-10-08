@@ -1,6 +1,7 @@
 import vm from "node:vm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Conf } from "electron-conf/main";
+import { safeStorage } from "electron";
 import type { BrowserWindow } from "electron";
 
 import { FakePlayer } from "./mocks/player";
@@ -325,6 +326,58 @@ describe("Vibe requests", () => {
     }
   });
 
+  it("keeps a locked key, says so, and retries it on the next request", async () => {
+    const h = await load();
+    const changed = vi.fn();
+    h.vibe.setStateChangedCallback(changed);
+    store.set("vibe.apiKey", Buffer.from(`sealed:${KEY}`).toString("base64"));
+    vi.mocked(safeStorage.isEncryptionAvailable).mockReturnValue(false);
+    try {
+      expect(h.vibe.getStatus()).toMatchObject({ hasKey: false, keyProblem: "locked" });
+      h.vibe.handleRequest({ prompt: "chill", mode: "next" });
+      await settle();
+      expect(h.updates()).toEqual([{ status: "error", code: "key-locked" }]);
+      expect(h.agent.runVibe).not.toHaveBeenCalled();
+      expect(store.has("vibe.usage")).toBe(false);
+      expect(store.has("vibe.apiKey")).toBe(true);
+      expect(changed).not.toHaveBeenCalled();
+
+      // Unlocked (in practice, after a restart): the next request reads it.
+      vi.mocked(safeStorage.isEncryptionAvailable).mockReturnValue(true);
+      vi.mocked(h.agent.runVibe).mockResolvedValueOnce([PICK]);
+      h.vibe.handleRequest({ prompt: "chill", mode: "next" });
+      await settle();
+      expect(h.agent.runVibe).toHaveBeenCalledOnce();
+      expect(h.updates().at(-1)).toEqual({ status: "done", mode: "next", picks: [PICK] });
+      expect(h.vibe.getStatus()).toMatchObject({ hasKey: true, keyProblem: null });
+      // Once for the key becoming readable, once for the usage count.
+      expect(changed).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.mocked(safeStorage.isEncryptionAvailable).mockReturnValue(true);
+    }
+  });
+
+  it("reports a key the keyring cannot decrypt, keeping it", async () => {
+    const h = await load();
+    store.set("vibe.apiKey", Buffer.from("garbage").toString("base64"));
+    h.vibe.handleRequest({ prompt: "chill", mode: "next" });
+    await settle();
+    expect(h.updates()).toEqual([{ status: "error", code: "key-unreadable" }]);
+    expect(store.has("vibe.apiKey")).toBe(true);
+    expect(h.vibe.getStatus().keyProblem).toBe("unreadable");
+  });
+
+  // Reading the key can ask the keyring, so a request the limits refuse anyway
+  // never gets that far.
+  it("checks the limits before touching the keyring", async () => {
+    const h = await load();
+    store.set("vibe.apiKey", Buffer.from(`sealed:${KEY}`).toString("base64"));
+    store.set("vibe.usage", { day: h.vibe.localDay(), count: 50 });
+    h.vibe.handleRequest({ prompt: "chill", mode: "next" });
+    expect(h.updates()).toEqual([{ status: "error", code: "daily-limit" }]);
+    expect(safeStorage.decryptString).not.toHaveBeenCalled();
+  });
+
   it("stops at the daily cap, which the config can lower", async () => {
     const h = await load();
     h.keys.saveApiKey(KEY);
@@ -339,6 +392,7 @@ describe("Vibe requests", () => {
     expect(h.vibe.getStatus()).toEqual({
       hasKey: true,
       keyPersisted: true,
+      keyProblem: null,
       keyStorage: "GNOME Keyring (gnome_libsecret)",
       usedToday: 0,
       dailyLimit: 2,

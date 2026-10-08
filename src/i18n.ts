@@ -265,6 +265,8 @@ export interface TrayStrings {
   vibeKeySaved: string;
   vibeKeyMemoryOnly: string;
   vibeKeyStorage: string;
+  vibeKeyLocked: string;
+  vibeKeyUnreadable: string;
   vibeModel: string;
   vibeUsage: string;
   vibePrivacy: string;
@@ -330,6 +332,8 @@ const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   vibeKeySaved: { en: 'API key saved' },
   vibeKeyMemoryOnly: { en: 'API key kept until Hydra quits: no system keyring to store it' },
   vibeKeyStorage: { en: 'Key storage: {backend}' },
+  vibeKeyLocked: { en: 'Keyring locked: unlock it and restart Hydra, then retry' },
+  vibeKeyUnreadable: { en: 'The saved API key cannot be read with this keyring: save it again' },
   vibeModel: { en: 'Model' },
   vibeUsage: { en: '{used} of {limit} requests used today' },
   vibePrivacy: {
@@ -518,6 +522,10 @@ const VIBE_TEXT: Record<Exclude<keyof VibeStrings, 'errors' | 'explicit'>, Recor
 
 const VIBE_ERROR_TEXT: Record<VibeErrorCode, Record<string, string>> = {
   'no-key': { en: 'Add your Anthropic API key in Settings to use Vibe.' },
+  // Chromium keeps a failed keyring lookup for the rest of the run, so
+  // unlocking alone is not enough: see src/integrations/vibe/apiKey.ts.
+  'key-locked': { en: 'Keyring locked: unlock it and restart Hydra, then retry.' },
+  'key-unreadable': { en: 'The saved API key cannot be read with this keyring. Save it again in Settings.' },
   'key-refused': { en: 'Anthropic refused the API key. Check it in Settings.' },
   'rate-limit': { en: "Anthropic's rate limit was reached. Try again in a minute." },
   unavailable: { en: 'Claude is busy or did not answer in time. Try again shortly.' },

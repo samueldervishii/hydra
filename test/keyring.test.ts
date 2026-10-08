@@ -35,6 +35,15 @@ describe("keyring", () => {
     expect(keyringDescription()).toBe("no keyring, memory only");
   });
 
+  // Measured: with GNOME Keyring locked at launch, Chromium keeps
+  // gnome_libsecret as the backend and reports no encryption.
+  it("says a real keyring is locked or unavailable rather than absent", () => {
+    vi.mocked(safeStorage.isEncryptionAvailable).mockReturnValue(false);
+    vi.mocked(safeStorage.getSelectedStorageBackend).mockReturnValue("gnome_libsecret");
+    expect(keyringAvailable()).toBe(false);
+    expect(keyringDescription()).toBe("GNOME Keyring, locked or unavailable (gnome_libsecret)");
+  });
+
   it("names the macOS and Windows stores without asking for a Linux backend", () => {
     setPlatform("darwin");
     expect(keyringDescription()).toBe("macOS Keychain");

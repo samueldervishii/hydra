@@ -77,14 +77,18 @@
     const { vibe, labels } = state;
     // Settings never receives the key: only whether one is saved.
     const lines = [];
-    if (vibe.hasKey) lines.push(vibe.keyPersisted ? labels.vibeKeySaved : labels.vibeKeyMemoryOnly);
+    if (vibe.keyProblem === 'locked') lines.push(labels.vibeKeyLocked);
+    else if (vibe.keyProblem === 'unreadable') lines.push(labels.vibeKeyUnreadable);
+    else if (vibe.hasKey) lines.push(vibe.keyPersisted ? labels.vibeKeySaved : labels.vibeKeyMemoryOnly);
     lines.push(labels.vibeKeyStorage.replace('{backend}', () => vibe.keyStorage));
     lines.push(labels.vibeUsage
       .replace('{used}', () => String(vibe.usedToday))
       .replace('{limit}', () => String(vibe.dailyLimit)));
     byId('vibe-status').textContent = lines.join(' · ');
-    byId('vibeClearKey').hidden = !vibe.hasKey;
-    if (focusedId === 'vibeClearKey' && !vibe.hasKey) byId('vibeApiKey').focus();
+    // A key that cannot be read can still be removed.
+    const removable = vibe.hasKey || vibe.keyProblem !== null;
+    byId('vibeClearKey').hidden = !removable;
+    if (focusedId === 'vibeClearKey' && !removable) byId('vibeApiKey').focus();
   }
 
   async function refresh() {

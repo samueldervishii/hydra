@@ -18,11 +18,6 @@ import { applyNavigation } from "./navigation";
 import { liveWebContents } from "./utils";
 import * as lastfm from "./integrations/lastfm";
 import * as vibe from "./integrations/vibe";
-import {
-  clearApiKey as clearVibeApiKey,
-  isApiKeyFormat,
-  saveApiKey as saveVibeApiKey,
-} from "./integrations/vibe/apiKey";
 
 /** Zoom levels that Settings accepts. */
 export type ZoomFactor = 1 | 1.25 | 1.5 | 1.75 | 2;
@@ -103,10 +98,12 @@ export function initSettingsActions(callbacks: SettingsRuntime): () => void {
     callbacks.refreshTray();
     notifySettingsChanged();
   });
+  vibe.setStateChangedCallback(notifySettingsChanged);
   return () => {
     if (runtime !== callbacks) return;
     runtime = null;
     lastfm.setStateChangedCallback(null);
+    vibe.setStateChangedCallback(null);
     listeners.clear();
   };
 }
@@ -253,9 +250,9 @@ function isSettingsAction(
         (option) => option.value === data.value,
       );
     case "vibeApiKey":
-      return isApiKeyFormat(data.value);
+      return vibe.isApiKeyFormat(data.value);
     case "vibeClearKey":
-      return state.vibe.hasKey;
+      return state.vibe.hasKey || state.vibe.keyProblem !== null;
     case "closeToTray":
     case "performanceMode":
       return typeof data.value === "boolean";
@@ -353,12 +350,12 @@ export function applySettingsAction(action: unknown): SettingsState {
       config.setVibeModel(action.value);
       break;
     case "vibeApiKey":
-      saveVibeApiKey(action.value);
+      vibe.saveApiKey(action.value);
       break;
     case "vibeClearKey":
       // Forget the key, then stop a request still running with it, so no
       // further call is made with a key the user has removed.
-      clearVibeApiKey();
+      vibe.clearApiKey();
       vibe.cancel();
       break;
   }

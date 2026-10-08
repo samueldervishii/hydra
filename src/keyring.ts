@@ -33,10 +33,11 @@ const LINUX_BACKENDS: Record<string, string> = {
 export function keyringDescription(): string {
   if (process.platform === "linux") {
     const backend = safeStorage.getSelectedStorageBackend();
-    const name = safeStorage.isEncryptionAvailable()
-      ? (LINUX_BACKENDS[backend] ?? "unrecognised keyring")
-      : "no keyring, memory only";
-    return `${name} (${backend})`;
+    const name = LINUX_BACKENDS[backend] ?? "unrecognised keyring";
+    // A real keyring that gives no key, as when it was locked at launch.
+    const unavailable =
+      !safeStorage.isEncryptionAvailable() && backend !== "basic_text" && backend !== "unknown";
+    return `${name}${unavailable ? ", locked or unavailable" : ""} (${backend})`;
   }
   if (!safeStorage.isEncryptionAvailable()) return "no keyring, memory only";
   if (process.platform === "darwin") return "macOS Keychain";

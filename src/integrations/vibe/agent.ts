@@ -37,6 +37,8 @@ const SUBMIT_TOOL = "submit_picks";
 /** What went wrong, for the panel to explain. */
 export type VibeErrorCode =
   | "no-key"
+  | "key-locked"
+  | "key-unreadable"
   | "key-refused"
   | "rate-limit"
   | "unavailable"
