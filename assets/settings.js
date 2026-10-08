@@ -11,7 +11,7 @@
   document.title = params.get('settings') || 'Settings';
   document.querySelector('[data-label="settings"]').textContent = document.title;
   const selects = ['musicService', 'startPage', 'theme', 'zoomFactor', 'navigation', 'vibeModel'];
-  const toggles = ['performanceMode', 'closeToTray', 'lastfmEnabled'];
+  const toggles = ['performanceMode', 'closeToTray', 'lastfmEnabled', 'vibeEnabled'];
   let state;
   // Pushed state supersedes pending replies from getState() and apply().
   let revision = 0;

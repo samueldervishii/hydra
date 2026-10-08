@@ -88,6 +88,7 @@ import {
   init as initVibe,
   cancel as cancelVibe,
   handleRequest as handleVibeRequest,
+  applyVibeEnabled,
 } from "./integrations/vibe";
 import { cleanArtworkCache } from "./artwork";
 import {
@@ -1007,6 +1008,7 @@ function setupContentHandlers(
     await win.webContents.insertCSS(assets.PLAYLIST_SORT_CSS);
     await applyPerformanceMode(win.webContents);
     await applyNavigation(win.webContents);
+    await applyVibeEnabled(win.webContents);
     await injectThemeCss(win.webContents);
     await injectRendererScripts(win, assets, "on load");
   }

@@ -16,7 +16,8 @@ import { app, type WebContents } from "electron";
 import log from "electron-log/main";
 import * as config from "../../config";
 import type { IntegrationContext, NowPlayingPayload } from "../../player";
-import { liveWebContents } from "../../utils";
+import { liveWebContents, errorMessage } from "../../utils";
+import { setRootAttribute } from "../../rootAttribute";
 import {
   MAX_PROMPT_LENGTH,
   MAX_SEARCHES,
@@ -38,6 +39,13 @@ export { clearApiKey, isApiKeyFormat, saveApiKey } from "./apiKey";
 import { keyringDescription } from "../../keyring";
 
 const vibeLog = log.scope("vibe");
+
+/**
+ * Attribute on `<html>` while Vibe is switched off in Settings: the top bar
+ * (assets/topBar.js) hides its Vibe item and the panel (assets/vibe.js) will
+ * not open.
+ */
+export const VIBE_OFF_ATTRIBUTE = "data-hydra-vibe-off";
 
 /** The wait after one request ends before the next may start. */
 export const COOLDOWN_MS = 5000;
@@ -170,6 +178,9 @@ export function pageCall(name: "search" | "update", ...args: unknown[]): string 
  * once the limits allow a request.
  */
 export function blockedReason(now = Date.now()): VibeErrorCode | null {
+  // Switched off, the panel cannot open; a request still arriving came from
+  // some other script in the page.
+  if (!config.getVibeEnabled()) return "disabled";
   if (active) return "busy";
   if (now - lastFinishedAt < COOLDOWN_MS) return "cooldown";
   if (usedToday() >= config.getVibeDailyLimit()) return "daily-limit";
@@ -326,6 +337,25 @@ export function handleRequest(data: unknown): void {
     return;
   }
   void run(request, access.key);
+}
+
+/**
+ * Mirror the Vibe setting onto the page, then close the panel and let the top
+ * bar show or hide its item, so a change from Settings applies without a
+ * reload. On a fresh load both scripts read the attribute themselves. Never
+ * rejects.
+ */
+export async function applyVibeEnabled(contents: WebContents | null): Promise<void> {
+  const enabled = config.getVibeEnabled();
+  await setRootAttribute(contents, VIBE_OFF_ATTRIBUTE, !enabled);
+  if (!contents) return;
+  try {
+    await contents.executeJavaScript(
+      `${enabled ? "" : "window.__hydraVibe?.close(); "}window.__hydraTopBar?.refresh(); undefined`,
+    );
+  } catch (e: unknown) {
+    vibeLog.warn("failed to update the page for the Vibe setting:", errorMessage(e));
+  }
 }
 
 /** Stop the running request, if any; the panel hears "cancelled". */

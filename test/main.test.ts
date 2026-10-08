@@ -110,6 +110,7 @@ const bootstrap = vi.hoisted(() => {
     toggleNavigation: vi.fn(),
     showAppleSidebar: vi.fn(),
     vibeCancel: vi.fn(),
+    applyVibeEnabled: vi.fn(() => Promise.resolve()),
     vibeRequest: vi.fn(),
     getPlaylistSorts: vi.fn((): Record<string, unknown> => ({})),
     setPlaylistSort: vi.fn(),
@@ -324,6 +325,7 @@ vi.mock("../src/integrations/vibe", () => ({
   init: bootstrap.integrations.vibe,
   cancel: bootstrap.vibeCancel,
   handleRequest: bootstrap.vibeRequest,
+  applyVibeEnabled: bootstrap.applyVibeEnabled,
 }));
 vi.mock("../src/artwork", () => ({ cleanArtworkCache: vi.fn() }));
 vi.mock("../src/windowState", () => ({
@@ -586,6 +588,8 @@ describe("main bootstrap", () => {
       bootstrap.webContents.insertCSS.mock.invocationCallOrder[1],
     ).toBeLessThan(bootstrap.applyPerformanceMode.mock.invocationCallOrder[0]);
     expect(bootstrap.applyNavigation).toHaveBeenCalledTimes(2);
+    expect(bootstrap.applyVibeEnabled).toHaveBeenCalledTimes(2);
+    expect(bootstrap.applyVibeEnabled).toHaveBeenCalledWith(bootstrap.webContents);
     expect(bootstrap.applyNavigation).toHaveBeenCalledWith(bootstrap.webContents);
     expect(
       bootstrap.webContents.insertCSS.mock.invocationCallOrder[2],

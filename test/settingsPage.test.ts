@@ -32,6 +32,7 @@ function fixture(): SettingsState {
     performanceMode: true, navigation: 'top-bar', closeToTray: false,
     lastfm: { available: true, connected: false, connecting: false, failed: false, username: '', enabled: false },
     vibeModel: 'claude-haiku-5-5',
+    vibeEnabled: true,
     vibe: { hasKey: false, keyPersisted: false, keyProblem: null, keyStorage: 'GNOME Keyring (gnome_libsecret)', usedToday: 0, dailyLimit: 50 },
     options: {
       musicService: [{ value: 'music', label: 'Apple Music' }, { value: 'classical', label: 'Apple Music Classical' }],
@@ -143,6 +144,19 @@ describe('settings page', () => {
     h.element('vibeModel').fire('change');
     await settle();
     expect(h.apply).toHaveBeenLastCalledWith({ type: 'vibeModel', value: 'claude-sonnet-5-5' });
+  });
+
+  it('shows and sends the Vibe switch', async () => {
+    const state = fixture();
+    const h = harness(state);
+    await settle();
+    expect(h.element('vibeEnabled').checked).toBe(true);
+    h.push({ ...state, vibeEnabled: false });
+    expect(h.element('vibeEnabled').checked).toBe(false);
+    h.element('vibeEnabled').checked = true;
+    h.element('vibeEnabled').fire('change');
+    await settle();
+    expect(h.apply).toHaveBeenLastCalledWith({ type: 'vibeEnabled', value: true });
   });
 
   it('says when the keyring is locked or cannot read the key, and still offers Remove', async () => {

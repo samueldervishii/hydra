@@ -191,6 +191,13 @@ function nowUnix(): number {
  * Builds the api_sig per the Last.fm spec: sort params by name, concatenate
  * name+value pairs, append the shared secret, then MD5. `format` and `callback`
  * are excluded by the caller (they are added to the request, never signed).
+ *
+ * MD5 is the only signature Last.fm verifies, so no stronger hash can replace
+ * it. It authenticates a request sent over HTTPS and stores nothing: with the
+ * secret last, MD5's length extension does not apply, and a collision would
+ * need Hydra to sign parameters an attacker chose, which it never does. Code
+ * scanning flags it as a weak algorithm (js/weak-cryptographic-algorithm),
+ * which does not apply to a hash the protocol fixes.
  */
 export function signParams(
   params: Record<string, string>,

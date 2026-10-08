@@ -259,6 +259,7 @@ export interface TrayStrings {
   lastfmConnectFailed: string;
   lastfmDisconnect: string;
   vibe: string;
+  vibeEnabled: string;
   vibeApiKey: string;
   vibeSaveKey: string;
   vibeRemoveKey: string;
@@ -326,6 +327,7 @@ const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   lastfmDisconnect: LASTFM_DISCONNECT_TEXT,
   // Vibe ships in English for now; getLocalizedString() falls back to it.
   vibe: { en: 'Vibe' },
+  vibeEnabled: { en: 'Use Vibe' },
   vibeApiKey: { en: 'Anthropic API key' },
   vibeSaveKey: { en: 'Save key' },
   vibeRemoveKey: { en: 'Remove key' },
@@ -521,6 +523,7 @@ const VIBE_TEXT: Record<Exclude<keyof VibeStrings, 'errors' | 'explicit'>, Recor
 };
 
 const VIBE_ERROR_TEXT: Record<VibeErrorCode, Record<string, string>> = {
+  disabled: { en: 'Vibe is turned off in Settings.' },
   'no-key': { en: 'Add your Anthropic API key in Settings to use Vibe.' },
   // Chromium keeps a failed keyring lookup for the rest of the run, so
   // unlocking alone is not enough: see src/integrations/vibe/apiKey.ts.

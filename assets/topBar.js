@@ -44,6 +44,8 @@
   var ALL_PLAYLISTS_PATH = "/library/all-playlists";
   /** Custom property on the host carrying the colour sampled below the strip. */
   var STRIP_PROPERTY = "--hydra-strip";
+  /** Set on <html> while Vibe is switched off in Settings; src/integrations/vibe/index.ts holds the name. */
+  var VIBE_OFF_ATTRIBUTE = "data-hydra-vibe-off";
   /** The pill and round buttons on a tinted page: the strip colour, 10% lighter in dark mode, 10% darker in light. */
   var TINT_PROPERTY = "--hydra-tint";
   /** Their icon colour on that tint: white or black, whichever contrasts more. */
@@ -84,6 +86,7 @@
     "  border: 0; cursor: pointer; font: inherit; background: transparent;",
     "  color: var(--systemSecondary, rgba(128, 128, 128, 0.9)); }",
     "button:hover { color: var(--systemPrimary, #ffffff); }",
+    "button[hidden] { display: none; }",
     "button:focus-visible { outline: 2px solid var(--keyColor, #fa586a); outline-offset: 2px; }",
     ".round { width: 32px; height: 32px; border-radius: 50%;",
     "  background: linear-gradient(var(--glass), var(--glass)), var(--pageBG, #1f1f1f);",
@@ -474,6 +477,12 @@
    */
   function refresh() {
     if (!host) return;
+    // Vibe switched off in Settings hides its item; the items after it move
+    // up, so the capsule moves with them.
+    var vibeOff = document.documentElement.hasAttribute(VIBE_OFF_ATTRIBUTE);
+    var vibeChanged = buttons.vibe.hasAttribute("hidden") !== vibeOff;
+    if (vibeOff) buttons.vibe.setAttribute("hidden", "");
+    else buttons.vibe.removeAttribute("hidden");
     var current = activeItem();
     BUTTONS.forEach(function (spec) {
       if (spec.place !== "pill") return;
@@ -481,7 +490,7 @@
       else buttons[spec.id].removeAttribute("aria-current");
     });
     buttons.back.setAttribute("aria-disabled", canGoBack() ? "false" : "true");
-    if (current !== capsuleOn) moveCapsule(current);
+    if (current !== capsuleOn || vibeChanged) moveCapsule(current);
   }
 
   /**

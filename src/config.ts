@@ -81,6 +81,7 @@ interface StoreSchema {
   'lastfm.username': string | null;
   'lastfm.session': string | null;
   'lastfm.pendingScrobbles': PendingScrobble[];
+  'vibe.enabled': boolean;
   'vibe.apiKey': string | null;
   'vibe.model': VibeModel;
   'vibe.dailyLimit': number;
@@ -248,6 +249,16 @@ export function getPendingScrobbles(): PendingScrobble[] {
 export function setPendingScrobbles(entries: PendingScrobble[]): void {
   store.set('lastfm.pendingScrobbles', entries);
   configLog.info('lastfm.pendingScrobbles set, queued:', entries.length);
+}
+
+/** Read `vibe.enabled`, defaulting to `true`: Vibe shows unless switched off in Settings. */
+export function getVibeEnabled(): boolean {
+  return getConfigValue('vibe.enabled', true);
+}
+
+/** Persist `vibe.enabled` without applying the setting to running components. */
+export function setVibeEnabled(enabled: boolean): void {
+  setConfigValue('vibe.enabled', enabled);
 }
 
 /**

@@ -123,6 +123,18 @@ describe('settings actions', () => {
     expect(store.has('vibe.apiKey')).toBe(false);
   });
 
+  it('switches Vibe off, stopping a running request, and back on', () => {
+    expect(getSettingsState().vibeEnabled).toBe(true);
+    applySettingsAction({ type: 'vibeEnabled', value: false });
+    expect(config.getVibeEnabled()).toBe(false);
+    expect(vibe.cancel).toHaveBeenCalledOnce();
+    expect(getSettingsState().vibeEnabled).toBe(false);
+    applySettingsAction({ type: 'vibeEnabled', value: true });
+    expect(config.getVibeEnabled()).toBe(true);
+    expect(vibe.cancel).toHaveBeenCalledOnce();
+    expect(() => applySettingsAction({ type: 'vibeEnabled', value: 'no' })).toThrow('Invalid settings action');
+  });
+
   it('switches the Vibe model between the two offered', () => {
     expect(getSettingsState().vibeModel).toBe('claude-haiku-5-5');
     expect(getSettingsState().options.vibeModel.map((option) => option.value)).toEqual(['claude-haiku-5-5', 'claude-sonnet-5-5']);

@@ -122,6 +122,17 @@ describe('vibe.js', () => {
     expect(h.send).toHaveBeenLastCalledWith('vibe:cancel', undefined);
   });
 
+  // src/integrations/vibe/index.ts sets this while Vibe is switched off.
+  it('will not open while Vibe is switched off in Settings', () => {
+    const h = createHarness();
+    stubDom.document.documentElement!.setAttribute('data-hydra-vibe-off', '');
+    h.vibe().open();
+    expect(h.isOpen()).toBe(false);
+    stubDom.document.documentElement!.removeAttribute('data-hydra-vibe-off');
+    h.vibe().open();
+    expect(h.isOpen()).toBe(true);
+  });
+
   it('sends nothing for an empty description', () => {
     const h = createHarness();
     h.input().value = '   ';

@@ -99,6 +99,10 @@ export class StubElement extends StubNode {
     this.attributes.delete(name);
   }
 
+  hasAttribute(name: string): boolean {
+    return this.attributes.has(name);
+  }
+
   addEventListener(type: string, listener: Listener): void {
     this.listeners.push({ type, listener });
   }

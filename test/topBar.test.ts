@@ -203,7 +203,7 @@ function createHarness({
     navigation: (canGoBack === undefined ? undefined : { canGoBack, currentEntry: { key: 'entry-0' } }) as
       | { canGoBack: boolean; currentEntry: { key: string } }
       | undefined,
-    __hydraTopBar: undefined as { update(): void } | undefined,
+    __hydraTopBar: undefined as { update(): void; refresh(): void } | undefined,
     // The stylesheet's effect: with the gate set, the sidebar is hidden and
     // the strip reserved, unless Apple's layout no longer matches it.
     innerWidth: 1280,
@@ -864,6 +864,29 @@ describe('topBar.js', () => {
     expect(source).toContain('transition: max-width 0.2s ease, margin-left 0.2s ease, opacity 0.2s ease;');
     expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ \.bar, \.pill, \.round, \.label, \.capsule \{ transition: none; \} \}/);
     expect(source).toMatch(/button:focus-visible \{ outline: 2px solid/);
+  });
+
+  // Vibe switched off in Settings: src/integrations/vibe/index.ts sets the
+  // attribute and calls refresh(); the items after Vibe move up, so the
+  // capsule is placed again.
+  it('hides the Vibe item while Vibe is switched off, and places the capsule again', () => {
+    const capsuleOf = (h: ReturnType<typeof createHarness>) =>
+      descendants(h.host()!.shadowRoot!).find((e) => e.getAttribute('class') === 'capsule')!;
+    const h = createHarness({ pathname: '/library/all-playlists' });
+    expect(h.button('vibe').attributes.has('hidden')).toBe(false);
+    capsuleOf(h).styles.delete('left');
+    h.html.setAttribute('data-hydra-vibe-off', '');
+    h.window.__hydraTopBar?.refresh();
+    expect(h.button('vibe').attributes.has('hidden')).toBe(true);
+    expect(capsuleOf(h).styles.has('left')).toBe(true);
+    // Nothing changed: the capsule stays put.
+    capsuleOf(h).styles.delete('left');
+    h.window.__hydraTopBar?.refresh();
+    expect(capsuleOf(h).styles.has('left')).toBe(false);
+    h.html.removeAttribute('data-hydra-vibe-off');
+    h.window.__hydraTopBar?.refresh();
+    expect(h.button('vibe').attributes.has('hidden')).toBe(false);
+    expect(source).toContain('"button[hidden] { display: none; }"');
   });
 
   it('shows the capsule only behind an active item', () => {

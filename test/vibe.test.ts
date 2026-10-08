@@ -326,6 +326,40 @@ describe("Vibe requests", () => {
     }
   });
 
+  // Switched off, the panel cannot open; a request can still come from some
+  // other script in the page, and it goes nowhere, not even to the keyring.
+  it("refuses every request while Vibe is switched off", async () => {
+    const h = await load();
+    h.keys.saveApiKey(KEY);
+    store.set("vibe.enabled", false);
+    vi.mocked(safeStorage.decryptString).mockClear();
+    h.vibe.handleRequest({ prompt: "chill", mode: "next" });
+    await settle();
+    expect(h.updates()).toEqual([{ status: "error", code: "disabled" }]);
+    expect(h.agent.runVibe).not.toHaveBeenCalled();
+    expect(store.has("vibe.usage")).toBe(false);
+    expect(safeStorage.decryptString).not.toHaveBeenCalled();
+  });
+
+  it("mirrors the setting onto the page, closing the panel when switched off", async () => {
+    const h = await load();
+    const contents = { executeJavaScript: vi.fn(async () => undefined) };
+    store.set("vibe.enabled", false);
+    await h.vibe.applyVibeEnabled(contents as unknown as Electron.WebContents);
+    expect(contents.executeJavaScript.mock.calls.map((call) => String((call as unknown[])[0]))).toEqual([
+      'document.documentElement.toggleAttribute("data-hydra-vibe-off", true); undefined',
+      "window.__hydraVibe?.close(); window.__hydraTopBar?.refresh(); undefined",
+    ]);
+    contents.executeJavaScript.mockClear();
+    store.set("vibe.enabled", true);
+    await h.vibe.applyVibeEnabled(contents as unknown as Electron.WebContents);
+    expect(contents.executeJavaScript.mock.calls.map((call) => String((call as unknown[])[0]))).toEqual([
+      'document.documentElement.toggleAttribute("data-hydra-vibe-off", false); undefined',
+      "window.__hydraTopBar?.refresh(); undefined",
+    ]);
+    await expect(h.vibe.applyVibeEnabled(null)).resolves.toBeUndefined();
+  });
+
   it("keeps a locked key, says so, and retries it on the next request", async () => {
     const h = await load();
     const changed = vi.fn();

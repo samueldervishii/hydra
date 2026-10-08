@@ -566,6 +566,8 @@
    * @returns {void}
    */
   function open() {
+    // Switched off in Settings (src/integrations/vibe/index.ts sets this).
+    if (document.documentElement.hasAttribute("data-hydra-vibe-off")) return;
     if (!host.isConnected) (document.body || document.documentElement).appendChild(host);
     if (!isOpen) {
       isOpen = true;

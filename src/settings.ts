@@ -34,6 +34,7 @@ export type SettingsAction =
   | { type: "zoomFactor"; value: ZoomFactor }
   | { type: "navigation"; value: config.NavigationMode }
   | { type: "vibeModel"; value: config.VibeModel }
+  | { type: "vibeEnabled"; value: boolean }
   | { type: "vibeApiKey"; value: string }
   | {
       type: "closeToTray" | "performanceMode" | "lastfmEnabled";
@@ -57,6 +58,8 @@ export interface SettingsState {
   closeToTray: boolean;
   lastfm: lastfm.LastfmStatus & { enabled: boolean };
   vibeModel: config.VibeModel;
+  /** Whether Vibe shows: its top bar item, its panel and its requests. */
+  vibeEnabled: boolean;
   /** Whether a key is saved and today's usage; never the key itself. */
   vibe: vibe.VibeStatus;
   options: {
@@ -159,6 +162,7 @@ export function getSettingsState(): SettingsState {
     closeToTray: config.getCloseToTrayEnabled(),
     lastfm: { ...lastfm.getStatus(), enabled: config.getLastfmEnabled() },
     vibeModel: config.getVibeModel(),
+    vibeEnabled: config.getVibeEnabled(),
     vibe: vibe.getStatus(),
     options: {
       musicService: allServices().map((service) => ({
@@ -255,6 +259,7 @@ function isSettingsAction(
       return state.vibe.hasKey || state.vibe.keyProblem !== null;
     case "closeToTray":
     case "performanceMode":
+    case "vibeEnabled":
       return typeof data.value === "boolean";
     case "lastfmEnabled":
       return (
@@ -348,6 +353,12 @@ export function applySettingsAction(action: unknown): SettingsState {
       break;
     case "vibeModel":
       config.setVibeModel(action.value);
+      break;
+    case "vibeEnabled":
+      config.setVibeEnabled(action.value);
+      // Switched off, nothing more goes to Anthropic, a running request included.
+      if (!action.value) vibe.cancel();
+      void vibe.applyVibeEnabled(liveWebContents(runtime.getMainWindow()));
       break;
     case "vibeApiKey":
       vibe.saveApiKey(action.value);
