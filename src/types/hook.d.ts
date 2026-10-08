@@ -30,7 +30,8 @@ type SendChannel =
  | "nav:settings"
  | "nav:apple-sidebar"
  | "vibe:request"
- | "vibe:cancel";
+ | "vibe:cancel"
+ | "playlist:sort";
 
 /**
  * Channels that the main process sends to the renderer (main → renderer).

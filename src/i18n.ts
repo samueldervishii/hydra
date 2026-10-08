@@ -541,6 +541,68 @@ const VIBE_ERROR_TEXT: Record<VibeErrorCode, Record<string, string>> = {
   failed: { en: 'Something went wrong. Try again.' },
 };
 
+/**
+ * Placeholder for JSON labels in assets/playlistSort.js, substituted by
+ * loadAssets() as NAV_LABELS_TOKEN is.
+ */
+export const PLAYLIST_SORT_LABELS_TOKEN = '__HYDRA_PLAYLIST_SORT_LABELS__';
+/**
+ * Placeholder for the stored sorts in assets/playlistSort.js, substituted at
+ * every injection, since they change while Hydra runs.
+ */
+export const PLAYLIST_SORTS_TOKEN = '__HYDRA_PLAYLIST_SORTS__';
+
+/** Labels for the playlist sort control and Hydra's sorted list. */
+export interface PlaylistSortStrings {
+  sort: string;
+  playlistOrder: string;
+  title: string;
+  artist: string;
+  album: string;
+  duration: string;
+  ascending: string;
+  descending: string;
+  sortedBy: string;
+  reset: string;
+  loading: string;
+  failed: string;
+  song: string;
+  time: string;
+  play: string;
+  explicit: string;
+}
+
+// English for now, like Vibe: not exported, so the consistency test does not
+// ask for every language. The column names are read from Apple's own column
+// headers on the page first, so they follow Apple's language already.
+const PLAYLIST_SORT_TEXT: Record<Exclude<keyof PlaylistSortStrings, 'explicit'>, Record<string, string>> = {
+  sort: { en: 'Sort' },
+  playlistOrder: { en: 'Playlist Order' },
+  title: { en: 'Title' },
+  artist: { en: 'Artist' },
+  album: { en: 'Album' },
+  duration: { en: 'Duration' },
+  ascending: { en: 'Ascending' },
+  descending: { en: 'Descending' },
+  sortedBy: { en: 'Sorted by {field}' },
+  reset: { en: 'Reset' },
+  loading: { en: 'Loading songs… {count}' },
+  failed: { en: 'The songs could not be loaded.' },
+  song: { en: 'Song' },
+  time: { en: 'Time' },
+  play: { en: 'Play' },
+};
+
+/** Resolve the labels for the playlist sort. */
+export function getPlaylistSortStrings(): PlaylistSortStrings {
+  const langs = getSystemLanguages();
+  const strings = { explicit: getLocalizedString(EXPLICIT_TEXT, langs) } as PlaylistSortStrings;
+  for (const key of Object.keys(PLAYLIST_SORT_TEXT) as (keyof typeof PLAYLIST_SORT_TEXT)[]) {
+    strings[key] = getLocalizedString(PLAYLIST_SORT_TEXT[key], langs);
+  }
+  return strings;
+}
+
 /** Resolve the labels for the injected Vibe panel. */
 export function getVibeStrings(): VibeStrings {
   const langs = getSystemLanguages();

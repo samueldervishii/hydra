@@ -44,6 +44,20 @@ export interface VibeUsage {
   count: number;
 }
 
+/** What a playlist page can be sorted by; 'playlist' is the playlist's own order. */
+export const PLAYLIST_SORT_KEYS = ['playlist', 'title', 'artist', 'album', 'duration'] as const;
+/** A playlist sort field. */
+export type PlaylistSortKey = (typeof PLAYLIST_SORT_KEYS)[number];
+/** A playlist's chosen sort. Playlist order ascending is the default and is never stored. */
+export interface PlaylistSort {
+  by: PlaylistSortKey;
+  dir: 'asc' | 'desc';
+}
+/** Playlists whose sort is remembered; the least recently changed is forgotten first. */
+export const MAX_PLAYLIST_SORTS = 500;
+/** A library (p.) or catalogue (pl.) playlist id, as the page's route carries it. */
+export const PLAYLIST_ID_FORMAT = /^(?:p|pl)\.[A-Za-z0-9._-]{1,100}$/;
+
 /** Vibe requests a day when `vibe.dailyLimit` is absent or invalid. */
 export const DEFAULT_VIBE_DAILY_LIMIT = 50;
 /** The highest `vibe.dailyLimit` accepted, so a typo cannot lift the cap. */
@@ -71,6 +85,7 @@ interface StoreSchema {
   'vibe.model': VibeModel;
   'vibe.dailyLimit': number;
   'vibe.usage': VibeUsage;
+  playlistSorts: Record<string, PlaylistSort>;
 }
 
 const store = new Conf<StoreSchema>();
@@ -293,6 +308,44 @@ export function getVibeUsage(): VibeUsage | null {
 /** Persist `vibe.usage`. */
 export function setVibeUsage(usage: VibeUsage): void {
   setConfigValue('vibe.usage', usage);
+}
+
+/** True when the value is a stored playlist sort other than the default. */
+export function isPlaylistSort(value: unknown): value is PlaylistSort {
+  if (typeof value !== 'object' || value === null) return false;
+  const sort = value as Partial<PlaylistSort>;
+  return PLAYLIST_SORT_KEYS.some((key) => key === sort.by)
+    && (sort.dir === 'asc' || sort.dir === 'desc')
+    && !(sort.by === 'playlist' && sort.dir === 'asc');
+}
+
+/**
+ * Read `playlistSorts`, the sort chosen per playlist id. The file can be
+ * edited by hand, so malformed entries and ids are dropped, and no more than
+ * MAX_PLAYLIST_SORTS are kept.
+ */
+export function getPlaylistSorts(): Record<string, PlaylistSort> {
+  const stored: unknown = getConfigValue('playlistSorts', {});
+  if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return {};
+  const sorts: Record<string, PlaylistSort> = {};
+  for (const [id, sort] of Object.entries(stored).slice(-MAX_PLAYLIST_SORTS)) {
+    if (PLAYLIST_ID_FORMAT.test(id) && isPlaylistSort(sort)) sorts[id] = { by: sort.by, dir: sort.dir };
+  }
+  return sorts;
+}
+
+/**
+ * Remember a playlist's sort, or with null go back to playlist order. A
+ * changed entry moves to the end, so the oldest is the one dropped at the cap.
+ * Logs the count only: playlist ids are the user's library.
+ */
+export function setPlaylistSort(id: string, sort: PlaylistSort | null): void {
+  const sorts = getPlaylistSorts();
+  delete sorts[id];
+  if (sort) sorts[id] = { by: sort.by, dir: sort.dir };
+  const kept = Object.fromEntries(Object.entries(sorts).slice(-MAX_PLAYLIST_SORTS));
+  store.set('playlistSorts', kept);
+  configLog.info('playlistSorts set, playlists:', Object.keys(kept).length);
 }
 
 /** Read `theme`, defaulting to `'apple-music'` when absent. */

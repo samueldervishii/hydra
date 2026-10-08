@@ -55,6 +55,8 @@
       "assets/navigationBar.js",
       "assets/songSearch.js",
       "assets/vibe.js",
+      "assets/playlistSort.js",
+      "assets/playlistSort.css",
       "assets/topBar.js",
       "assets/topBar.css",
       "assets/performanceMode.css",

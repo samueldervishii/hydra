@@ -1,6 +1,7 @@
 // A stand-in for the few DOM features the injected panels use (elements, a
-// shadow root, focus, bubbling), so assets/songSearch.js and assets/vibe.js
-// can run in a VM without a renderer. resetStubDom() starts a fresh page.
+// shadow root, focus, bubbling, simple selectors, layout boxes), so
+// assets/songSearch.js, assets/vibe.js and assets/playlistSort.js can run in a
+// VM without a renderer. resetStubDom() starts a fresh page.
 import { vi } from 'vitest';
 
 export interface StubEvent {
@@ -54,11 +55,21 @@ export class StubElement extends StubNode {
   readonly attributes = new Map<string, string>();
   readonly listeners: Array<{ type: string; listener: Listener }> = [];
   readonly styles = new Map<string, string>();
-  readonly style = {
+  readonly style: Record<string, unknown> & {
+    setProperty: (name: string, value: string, priority?: string) => void;
+    removeProperty: (name: string) => void;
+  } = {
     setProperty: (name: string, value: string, priority?: string) => {
       this.styles.set(name, priority ? `${value} !${priority}` : value);
     },
+    removeProperty: (name: string) => {
+      this.styles.delete(name);
+    },
   };
+  /** What getBoundingClientRect() reports; tests set it to lay a page out. */
+  rect = { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 };
+  scrollTop = 0;
+  clientHeight = 0;
   textContent = '';
   value = '';
   disabled = false;
@@ -90,6 +101,80 @@ export class StubElement extends StubNode {
 
   addEventListener(type: string, listener: Listener): void {
     this.listeners.push({ type, listener });
+  }
+
+  removeEventListener(type: string, listener: Listener): void {
+    const at = this.listeners.findIndex((entry) => entry.type === type && entry.listener === listener);
+    if (at !== -1) this.listeners.splice(at, 1);
+  }
+
+  getBoundingClientRect(): { top: number; bottom: number; left: number; right: number; width: number; height: number } {
+    return { ...this.rect };
+  }
+
+  get parentElement(): StubElement | null {
+    return this.parentNode instanceof StubElement ? this.parentNode : null;
+  }
+
+  get nextSibling(): StubNode | null {
+    const siblings = this.parentNode?.children ?? [];
+    return siblings[siblings.indexOf(this) + 1] ?? null;
+  }
+
+  get nextElementSibling(): StubElement | null {
+    const next = this.nextSibling;
+    return next instanceof StubElement ? next : null;
+  }
+
+  get previousElementSibling(): StubElement | null {
+    const siblings = this.parentNode?.children ?? [];
+    const previous = siblings[siblings.indexOf(this) - 1];
+    return previous instanceof StubElement ? previous : null;
+  }
+
+  insertBefore<T extends StubNode>(child: T, reference: StubNode | null): T {
+    if (child.parentNode) {
+      child.parentNode.children = child.parentNode.children.filter((c) => c !== child);
+    }
+    child.parentNode = this;
+    const at = reference ? this.children.indexOf(reference) : -1;
+    if (at === -1) this.children.push(child);
+    else this.children.splice(at, 0, child);
+    return child;
+  }
+
+  removeChild<T extends StubNode>(child: T): T {
+    this.children = this.children.filter((c) => c !== child);
+    child.parentNode = null;
+    return child;
+  }
+
+  contains(node: StubNode | null): boolean {
+    for (let at: StubNode | null = node; at; at = at.parentNode) if (at === this) return true;
+    return false;
+  }
+
+  /** Whether this element matches a simple selector: tag, #id, [attr="value"], or a mix. */
+  matches(selector: string): boolean {
+    const parts = /^([a-z][\w-]*)?(?:#([\w-]+))?(?:\[([\w-]+)="([^"]*)"\])?$/.exec(selector.trim());
+    if (!parts) throw new Error(`stubDom cannot match ${selector}`);
+    const [, tag, id, attr, value] = parts;
+    return (!tag || this.tagName === tag)
+      && (!id || this.id === id)
+      && (!attr || this.getAttribute(attr) === value);
+  }
+
+  querySelectorAll(selector: string): StubElement[] {
+    return this.descendants().filter((element) => element.matches(selector));
+  }
+
+  querySelector(selector: string): StubElement | null {
+    return this.querySelectorAll(selector)[0] ?? null;
+  }
+
+  closest(selector: string): StubElement | null {
+    for (let at: StubElement | null = this; at; at = at.parentElement) if (at.matches(selector)) return at;
+    return null;
   }
 
   attachShadow(): StubShadowRoot {

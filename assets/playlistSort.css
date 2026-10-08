@@ -1,0 +1,4 @@
+/* Hydra playlist sort: Apple's track list makes way for Hydra's sorted one */
+html[data-hydra-playlist-sorted] [data-testid="tracklist"] {
+  display: none !important;
+}

@@ -200,6 +200,7 @@ function createHarness({
     __hydra?: Record<string, (...args: unknown[]) => unknown>;
     __hydraPlaySongs?: (ids: unknown, startIndex: unknown) => Promise<void>;
     __hydraPlayNext?: (ids: unknown) => Promise<boolean>;
+    __hydraPlayTracks?: (items: unknown, startIndex: unknown) => Promise<boolean>;
   }
   const window: HarnessWindow = {
     addEventListener: vi.fn(
@@ -752,6 +753,66 @@ describe("MusicKit page play next", () => {
   it("is not a command on window.__hydra", () => {
     const { window } = createHarness();
     expect(Object.keys(window.__hydra!)).not.toContain("playNext");
+  });
+});
+
+// assets/playlistSort.js plays a sorted playlist through this page-only entry.
+// The tracks are made up: library-shaped and catalogue-shaped resources.
+describe("MusicKit page sorted tracks", () => {
+  const track = (id: string, type = "library-songs") => ({
+    id,
+    type,
+    attributes: { name: "Track", playParams: { id, kind: "song" } },
+  });
+  const items = [track("i.AbC123"), track("1440857781", "songs"), track("i.Zz9")];
+
+  it("queues the resources in the order given and starts at the chosen one", async () => {
+    const { window, musicKit } = createHarness();
+    await expect(window.__hydraPlayTracks!(items, 1)).resolves.toBe(true);
+    expect(musicKit.setQueue).toHaveBeenCalledExactlyOnceWith({
+      items,
+      startWith: 1,
+      startPlaying: true,
+    });
+    // A copy, so a later change to the caller's array cannot reach MusicKit.
+    const calls = musicKit.setQueue.mock.calls as unknown as Array<[{ items: unknown[] }]>;
+    expect(calls[0][0].items).not.toBe(items);
+  });
+
+  it.each([
+    ["no list", undefined, 0],
+    ["an empty list", [], 0],
+    ["more than 10,000 tracks", Array(10001).fill(items[0]), 0],
+    ["a music video", [{ ...items[0], type: "music-videos" }], 0],
+    ["an id with a path", [track("i.ab/../c")], 0],
+    ["a resource without attributes", [{ id: "i.Abc", type: "library-songs" }], 0],
+    ["an index past the end", items, 3],
+    ["a string index", items, "1"],
+  ])("ignores %s", async (_label, list, index) => {
+    const { window, musicKit } = createHarness();
+    await expect(window.__hydraPlayTracks!(list, index)).resolves.toBe(false);
+    expect(musicKit.setQueue).not.toHaveBeenCalled();
+  });
+
+  // MusicKit took seconds for a 128-track queue, so the usual 5 s is not enough.
+  it("waits longer than an ordinary queue change before giving up", async () => {
+    vi.useFakeTimers();
+    try {
+      const { window, musicKit } = createHarness();
+      let finish!: () => void;
+      musicKit.setQueue.mockReturnValueOnce(new Promise<void>((resolve) => (finish = resolve)));
+      const result = window.__hydraPlayTracks!(items, 0);
+      await vi.advanceTimersByTimeAsync(10_000);
+      finish();
+      await expect(result).resolves.toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("is not a command on window.__hydra", () => {
+    const { window } = createHarness();
+    expect(Object.keys(window.__hydra!)).not.toContain("playTracks");
   });
 });
 

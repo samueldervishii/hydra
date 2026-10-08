@@ -111,6 +111,8 @@ const bootstrap = vi.hoisted(() => {
     showAppleSidebar: vi.fn(),
     vibeCancel: vi.fn(),
     vibeRequest: vi.fn(),
+    getPlaylistSorts: vi.fn((): Record<string, unknown> => ({})),
+    setPlaylistSort: vi.fn(),
     handlePlaybackCapabilitiesDidChange: vi.fn(),
     browserWindow: vi.fn(),
     savedWindowBounds: vi.fn((): unknown => null),
@@ -195,10 +197,15 @@ vi.mock("fs", () => ({
   default: { readFileSync: vi.fn(() => "asset") },
 }));
 
-vi.mock("../src/config", () => ({
+// The real module for the playlist sort's validation helpers, with the
+// accessors main.ts reads replaced.
+vi.mock("../src/config", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/config")>()),
   getZoomFactor: vi.fn(() => 1),
   getCloseToTrayEnabled: vi.fn(() => false),
   getMusicService: vi.fn(() => "music"),
+  getPlaylistSorts: bootstrap.getPlaylistSorts,
+  setPlaylistSort: bootstrap.setPlaylistSort,
 }));
 
 vi.mock("../src/i18n", () => ({
@@ -208,6 +215,9 @@ vi.mock("../src/i18n", () => ({
   getTopBarStrings: vi.fn(() => ({})),
   getTrayStrings: vi.fn(() => ({ about: "À propos de Hydra" })),
   getVibeStrings: vi.fn(() => ({})),
+  getPlaylistSortStrings: vi.fn(() => ({})),
+  PLAYLIST_SORT_LABELS_TOKEN: "__PLAYLIST_SORT_LABELS__",
+  PLAYLIST_SORTS_TOKEN: "__PLAYLIST_SORTS__",
   NAV_LABELS_TOKEN: "__NAV_LABELS__",
   SEARCH_LABELS_TOKEN: "__SEARCH_LABELS__",
   TOP_BAR_LABELS_TOKEN: "__TOP_BAR_LABELS__",
@@ -564,9 +574,10 @@ describe("main bootstrap", () => {
     const finish = bootstrap.mainWebListeners.get("did-finish-load");
     await finish?.();
     await finish?.();
-    // Each load inserts styleFix.css, performanceMode.css and topBar.css; the
-    // theme is mocked. fs is mocked to return "asset" for every file.
-    expect(bootstrap.webContents.insertCSS).toHaveBeenCalledTimes(6);
+    // Each load inserts styleFix.css, performanceMode.css, topBar.css and
+    // playlistSort.css; the theme is mocked. fs is mocked to return "asset"
+    // for every file.
+    expect(bootstrap.webContents.insertCSS).toHaveBeenCalledTimes(8);
     expect(bootstrap.applyPerformanceMode).toHaveBeenCalledTimes(2);
     expect(bootstrap.applyPerformanceMode).toHaveBeenCalledWith(
       bootstrap.webContents,
@@ -637,6 +648,53 @@ describe("main bootstrap", () => {
       expect(bootstrap.vibeCancel).toHaveBeenCalledOnce();
     } finally {
       mainFrame.url = originalUrl;
+    }
+  });
+
+  it("remembers a playlist sort only from Apple Music's main frame, and only a valid one", async () => {
+    await startMain();
+    const handler = bootstrap.ipcOn.mock.calls.find(([channel]) => channel === "playlist:sort")?.[1];
+    const mainFrame = bootstrap.webContents.mainFrame as { url: string };
+    const event = { sender: bootstrap.webContents, senderFrame: mainFrame };
+    const originalUrl = mainFrame.url;
+    try {
+      handler?.({ ...event, sender: {} }, { id: "p.Abc", by: "title", dir: "asc" });
+      mainFrame.url = "https://classical.music.apple.com/us/";
+      handler?.(event, { id: "p.Abc", by: "title", dir: "asc" });
+      mainFrame.url = originalUrl;
+      handler?.(event, { id: "p.Abc", by: "dateAdded", dir: "asc" });
+      expect(bootstrap.setPlaylistSort).not.toHaveBeenCalled();
+      handler?.(event, { id: "p.Abc", by: "title", dir: "desc" });
+      handler?.(event, { id: "p.Abc", by: "playlist", dir: "asc" });
+      expect(bootstrap.setPlaylistSort.mock.calls).toEqual([
+        ["p.Abc", { by: "title", dir: "desc" }],
+        ["p.Abc", null],
+      ]);
+    } finally {
+      mainFrame.url = originalUrl;
+    }
+  });
+
+  // The stored sorts change while Hydra runs, so each injection carries the
+  // current ones rather than those read at launch.
+  it("hands the playlist sort script the stored sorts at every injection", async () => {
+    const fs = (await import("fs")).default;
+    const read = (file: unknown): string =>
+      String(file).endsWith("playlistSort.js") ? "sorts=__PLAYLIST_SORTS__" : "asset";
+    vi.mocked(fs.readFileSync).mockImplementation(read as unknown as typeof fs.readFileSync);
+    try {
+      await startMain();
+      bootstrap.getPlaylistSorts.mockReturnValueOnce({ "p.One": { by: "title", dir: "asc" } });
+      await bootstrap.mainWebListeners.get("did-finish-load")?.();
+      bootstrap.getPlaylistSorts.mockReturnValueOnce({});
+      await bootstrap.mainWebListeners.get("did-navigate-in-page")?.({}, "https://music.apple.com/gb/new", true);
+      const scripts = bootstrap.webContents.executeJavaScript.mock.calls
+        .map((call) => String((call as unknown[])[0]))
+        .filter((script) => script.startsWith("sorts="));
+      expect(scripts).toEqual(['sorts={"p.One":{"by":"title","dir":"asc"}}', "sorts={}"]);
+      expect(bootstrap.log.debug).toHaveBeenCalledWith("Playlist sort injected");
+    } finally {
+      vi.mocked(fs.readFileSync).mockImplementation((() => "asset") as unknown as typeof fs.readFileSync);
     }
   });
 
@@ -818,7 +876,7 @@ describe("main bootstrap", () => {
     expect(bootstrap.webContents.executeJavaScript).not.toHaveBeenCalled();
 
     await finish?.();
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(5);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(6);
     for (const initialise of Object.values(bootstrap.integrations)) {
       expect(initialise.mock.invocationCallOrder[0]).toBeLessThan(
         bootstrap.webContents.executeJavaScript.mock.invocationCallOrder[0],
@@ -826,7 +884,7 @@ describe("main bootstrap", () => {
     }
 
     await navigate?.({}, "https://music.apple.com/gb/new", true);
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(10);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(12);
     for (const initialise of Object.values(bootstrap.integrations))
       expect(initialise).toHaveBeenCalledOnce();
   });
@@ -836,7 +894,7 @@ describe("main bootstrap", () => {
   it("injects the song search, Vibe and the top bar only where the hook is injected", async () => {
     await startMain();
     await bootstrap.mainWebListeners.get("did-finish-load")?.();
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(5);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(6);
     expect(bootstrap.log.debug).toHaveBeenCalledWith("Song search injected");
     expect(bootstrap.log.debug).toHaveBeenCalledWith("Vibe panel injected");
     expect(bootstrap.log.debug).toHaveBeenCalledWith("Top bar injected");
@@ -856,6 +914,7 @@ describe("main bootstrap", () => {
   it("logs a failed top bar injection without failing the load", async () => {
     await startMain();
     bootstrap.webContents.executeJavaScript
+      .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
@@ -954,9 +1013,9 @@ describe("main bootstrap", () => {
       expect.any(Error),
     );
     expect(bootstrap.integrations.trayState).toHaveBeenCalledOnce();
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(5);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(6);
     await navigate?.({}, "https://music.apple.com/gb/new", true);
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(10);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(12);
     expect(bootstrap.integrations.dock).toHaveBeenCalledOnce();
   });
 

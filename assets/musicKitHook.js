@@ -37,6 +37,10 @@
     });
     /** The most songs __hydraPlaySongs() queues: one page of catalogue search results. */
     const MAX_QUEUED_SONGS = 25;
+    /** The most tracks __hydraPlayTracks() queues: a sorted playlist, however long. */
+    const MAX_QUEUED_TRACKS = 10000;
+    /** How long a sorted playlist's queue may take to set: MusicKit took seconds for 128. */
+    const LONG_QUEUE_TIMEOUT_MS = 30000;
     const unsafeTimedText =
       /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
 
@@ -553,9 +557,10 @@
        * Rejects on a timeout or while a timed-out call is still pending.
        *
        * @param {object} options - MusicKit setQueue() options
+       * @param {number} [timeoutMs] - How long to wait, 5 s unless given
        * @returns {Promise<void>}
        */
-      async function replaceQueue(options) {
+      async function replaceQueue(options, timeoutMs = 5000) {
         if (blockedQueue) throw new Error("Queue replacement still pending");
         const request = ++queueRequest;
         const pageGeneration = documentGeneration;
@@ -589,7 +594,7 @@
                   });
                 }
                 reject(new Error("Queue replacement timed out"));
-              }, 5000);
+              }, timeoutMs);
             }),
           ]);
         } finally {
@@ -673,6 +678,52 @@
           console.warn("[Hydra] failed to open requested media");
         }
       };
+      /**
+       * Play a playlist's tracks in the order given, starting at startIndex,
+       * for the playlist sort (assets/playlistSort.js). Page-only, like
+       * __hydraPlaySongs. The items are the API's own track resources, which
+       * setQueue() takes as they are; library songs have i. ids, which
+       * __hydraPlaySongs refuses. MusicKit keeps only the last copy of a
+       * repeated song, so the caller removes repeats first.
+       *
+       * @param {unknown} items - Track resources, at most MAX_QUEUED_TRACKS
+       * @param {unknown} startIndex - Index into items of the track to play first
+       * @returns {Promise<boolean>} Whether the queue was set
+       */
+      window.__hydraPlayTracks = async (items, startIndex) => {
+        if (
+          !Array.isArray(items) ||
+          items.length === 0 ||
+          items.length > MAX_QUEUED_TRACKS ||
+          !items.every(
+            (item) =>
+              item !== null &&
+              typeof item === "object" &&
+              (item.type === "songs" || item.type === "library-songs") &&
+              typeof item.id === "string" &&
+              /^(?:\d{1,20}|i\.[A-Za-z0-9]{1,64})$/.test(item.id) &&
+              item.attributes !== null &&
+              typeof item.attributes === "object",
+          ) ||
+          !Number.isSafeInteger(startIndex) ||
+          startIndex < 0 ||
+          startIndex >= items.length ||
+          !documentActive ||
+          window.__hydraHookedMk !== mk
+        )
+          return false;
+        try {
+          await replaceQueue(
+            { items: items.slice(), startWith: startIndex, startPlaying: true },
+            LONG_QUEUE_TIMEOUT_MS,
+          );
+          return true;
+        } catch (_) {
+          console.warn("[Hydra] failed to open requested media");
+          return false;
+        }
+      };
+
       /**
        * Insert catalogue songs after the current one, in order, for the Vibe
        * panel (assets/vibe.js). Page-only, like __hydraPlaySongs. With nothing

@@ -20,7 +20,10 @@ import {
   getZoomFactor,
   getCloseToTrayEnabled,
   getMusicService,
+  getPlaylistSorts,
+  setPlaylistSort,
 } from "./config";
+import { parsePlaylistSortMessage } from "./playlistSort";
 import {
   getLoadingText,
   getNavigationStrings,
@@ -28,6 +31,9 @@ import {
   getTopBarStrings,
   getTrayStrings,
   getVibeStrings,
+  getPlaylistSortStrings,
+  PLAYLIST_SORT_LABELS_TOKEN,
+  PLAYLIST_SORTS_TOKEN,
   NAV_LABELS_TOKEN,
   SEARCH_LABELS_TOKEN,
   TOP_BAR_LABELS_TOKEN,
@@ -261,12 +267,14 @@ export interface Assets {
   STYLE_FIX_CSS: string;
   PERFORMANCE_CSS: string;
   TOP_BAR_CSS: string;
+  PLAYLIST_SORT_CSS: string;
   authFrameScript: string;
   navBarScript: string;
   hookScript: string;
   songSearchScript: string;
   topBarScript: string;
   vibeScript: string;
+  playlistSortScript: string;
 }
 
 function createSplash(): {
@@ -367,14 +375,18 @@ function setupApplicationMenu(): void {
 }
 
 // The renderer→main channels split by owner: the nav: prefix is the navigation
-// bar's namespace, vibe: is the Vibe panel's, and every other channel is a
-// MusicKit event for the Player.
+// bar's namespace, vibe: is the Vibe panel's, playlist: the playlist sort's,
+// and every other channel is a MusicKit event for the Player.
 // Each table below is a total record over its half, so a channel renamed in
 // src/types/hook.d.ts and a channel added there with no listener both fail tsc
 // here rather than compiling on and never firing.
 type NavSendChannel = Extract<SendChannel, `nav:${string}`>;
 type VibeSendChannel = Extract<SendChannel, `vibe:${string}`>;
-type PlayerSendChannel = Exclude<SendChannel, NavSendChannel | VibeSendChannel>;
+type PlaylistSendChannel = Extract<SendChannel, `playlist:${string}`>;
+type PlayerSendChannel = Exclude<
+  SendChannel,
+  NavSendChannel | VibeSendChannel | PlaylistSendChannel
+>;
 type SendListener = Parameters<typeof ipcMain.on>[1];
 
 // Object.keys() preserves insertion order, so listeners register in the order
@@ -508,6 +520,17 @@ function loadAssets(): Assets {
   const vibeScript = fs
     .readFileSync(getAssetPath("assets", "vibe.js"), "utf-8")
     .replace(VIBE_LABELS_TOKEN, () => JSON.stringify(getVibeStrings()));
+  const PLAYLIST_SORT_CSS = fs.readFileSync(
+    getAssetPath("assets", "playlistSort.css"),
+    "utf-8",
+  );
+  // The labels are fixed for the run; the stored sorts are filled in at every
+  // injection by injectRendererScripts(), since they change while Hydra runs.
+  const playlistSortScript = fs
+    .readFileSync(getAssetPath("assets", "playlistSort.js"), "utf-8")
+    .replace(PLAYLIST_SORT_LABELS_TOKEN, () =>
+      JSON.stringify(getPlaylistSortStrings()),
+    );
   const hookPath = getAssetPath("assets", "musicKitHook.js");
   const hookScript = fs
     .readFileSync(hookPath, "utf-8")
@@ -518,12 +541,14 @@ function loadAssets(): Assets {
     STYLE_FIX_CSS,
     PERFORMANCE_CSS,
     TOP_BAR_CSS,
+    PLAYLIST_SORT_CSS,
     authFrameScript,
     navBarScript,
     hookScript,
     songSearchScript,
     topBarScript,
     vibeScript,
+    playlistSortScript,
   };
 }
 
@@ -710,10 +735,11 @@ function setupWindowZoomAndNav(win: BrowserWindow): void {
 
 /**
  * Whether a frame's URL is on Apple Music's own origin, where assets/vibe.js
- * runs. Classical and the sign-in hosts are allowed navigation targets, but
- * Vibe has no panel there, so a request from one did not come from Hydra.
+ * and assets/playlistSort.js run. Classical and the sign-in hosts are allowed
+ * navigation targets, but neither runs there, so a message from one did not
+ * come from Hydra.
  */
-function isVibeOrigin(url: string): boolean {
+function isMusicOrigin(url: string): boolean {
   try {
     return new URL(url).origin === getService("music").origin;
   } catch {
@@ -733,13 +759,23 @@ function setupVibeIPC(win: BrowserWindow): void {
     event.sender === win.webContents &&
     event.senderFrame === win.webContents.mainFrame &&
     !!event.senderFrame &&
-    isVibeOrigin(event.senderFrame.url);
+    isMusicOrigin(event.senderFrame.url);
   onSendChannels<VibeSendChannel>({
     "vibe:request": (event, data) => {
       if (fromPage(event)) handleVibeRequest(data);
     },
     "vibe:cancel": (event) => {
       if (fromPage(event)) cancelVibe();
+    },
+  });
+  // The sort chosen on a playlist page, remembered per playlist. A message
+  // that fails the checks is dropped without a log line, since its id would
+  // be the user's library.
+  onSendChannels<PlaylistSendChannel>({
+    "playlist:sort": (event, data) => {
+      if (!fromPage(event)) return;
+      const change = parsePlaylistSortMessage(data);
+      if (change) setPlaylistSort(change.id, change.sort);
     },
   });
 }
@@ -792,6 +828,16 @@ async function injectRendererScripts(
     mainLog.debug("Vibe panel injected");
   } catch (e: unknown) {
     mainLog.warn(`failed to inject vibeScript ${context}:`, e);
+  }
+  try {
+    await win.webContents.executeJavaScript(
+      assets.playlistSortScript.replace(PLAYLIST_SORTS_TOKEN, () =>
+        JSON.stringify(getPlaylistSorts()),
+      ),
+    );
+    mainLog.debug("Playlist sort injected");
+  } catch (e: unknown) {
+    mainLog.warn(`failed to inject playlistSortScript ${context}:`, e);
   }
   try {
     await win.webContents.executeJavaScript(assets.topBarScript);
@@ -958,6 +1004,7 @@ function setupContentHandlers(
     // toggle reaches the open page without inserting or removing CSS.
     await win.webContents.insertCSS(assets.PERFORMANCE_CSS);
     await win.webContents.insertCSS(assets.TOP_BAR_CSS);
+    await win.webContents.insertCSS(assets.PLAYLIST_SORT_CSS);
     await applyPerformanceMode(win.webContents);
     await applyNavigation(win.webContents);
     await injectThemeCss(win.webContents);
