@@ -33,6 +33,7 @@ import {
   type ListenedTrack,
 } from "./catalog";
 import { getApiKey, getApiKeyStatus } from "./apiKey";
+import { keyringDescription } from "../../keyring";
 
 const vibeLog = log.scope("vibe");
 
@@ -66,6 +67,8 @@ export type VibeUpdate =
 export interface VibeStatus {
   hasKey: boolean;
   keyPersisted: boolean;
+  /** Where safeStorage keeps its key, such as "GNOME Keyring (gnome_libsecret)". */
+  keyStorage: string;
   usedToday: number;
   dailyLimit: number;
 }
@@ -95,19 +98,59 @@ export function getStatus(): VibeStatus {
   return {
     hasKey: key.hasKey,
     keyPersisted: key.persisted,
+    keyStorage: keyringDescription(),
     usedToday: usedToday(),
     dailyLimit: config.getVibeDailyLimit(),
   };
 }
 
-/** The request in a vibe:request payload, or null when it is malformed. */
+/**
+ * The request in a vibe:request payload, or null when it is malformed. Any
+ * script in Apple's page can send one, so the shape is checked here and not
+ * only in the panel: exactly a prompt and a mode, and a prompt of at most
+ * MAX_PROMPT_LENGTH characters is refused rather than cut, before any work is
+ * done on it.
+ */
 export function parseRequest(data: unknown): VibeRequest | null {
-  if (typeof data !== "object" || data === null) return null;
+  if (typeof data !== "object" || data === null || Array.isArray(data)) return null;
   const entry = data as Record<string, unknown>;
+  const keys = Object.keys(entry);
+  if (keys.length !== 2 || !keys.includes("prompt") || !keys.includes("mode")) return null;
   if (entry.mode !== "next" && entry.mode !== "replace") return null;
-  if (typeof entry.prompt !== "string") return null;
+  if (typeof entry.prompt !== "string" || entry.prompt.length > MAX_PROMPT_LENGTH) return null;
   const prompt = cleanText(entry.prompt, MAX_PROMPT_LENGTH);
   return prompt ? { prompt, mode: entry.mode } : null;
+}
+
+/** Where Hydra sends the key; never taken from the environment. */
+export const ANTHROPIC_API_URL = "https://api.anthropic.com";
+
+/**
+ * The SDK client for one request. Without these options the SDK would take
+ * its endpoint from ANTHROPIC_BASE_URL, add ANTHROPIC_AUTH_TOKEN as a second
+ * credential, and with ANTHROPIC_LOG at info or debug print every request
+ * body, the description and the listening history, to the console. Each is
+ * pinned so the key goes to Anthropic alone and nothing is printed.
+ */
+export function createClient(apiKey: string): Anthropic {
+  return new Anthropic({
+    apiKey,
+    authToken: null,
+    baseURL: ANTHROPIC_API_URL,
+    logLevel: "off",
+    maxRetries: 1,
+    timeout: API_TIMEOUT_MS,
+  });
+}
+
+/**
+ * A call to one of the panel's functions in the page. Every argument is
+ * written with JSON.stringify, which yields a JavaScript literal, so no value
+ * (quotes, backticks, ${}, </script>, line separators) can end the call or
+ * start code of its own.
+ */
+export function pageCall(name: "search" | "update", ...args: unknown[]): string {
+  return `window.__hydraVibe.${name}(${args.map((arg) => JSON.stringify(arg)).join(", ")})`;
 }
 
 /**
@@ -162,11 +205,8 @@ function update(state: VibeUpdate): void {
   const contents: WebContents | null = liveWebContents(
     context?.getMainWindow() ?? null,
   );
-  // JSON is valid JavaScript, so the value cannot escape the call.
   contents
-    ?.executeJavaScript(
-      `window.__hydraVibe && window.__hydraVibe.update(${JSON.stringify(state)})`,
-    )
+    ?.executeJavaScript(`window.__hydraVibe && ${pageCall("update", state)}`)
     .catch(() => vibeLog.warn("panel update failed"));
 }
 
@@ -191,10 +231,7 @@ async function recentTracks(): Promise<ListenedTrack[]> {
 }
 
 async function search(artist: string, title: string) {
-  const answer = await inPage(
-    `window.__hydraVibe.search(${JSON.stringify(artist)}, ${JSON.stringify(title)})`,
-    SEARCH_TIMEOUT_MS,
-  );
+  const answer = await inPage(pageCall("search", artist, title), SEARCH_TIMEOUT_MS);
   if (!Array.isArray(answer)) throw new Error("search failed");
   return parseCatalogSongs(answer);
 }
@@ -217,11 +254,7 @@ async function run(request: VibeRequest): Promise<void> {
   config.setVibeUsage({ day: localDay(), count: usedToday() + 1 });
   update({ status: "working", searches: 0, maxSearches: MAX_SEARCHES });
   try {
-    const client = new Anthropic({
-      apiKey,
-      maxRetries: 1,
-      timeout: API_TIMEOUT_MS,
-    });
+    const client = createClient(apiKey);
     const picks = await runVibe({
       createMessage: (params, options) => client.messages.create(params, options),
       model,

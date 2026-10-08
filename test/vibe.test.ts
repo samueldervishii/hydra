@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import vm from "node:vm";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Conf } from "electron-conf/main";
 import type { BrowserWindow } from "electron";
 
@@ -70,18 +71,110 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+describe("Vibe page calls", () => {
+  const NASTY = [
+    'a"b',
+    "a'b",
+    "`${globalThis.pwned()}`",
+    "${globalThis.pwned()}",
+    "</script><script>globalThis.pwned()</script>",
+    '"); globalThis.pwned(); ("',
+    "\\\"); globalThis.pwned(); //",
+    "line\u2028separator\u2029paragraph",
+    "\u0000nul",
+  ];
+
+  /** Run a generated call as the page would, with a canary any injection would trip. */
+  function evaluate(script: string) {
+    const calls: unknown[][] = [];
+    const pwned = vi.fn();
+    const window = {
+      __hydraVibe: {
+        search: (...args: unknown[]) => calls.push(args),
+        update: (...args: unknown[]) => calls.push(args),
+      },
+    };
+    vm.runInNewContext(script, { window, globalThis: { pwned } });
+    return { calls, pwned };
+  }
+
+  it("passes artist and title through as exact strings, running nothing else", async () => {
+    const { vibe } = await load();
+    for (const artist of NASTY) {
+      for (const title of NASTY) {
+        const { calls, pwned } = evaluate(vibe.pageCall("search", artist, title));
+        expect(calls).toEqual([[artist, title]]);
+        expect(pwned).not.toHaveBeenCalled();
+      }
+    }
+  });
+
+  it("passes Claude's picks to the panel as data, whatever the reasons say", async () => {
+    const { vibe } = await load();
+    const state = {
+      status: "done",
+      mode: "next",
+      picks: NASTY.map((reason, i) => ({ ...PICK, id: String(i), title: reason, reason })),
+    };
+    const { calls, pwned } = evaluate(vibe.pageCall("update", state));
+    expect(calls).toEqual([[state]]);
+    expect(pwned).not.toHaveBeenCalled();
+  });
+});
+
+describe("Vibe SDK client", () => {
+  const ENV = ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_LOG", "ANTHROPIC_API_KEY"] as const;
+  const saved = Object.fromEntries(ENV.map((name) => [name, process.env[name]]));
+  afterEach(() => {
+    for (const name of ENV) {
+      if (saved[name] === undefined) delete process.env[name];
+      else process.env[name] = saved[name];
+    }
+  });
+
+  // Each of these would otherwise redirect the key, add a second credential,
+  // or print request bodies (the description and history) to the console.
+  it("ignores the environment: fixed endpoint, Hydra's key only, no logging, bounded waits", async () => {
+    process.env.ANTHROPIC_BASE_URL = "https://collector.example";
+    process.env.ANTHROPIC_AUTH_TOKEN = "env-token";
+    process.env.ANTHROPIC_LOG = "debug";
+    process.env.ANTHROPIC_API_KEY = "sk-ant-env-key";
+    const { vibe } = await load();
+    const client = vibe.createClient(KEY);
+    expect(client.baseURL).toBe("https://api.anthropic.com");
+    expect(client.apiKey).toBe(KEY);
+    expect(client.authToken).toBeNull();
+    expect(client.logLevel).toBe("off");
+    expect(client.maxRetries).toBe(1);
+    expect(client.timeout).toBe(60_000);
+  });
+});
+
 describe("Vibe requests", () => {
   it("rejects malformed requests", async () => {
     const { vibe } = await load();
     expect(vibe.parseRequest(null)).toBeNull();
+    expect(vibe.parseRequest([])).toBeNull();
     expect(vibe.parseRequest({ prompt: "x", mode: "later" })).toBeNull();
     expect(vibe.parseRequest({ prompt: "   ", mode: "next" })).toBeNull();
     expect(vibe.parseRequest({ prompt: 5, mode: "next" })).toBeNull();
+    expect(vibe.parseRequest({ prompt: "x", mode: "next", model: "claude-opus-5-5" })).toBeNull();
+    expect(vibe.parseRequest({ prompt: "x" })).toBeNull();
     expect(vibe.parseRequest({ prompt: " chill\nmix ", mode: "replace" })).toEqual({
       prompt: "chill mix",
       mode: "replace",
     });
-    expect(vibe.parseRequest({ prompt: "y".repeat(900), mode: "next" })?.prompt).toHaveLength(500);
+  });
+
+  // The panel limits the field, but a script in the page can send anything.
+  it("refuses a description over 500 characters in main, before any work on it", async () => {
+    const { vibe } = await load();
+    expect(vibe.parseRequest({ prompt: "y".repeat(500), mode: "next" })?.prompt).toHaveLength(500);
+    expect(vibe.parseRequest({ prompt: "y".repeat(501), mode: "next" })).toBeNull();
+    const huge = " ".repeat(50_000_000) + "x";
+    const started = performance.now();
+    expect(vibe.parseRequest({ prompt: huge, mode: "next" })).toBeNull();
+    expect(performance.now() - started).toBeLessThan(50);
   });
 
   it("asks for a key before anything else", async () => {
@@ -173,6 +266,65 @@ describe("Vibe requests", () => {
     expect(h.agent.runVibe).toHaveBeenCalledOnce();
   });
 
+  // A script in Apple's page can call vibe:request as often as it likes; the
+  // limits live here, in main, so it gets one request and the rest refused.
+  it("runs one request for a burst of calls from the page", async () => {
+    const h = await load();
+    h.keys.saveApiKey(KEY);
+    let finish!: (value: typeof PICK[]) => void;
+    vi.mocked(h.agent.runVibe).mockImplementation(
+      () => new Promise((resolve) => (finish = resolve)),
+    );
+    for (let i = 0; i < 100; i += 1) h.vibe.handleRequest({ prompt: `p${i}`, mode: "next" });
+    await settle();
+    expect(h.agent.runVibe).toHaveBeenCalledOnce();
+    expect(h.updates().filter((u) => (u as { code?: string }).code === "busy")).toHaveLength(99);
+    finish([PICK]);
+    await settle();
+    for (let i = 0; i < 100; i += 1) h.vibe.handleRequest({ prompt: `q${i}`, mode: "next" });
+    expect(h.agent.runVibe).toHaveBeenCalledOnce();
+    expect(h.updates().at(-1)).toEqual({ status: "error", code: "cooldown" });
+    expect(store.get("vibe.usage")).toEqual({ day: h.vibe.localDay(), count: 1 });
+  });
+
+  it("logs no description, history, pick or key, on success or failure", async () => {
+    const h = await load({
+      recent: () => [{ artist: "SENTINEL-ARTIST", title: "SENTINEL-TRACK" }],
+      search: () => [{ id: "111", title: "SENTINEL-SONG", artist: "SENTINEL-ARTIST" }],
+    });
+    const log = (await import("electron-log/main")).default.scope("vibe");
+    const consoleSpies = (["log", "info", "warn", "error", "debug"] as const).map((name) =>
+      vi.spyOn(console, name).mockImplementation(() => {}),
+    );
+    try {
+      h.keys.saveApiKey(KEY);
+      h.player.emit("nowPlayingItemDidChange", { name: "SENTINEL-NOW", artistName: "SENTINEL-ARTIST" });
+      vi.mocked(h.agent.runVibe).mockImplementationOnce(async (options) => {
+        await options.search("SENTINEL-ARTIST", "SENTINEL-SONG");
+        return [{ ...PICK, title: "SENTINEL-SONG", reason: "SENTINEL-REASON" }];
+      });
+      h.vibe.handleRequest({ prompt: "SENTINEL-PROMPT", mode: "next" });
+      await settle();
+      vi.mocked(h.agent.runVibe).mockRejectedValueOnce(new Error("SENTINEL-ERROR " + KEY));
+      vi.spyOn(Date, "now").mockReturnValue(Date.now() + h.vibe.COOLDOWN_MS + 1);
+      h.vibe.handleRequest({ prompt: "SENTINEL-PROMPT", mode: "replace" });
+      await settle();
+      vi.mocked(Date.now).mockRestore();
+      h.vibe.handleRequest({ prompt: "x".repeat(600), mode: "next" });
+
+      const logged = JSON.stringify([
+        vi.mocked(log.info).mock.calls,
+        ...consoleSpies.map((spy) => spy.mock.calls),
+      ]);
+      expect(vi.mocked(log.info).mock.calls.length).toBeGreaterThan(0);
+      expect(logged).not.toMatch(/SENTINEL/);
+      expect(logged).not.toContain(KEY);
+      expect(logged).not.toContain("sk-ant-");
+    } finally {
+      for (const spy of consoleSpies) spy.mockRestore();
+    }
+  });
+
   it("stops at the daily cap, which the config can lower", async () => {
     const h = await load();
     h.keys.saveApiKey(KEY);
@@ -184,7 +336,13 @@ describe("Vibe requests", () => {
     store.set("vibe.dailyLimit", 2);
     store.set("vibe.usage", { day: "2000-01-01", count: 99 });
     expect(h.vibe.blockedReason()).toBeNull();
-    expect(h.vibe.getStatus()).toEqual({ hasKey: true, keyPersisted: true, usedToday: 0, dailyLimit: 2 });
+    expect(h.vibe.getStatus()).toEqual({
+      hasKey: true,
+      keyPersisted: true,
+      keyStorage: "GNOME Keyring (gnome_libsecret)",
+      usedToday: 0,
+      dailyLimit: 2,
+    });
     // A hand-edited limit outside 1 to 1000 reads as the default.
     store.set("vibe.dailyLimit", 0);
     expect(h.vibe.getStatus().dailyLimit).toBe(50);

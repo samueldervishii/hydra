@@ -78,6 +78,7 @@
     // Settings never receives the key: only whether one is saved.
     const lines = [];
     if (vibe.hasKey) lines.push(vibe.keyPersisted ? labels.vibeKeySaved : labels.vibeKeyMemoryOnly);
+    lines.push(labels.vibeKeyStorage.replace('{backend}', () => vibe.keyStorage));
     lines.push(labels.vibeUsage
       .replace('{used}', () => String(vibe.usedToday))
       .replace('{limit}', () => String(vibe.dailyLimit)));

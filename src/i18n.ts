@@ -264,6 +264,7 @@ export interface TrayStrings {
   vibeRemoveKey: string;
   vibeKeySaved: string;
   vibeKeyMemoryOnly: string;
+  vibeKeyStorage: string;
   vibeModel: string;
   vibeUsage: string;
   vibePrivacy: string;
@@ -328,6 +329,7 @@ const TRAY_TEXT: Record<keyof TrayStrings, Record<string, string>> = {
   vibeRemoveKey: { en: 'Remove key' },
   vibeKeySaved: { en: 'API key saved' },
   vibeKeyMemoryOnly: { en: 'API key kept until Hydra quits: no system keyring to store it' },
+  vibeKeyStorage: { en: 'Key storage: {backend}' },
   vibeModel: { en: 'Model' },
   vibeUsage: { en: '{used} of {limit} requests used today' },
   vibePrivacy: {

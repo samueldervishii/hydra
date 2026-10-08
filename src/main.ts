@@ -709,10 +709,23 @@ function setupWindowZoomAndNav(win: BrowserWindow): void {
 }
 
 /**
- * Accept the Vibe panel's requests from the main window's main frame on a
- * service host only. Any script in Apple's page can reach these channels, so
- * src/integrations/vibe/index.ts also runs one request at a time, with a
- * cooldown and a daily cap.
+ * Whether a frame's URL is on Apple Music's own origin, where assets/vibe.js
+ * runs. Classical and the sign-in hosts are allowed navigation targets, but
+ * Vibe has no panel there, so a request from one did not come from Hydra.
+ */
+function isVibeOrigin(url: string): boolean {
+  try {
+    return new URL(url).origin === getService("music").origin;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Accept the Vibe panel's requests from the main window's main frame on Apple
+ * Music's origin only. Any script in that page can still reach these
+ * channels, so src/integrations/vibe/index.ts checks the payload and runs one
+ * request at a time, with a cooldown and a daily cap.
  */
 function setupVibeIPC(win: BrowserWindow): void {
   const fromPage = (event: Electron.IpcMainEvent): boolean =>
@@ -720,7 +733,7 @@ function setupVibeIPC(win: BrowserWindow): void {
     event.sender === win.webContents &&
     event.senderFrame === win.webContents.mainFrame &&
     !!event.senderFrame &&
-    isAllowedNavigationUrl(event.senderFrame.url);
+    isVibeOrigin(event.senderFrame.url);
   onSendChannels<VibeSendChannel>({
     "vibe:request": (event, data) => {
       if (fromPage(event)) handleVibeRequest(data);

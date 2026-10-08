@@ -290,7 +290,10 @@ vi.mock("../src/performanceMode", () => ({
 }));
 
 vi.mock("../src/musicService", () => ({
-  getService: vi.fn(() => ({ contentReadySelector: "#content" })),
+  getService: vi.fn(() => ({
+    contentReadySelector: "#content",
+    origin: "https://music.apple.com",
+  })),
   allServices: vi.fn(() => [
     {
       host: "music.apple.com",
@@ -597,29 +600,44 @@ describe("main bootstrap", () => {
 
   // Any script in Apple's page can reach these channels, so the sender is
   // checked here and the request handler adds its own limits.
-  it("accepts Vibe requests and cancels only from the main frame on a service host", async () => {
-    const { isAllowedNavigationUrl } = await import("../src/musicService");
+  it("accepts Vibe requests and cancels only from the main frame on Apple Music's origin", async () => {
     await startMain();
     const handler = (name: string) =>
       bootstrap.ipcOn.mock.calls.find(([channel]) => channel === name)?.[1];
     const request = handler("vibe:request");
     const cancel = handler("vibe:cancel");
-    const event = {
-      sender: bootstrap.webContents,
-      senderFrame: bootstrap.webContents.mainFrame,
-    };
+    const mainFrame = bootstrap.webContents.mainFrame as { url: string };
+    const event = { sender: bootstrap.webContents, senderFrame: mainFrame };
     const payload = { prompt: "chill", mode: "next" };
-    request?.({ ...event, sender: {} }, payload);
-    request?.({ ...event, senderFrame: { url: event.senderFrame.url } }, payload);
-    vi.mocked(isAllowedNavigationUrl).mockReturnValueOnce(false);
-    request?.(event, payload);
-    cancel?.({ ...event, sender: {} });
-    expect(bootstrap.vibeRequest).not.toHaveBeenCalled();
-    expect(bootstrap.vibeCancel).not.toHaveBeenCalled();
-    request?.(event, payload);
-    cancel?.(event);
-    expect(bootstrap.vibeRequest).toHaveBeenCalledExactlyOnceWith(payload);
-    expect(bootstrap.vibeCancel).toHaveBeenCalledOnce();
+    const originalUrl = mainFrame.url;
+    try {
+      request?.({ ...event, sender: {} }, payload);
+      request?.({ ...event, senderFrame: { url: "https://music.apple.com/us/new" } }, payload);
+      cancel?.({ ...event, sender: {} });
+      // Allowed navigation hosts that are not where the panel runs.
+      for (const url of [
+        "https://classical.music.apple.com/us/",
+        "https://idmsa.apple.com/appleauth/",
+        "https://auth.music.apple.com/",
+        "http://music.apple.com/us/new",
+        "https://music.apple.com.evil.example/",
+        "https://evil.example/?https://music.apple.com/",
+        "not a url",
+      ]) {
+        mainFrame.url = url;
+        request?.(event, payload);
+        cancel?.(event);
+      }
+      expect(bootstrap.vibeRequest).not.toHaveBeenCalled();
+      expect(bootstrap.vibeCancel).not.toHaveBeenCalled();
+      mainFrame.url = "https://music.apple.com/us/new?l=en";
+      request?.(event, payload);
+      cancel?.(event);
+      expect(bootstrap.vibeRequest).toHaveBeenCalledExactlyOnceWith(payload);
+      expect(bootstrap.vibeCancel).toHaveBeenCalledOnce();
+    } finally {
+      mainFrame.url = originalUrl;
+    }
   });
 
   it("logs a failed Vibe injection without failing the load", async () => {

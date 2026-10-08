@@ -90,6 +90,7 @@ const mockTrayStrings: TrayStrings = {
   vibeRemoveKey: "Remove key",
   vibeKeySaved: "API key saved",
   vibeKeyMemoryOnly: "API key kept until Hydra quits",
+  vibeKeyStorage: "Key storage: {backend}",
   vibeModel: "Model",
   vibeUsage: "{used} of {limit} requests used today",
   vibePrivacy: "Each request sends your description to Anthropic.",

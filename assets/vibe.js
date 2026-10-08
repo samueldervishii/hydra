@@ -237,6 +237,25 @@
   }
 
   /**
+   * The URL when it parses as https on Apple's image host, else "". Parsed
+   * rather than matched, since "https://evil.example?.mzstatic.com/" looks
+   * like Apple's host to a pattern but loads from evil.example.
+   * @param {unknown} value - A URL from the main process
+   * @returns {string}
+   */
+  function imageUrl(value) {
+    if (typeof value !== "string") return "";
+    try {
+      var url = new URL(value);
+      return url.protocol === "https:" && /\.mzstatic\.com$/.test(url.hostname)
+        ? url.href
+        : "";
+    } catch (_) {
+      return "";
+    }
+  }
+
+  /**
    * How well a result matches the song asked for, or 0 when its title is a
    * different song. Apple ranks by popularity, so a famous song that merely
    * shares a word can come before the one Claude meant, and a search for a
@@ -410,9 +429,8 @@
       loading: "lazy",
       draggable: "false",
     });
-    if (typeof pick.artwork === "string" && /^https:\/\/[^/]+\.mzstatic\.com\//.test(pick.artwork)) {
-      art.setAttribute("src", pick.artwork);
-    }
+    var src = imageUrl(pick.artwork);
+    if (src) art.setAttribute("src", src);
     var text = el("div", { class: "text" });
     var title = el("div", { class: "title" });
     var name = el("span", { class: "name" });

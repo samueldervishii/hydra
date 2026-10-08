@@ -244,10 +244,15 @@ export function getVibeEncryptedApiKey(): string | null {
   return getConfigValue('vibe.apiKey', null);
 }
 
-/** Store the encrypted key, or null to forget it. The value is never logged. */
+/**
+ * Store the encrypted key, or with null delete the key from config.json
+ * altogether. electron-conf rewrites the whole file through a temporary file
+ * and a rename, so no earlier ciphertext is left behind. Never logs a value.
+ */
 export function setVibeEncryptedApiKey(encrypted: string | null): void {
-  store.set('vibe.apiKey', encrypted);
-  configLog.info(`vibe.apiKey ${encrypted ? 'stored encrypted' : 'removed from config'}`);
+  if (encrypted) store.set('vibe.apiKey', encrypted);
+  else store.delete('vibe.apiKey');
+  configLog.info(`vibe.apiKey ${encrypted ? 'stored encrypted' : 'absent from config'}`);
 }
 
 /** Read `vibe.model`, falling back to the default for an unknown id. */

@@ -152,25 +152,23 @@ const LAST_ROUND =
 const SUBMIT_NOW =
   "Call submit_picks now with songs you have already found.";
 
-/** "Artist - Title", or the title alone. */
-function describe(track: ListenedTrack): string {
-  return track.artist ? `${track.artist} - ${track.title}` : track.title;
-}
-
-/** The first user turn: the description, then the listening context. */
+/**
+ * The first user turn: the description, then the listening history as one
+ * JSON value. Song titles are written by whoever released the song, so they
+ * reach Claude as quoted data, the way search results do, and never as lines
+ * of the message itself.
+ */
 export function buildUserMessage(prompt: string, context: VibeContext): string {
-  const lines = [
+  const history = {
+    nowPlaying: context.nowPlaying,
+    recentlyPlayedNewestFirst: context.recent,
+  };
+  return [
     `<request>${prompt}</request>`,
     "",
-    `Now playing: ${context.nowPlaying ? describe(context.nowPlaying) : "nothing"}`,
-  ];
-  if (context.recent.length) {
-    lines.push("Recently played, newest first:");
-    for (const track of context.recent) lines.push(`- ${describe(track)}`);
-  } else {
-    lines.push("Recently played: unknown");
-  }
-  return lines.join("\n");
+    "Listening history (JSON data):",
+    JSON.stringify(history),
+  ].join("\n");
 }
 
 /** The picks in a submit_picks input that a search returned, in order, without repeats. */

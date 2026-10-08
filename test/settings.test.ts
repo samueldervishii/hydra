@@ -5,6 +5,7 @@ import * as config from '../src/config';
 import { applySettingsAction, getSettingsState, initSettingsActions, notifySettingsChanged, subscribeSettingsChanges, showAppleSidebar, toggleNavigation } from '../src/settings';
 import { applyTheme, hasCustomTheme } from '../src/theme';
 import * as lastfm from '../src/integrations/lastfm';
+import * as vibe from '../src/integrations/vibe';
 
 vi.mock('../src/theme', () => ({
   applyTheme: vi.fn(), hasCustomTheme: vi.fn(() => false),
@@ -16,6 +17,12 @@ vi.mock('../src/theme', () => ({
 const lastfmStatus = vi.hoisted(() => ({
   available: false, connected: false, connecting: false, failed: false, username: '',
 }));
+// The real Vibe module, with cancel() observable.
+vi.mock('../src/integrations/vibe', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/integrations/vibe')>()),
+  cancel: vi.fn(),
+}));
+
 vi.mock('../src/integrations/lastfm', () => ({
   getStatus: vi.fn(() => ({ ...lastfmStatus })), enable: vi.fn(), disable: vi.fn(),
   startAuth: vi.fn(), disconnect: vi.fn(), setStateChangedCallback: vi.fn(),
@@ -88,7 +95,9 @@ describe('settings actions', () => {
   // A second Connect while the browser approval is pending would start a second flow.
   it('saves a Vibe key without ever putting it in the state, and removes it', () => {
     const key = 'sk-ant-api03-' + 'c'.repeat(40);
-    expect(getSettingsState().vibe).toEqual({ hasKey: false, keyPersisted: false, usedToday: 0, dailyLimit: 50 });
+    expect(getSettingsState().vibe).toEqual({
+      hasKey: false, keyPersisted: false, keyStorage: 'GNOME Keyring (gnome_libsecret)', usedToday: 0, dailyLimit: 50,
+    });
     expect(() => applySettingsAction({ type: 'vibeClearKey' })).toThrow('Invalid settings action');
     for (const value of ['', 'not-a-key', 42, `${key} extra`]) {
       expect(() => applySettingsAction({ type: 'vibeApiKey', value })).toThrow('Invalid settings action');
@@ -98,6 +107,20 @@ describe('settings actions', () => {
     expect(JSON.stringify(state)).not.toContain(key);
     expect(refreshTray).toHaveBeenCalled();
     expect(applySettingsAction({ type: 'vibeClearKey' }).vibe.hasKey).toBe(false);
+  });
+
+  // Removing the key must also stop a request still running with it.
+  it('forgets the Vibe key on disk and in memory, then cancels a running request', () => {
+    const store = (Conf as unknown as { _data: Map<string, unknown> })._data;
+    applySettingsAction({ type: 'vibeApiKey', value: 'sk-ant-api03-' + 'd'.repeat(40) });
+    expect(store.has('vibe.apiKey')).toBe(true);
+    vi.mocked(vibe.cancel).mockImplementationOnce(() => {
+      expect(store.has('vibe.apiKey')).toBe(false);
+      expect(getSettingsState().vibe.hasKey).toBe(false);
+    });
+    applySettingsAction({ type: 'vibeClearKey' });
+    expect(vibe.cancel).toHaveBeenCalledOnce();
+    expect(store.has('vibe.apiKey')).toBe(false);
   });
 
   it('switches the Vibe model between the two offered', () => {

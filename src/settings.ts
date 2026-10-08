@@ -356,7 +356,10 @@ export function applySettingsAction(action: unknown): SettingsState {
       saveVibeApiKey(action.value);
       break;
     case "vibeClearKey":
+      // Forget the key, then stop a request still running with it, so no
+      // further call is made with a key the user has removed.
       clearVibeApiKey();
+      vibe.cancel();
       break;
   }
   runtime.refreshTray();

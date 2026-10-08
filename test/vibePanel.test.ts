@@ -148,6 +148,36 @@ describe('vibe.js', () => {
     expect(h.go().textContent).toBe(LABELS.submit);
   });
 
+  // No renderer parses HTML here, so the static check below is what holds the
+  // panel to text; this one shows a hostile reason ends up as text alone.
+  it('renders a hostile reason, title and artwork as inert text', async () => {
+    const h = createHarness();
+    const hostile = '<img src=x onerror=alert(1)>';
+    h.vibe().update({
+      status: 'done',
+      mode: 'next',
+      picks: [
+        { id: '1', title: hostile, artist: hostile, explicit: false, artwork: 'https://evil.example?.mzstatic.com/a.jpg', reason: hostile },
+        { id: '2', title: 'B', artist: 'B', explicit: false, artwork: 'javascript:alert(1)//.mzstatic.com/', reason: '' },
+      ],
+    });
+    await settle();
+    const [row, second] = h.rows();
+    const texts = row.descendants().map((e) => e.textContent);
+    expect(texts.filter((t) => t === hostile)).toHaveLength(3);
+    // Only the artwork <img>, and with no src from a host that is not Apple's.
+    const images = [...row.descendants(), ...second.descendants()].filter((e) => e.tagName === 'img');
+    expect(images).toHaveLength(2);
+    for (const img of images) expect(img.getAttribute('src')).toBeNull();
+    expect(row.descendants().some((e) => e.attributes.has('onerror'))).toBe(false);
+  });
+
+  it('never writes markup: no HTML sinks or code evaluation in the panel', () => {
+    for (const sink of ['innerHTML', 'outerHTML', 'insertAdjacentHTML', 'document.write', 'eval(', 'new Function', 'srcdoc', 'setHTML']) {
+      expect(source, sink).not.toContain(sink);
+    }
+  });
+
   it('replaces the queue when asked, and says so when queueing fails', async () => {
     const h = createHarness();
     h.vibe().update({ status: 'done', mode: 'replace', picks: PICKS });

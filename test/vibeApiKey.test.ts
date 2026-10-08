@@ -39,7 +39,8 @@ describe("Vibe API key store", () => {
     keys.saveApiKey(KEY);
     expect(keys.getApiKey()).toBe(KEY);
     expect(keys.getApiKeyStatus()).toEqual({ hasKey: true, persisted: false });
-    expect(store.get("vibe.apiKey")).toBeNull();
+    expect(store.has("vibe.apiKey")).toBe(false);
+    expect(JSON.stringify([...store.entries()])).not.toContain(KEY);
     expect(safeStorage.encryptString).not.toHaveBeenCalled();
 
     const nextRun = await loadKeyStore();
@@ -50,15 +51,28 @@ describe("Vibe API key store", () => {
     store.set("vibe.apiKey", Buffer.from("garbage").toString("base64"));
     const keys = await loadKeyStore();
     expect(keys.getApiKey()).toBeNull();
-    expect(store.get("vibe.apiKey")).toBeNull();
+    expect(store.has("vibe.apiKey")).toBe(false);
   });
 
-  it("clears the key from memory and config", async () => {
+  it("deletes the key from config and memory", async () => {
     const keys = await loadKeyStore();
     keys.saveApiKey(KEY);
     keys.clearApiKey();
     expect(keys.getApiKeyStatus()).toEqual({ hasKey: false, persisted: false });
-    expect(store.get("vibe.apiKey")).toBeNull();
+    expect(store.has("vibe.apiKey")).toBe(false);
+    expect(JSON.stringify([...store.entries()])).not.toContain("sealed:");
+    // A later run finds nothing to decrypt.
+    expect((await loadKeyStore()).getApiKey()).toBeNull();
+  });
+
+  // What reaches config.json, as JSON: only ciphertext from safeStorage, base64.
+  it("writes nothing but safeStorage's ciphertext to config", async () => {
+    const keys = await loadKeyStore();
+    keys.saveApiKey(KEY);
+    expect([...store.keys()]).toEqual(["vibe.apiKey"]);
+    expect(safeStorage.encryptString).toHaveBeenCalledExactlyOnceWith(KEY);
+    const written = store.get("vibe.apiKey") as string;
+    expect(written).toBe(Buffer.from(`sealed:${KEY}`).toString("base64"));
   });
 
   it("accepts only the shape of an Anthropic API key", async () => {

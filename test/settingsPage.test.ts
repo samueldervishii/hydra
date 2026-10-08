@@ -32,7 +32,7 @@ function fixture(): SettingsState {
     performanceMode: true, navigation: 'top-bar', closeToTray: false,
     lastfm: { available: true, connected: false, connecting: false, failed: false, username: '', enabled: false },
     vibeModel: 'claude-haiku-5-5',
-    vibe: { hasKey: false, keyPersisted: false, usedToday: 0, dailyLimit: 50 },
+    vibe: { hasKey: false, keyPersisted: false, keyStorage: 'GNOME Keyring (gnome_libsecret)', usedToday: 0, dailyLimit: 50 },
     options: {
       musicService: [{ value: 'music', label: 'Apple Music' }, { value: 'classical', label: 'Apple Music Classical' }],
       startPage: [{ value: 'new', label: 'New' }],
@@ -124,7 +124,7 @@ describe('settings page', () => {
     const h = harness(state);
     await settle();
     expect(h.element('vibeClearKey').hidden).toBe(true);
-    expect(h.element('vibe-status').textContent).toBe('0 of 50 requests used today');
+    expect(h.element('vibe-status').textContent).toBe('Key storage: GNOME Keyring (gnome_libsecret) · 0 of 50 requests used today');
     h.element('vibe-key-form').fire('submit');
     await settle();
     expect(h.apply).not.toHaveBeenCalled();
@@ -133,8 +133,8 @@ describe('settings page', () => {
     expect(h.element('vibeApiKey').value).toBe('');
     await settle();
     expect(h.apply).toHaveBeenLastCalledWith({ type: 'vibeApiKey', value: 'sk-ant-api03-key' });
-    h.push({ ...state, vibe: { hasKey: true, keyPersisted: true, usedToday: 3, dailyLimit: 50 } });
-    expect(h.element('vibe-status').textContent).toBe(`${state.labels.vibeKeySaved} · 3 of 50 requests used today`);
+    h.push({ ...state, vibe: { hasKey: true, keyPersisted: true, keyStorage: 'KWallet 5 (kwallet5)', usedToday: 3, dailyLimit: 50 } });
+    expect(h.element('vibe-status').textContent).toBe(`${state.labels.vibeKeySaved} · Key storage: KWallet 5 (kwallet5) · 3 of 50 requests used today`);
     expect(h.element('vibeClearKey').hidden).toBe(false);
     h.element('vibeClearKey').fire('click');
     await settle();

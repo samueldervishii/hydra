@@ -13,3 +13,33 @@ export function keyringAvailable(): boolean {
   const backend = safeStorage.getSelectedStorageBackend();
   return backend !== "basic_text" && backend !== "unknown";
 }
+
+/** What Linux's backend names mean, for Settings. */
+const LINUX_BACKENDS: Record<string, string> = {
+  gnome_libsecret: "GNOME Keyring",
+  kwallet: "KWallet",
+  kwallet5: "KWallet 5",
+  kwallet6: "KWallet 6",
+  basic_text: "no keyring, memory only",
+  unknown: "no keyring, memory only",
+};
+
+/**
+ * Where safeStorage keeps its key, named for Settings with Chromium's own
+ * backend id in brackets on Linux, such as "GNOME Keyring (gnome_libsecret)".
+ * The id is shown even when encryption is unavailable, since that is when it
+ * explains why. getSelectedStorageBackend() exists on Linux only.
+ */
+export function keyringDescription(): string {
+  if (process.platform === "linux") {
+    const backend = safeStorage.getSelectedStorageBackend();
+    const name = safeStorage.isEncryptionAvailable()
+      ? (LINUX_BACKENDS[backend] ?? "unrecognised keyring")
+      : "no keyring, memory only";
+    return `${name} (${backend})`;
+  }
+  if (!safeStorage.isEncryptionAvailable()) return "no keyring, memory only";
+  if (process.platform === "darwin") return "macOS Keychain";
+  if (process.platform === "win32") return "Windows DPAPI";
+  return "system keyring";
+}
