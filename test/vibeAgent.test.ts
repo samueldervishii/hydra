@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   classifyError,
   cleanReplyText,
+  isAlbanian,
   MAX_FOUND,
   MAX_PLAYLIST_SONGS,
   MAX_ROUNDS,
@@ -185,8 +186,10 @@ describe("runTurn", () => {
   it("states the rules the user set in the system prompt", () => {
     expect(SYSTEM_PROMPT).toMatch(/Music only/);
     expect(SYSTEM_PROMPT).toMatch(/politely/);
-    expect(SYSTEM_PROMPT).toMatch(/Reply in the language the user writes in/);
+    expect(SYSTEM_PROMPT).toMatch(/Always reply in the language of the user's latest message/);
     expect(SYSTEM_PROMPT).toMatch(/English or Albanian/);
+    expect(SYSTEM_PROMPT).toMatch(/every song reason and any playlist name/);
+    expect(SYSTEM_PROMPT).not.toMatch(/when unsure, use English/);
     expect(SYSTEM_PROMPT).toMatch(/Never name a song as a recommendation in your text unless a search_catalog call in this chat returned it/);
     expect(SYSTEM_PROMPT).toMatch(/Keep replies short/);
     expect(SYSTEM_PROMPT).toMatch(/cannot play, queue or save anything yourself/);
@@ -476,6 +479,42 @@ describe("propose_playlist", () => {
     const { stream } = scripted(new Anthropic.InternalServerError(529, {}, "overloaded", new Headers()));
     await expect(runTurn(options(stream, { chat }).turn)).rejects.toMatchObject({ code: "unavailable" });
     expect(chat.notes).toEqual(["(note)"]);
+  });
+});
+
+describe("reply language", () => {
+  it("recognises Albanian, with or without its diacritics, and leaves English alone", () => {
+    for (const text of [
+      "Më gjej disa këngë të qeta për të studiuar",
+      "me gjej disa kenge te qeta per te studiuar",
+      "dua muzike per sot",
+      "Faleminderit, edhe ca te tjera",
+      "këngë",
+    ]) {
+      expect(isAlbanian(text), text).toBe(true);
+    }
+    for (const text of [
+      "late night drive, synthwave and some r&b",
+      "play me something per my mood",
+      "songs like Nightcall",
+      "Beyoncé and Céline Dion",
+      "",
+    ]) {
+      expect(isAlbanian(text), text).toBe(false);
+    }
+  });
+
+  it("starts an Albanian turn with a note asking for Albanian, after any other notes", async () => {
+    const chat = newChat();
+    chat.notes.push("(note)");
+    const albanian = scripted(message([text("Mirë.")]));
+    await runTurn(options(albanian.stream, { chat, prompt: "më gjej disa këngë" }).turn);
+    expect(albanian.calls[0].messages.at(-1)!.content).toBe(
+      "(note)\n\n(The user wrote in Albanian: reply in Albanian, with every song reason and any playlist name in Albanian too.)\n\nmë gjej disa këngë",
+    );
+    const english = scripted(message([text("Sure.")]));
+    await runTurn(options(english.stream, { chat, prompt: "now something upbeat" }).turn);
+    expect(english.calls[0].messages.at(-1)!.content).toBe("now something upbeat");
   });
 });
 

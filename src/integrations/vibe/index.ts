@@ -343,6 +343,11 @@ export function showSpend(): void {
   update(spendUpdate());
 }
 
+/** Dollars for the log, to a hundredth of a cent: a Haiku turn costs about $0.001. */
+function logUsd(amount: number): string {
+  return `$${amount.toFixed(4)}`;
+}
+
 /** Add one response's cost to today's spend, and tell Settings and the panel. */
 function addSpend(usd: number): void {
   if (!(usd > 0)) return;
@@ -449,7 +454,7 @@ async function run(request: VibeRequest, apiKey: string): Promise<void> {
       withinBudget,
     });
     vibeLog.info(
-      `turn done model=${model} songs=${shown} cost=${formatUsd(cost)} ms=${Date.now() - started}`,
+      `turn done model=${model} songs=${shown} cost=${logUsd(cost)} ms=${Date.now() - started}`,
     );
     if (current()) update({ status: "done" });
   } catch (err: unknown) {
@@ -460,7 +465,7 @@ async function run(request: VibeRequest, apiKey: string): Promise<void> {
         : "failed";
     // The code is a fixed word; the error itself could carry request data.
     vibeLog.warn(
-      `turn failed model=${model} code=${code} cost=${formatUsd(cost)} ms=${Date.now() - started}`,
+      `turn failed model=${model} code=${code} cost=${logUsd(cost)} ms=${Date.now() - started}`,
     );
     if (current()) update({ status: "error", code });
   } finally {

@@ -93,7 +93,7 @@
     "  background: linear-gradient(var(--glass), var(--glass)), var(--pageBG, #1f1f1f);",
     "  border-inline-start: 1px solid var(--glass-stroke); box-shadow: 0 10px 40px var(--glass-shadow); }",
     "button { margin: 0; font: inherit; color: inherit; cursor: pointer; border: 0; background: transparent; }",
-    "button:focus-visible, .input:focus-visible { outline: 2px solid var(--keyColor, #fa586a); outline-offset: 2px; }",
+    "button:focus-visible { outline: 2px solid var(--keyColor, #fa586a); outline-offset: 2px; }",
     "button:disabled { cursor: default; opacity: 0.6; }",
     ".header { display: flex; align-items: center; gap: 4px; padding: 23px 12px 12px 20px; }",
     ".heading { flex: 1 1 auto; margin: 0; font: var(--title-2-emphasized, 700 17px/22px system-ui); }",
@@ -154,7 +154,7 @@
     ".menu button:hover, .menu button:focus { background: var(--systemQuaternary, rgba(128, 128, 128, 0.2)); outline: none; }",
     ".footer { padding: 10px 12px 12px; border-top: 1px solid var(--labelDivider, rgba(128, 128, 128, 0.3)); }",
     ".form { display: flex; align-items: flex-end; gap: 8px; }",
-    ".input { flex: 1 1 auto; box-sizing: border-box; min-height: 36px; max-height: 120px; resize: none;",
+    ".input { flex: 1 1 auto; box-sizing: border-box; height: 36px; max-height: 120px; resize: none; overflow-y: hidden;",
     "  padding: 8px 12px; font: inherit; line-height: 1.4; color: inherit; background: transparent;",
     "  border: 1px solid var(--labelDivider, rgba(128, 128, 128, 0.3)); border-radius: 18px; outline: none; }",
     ".input:focus { border-color: var(--keyColor, #fa586a); }",
@@ -568,6 +568,23 @@
     sendButton.setAttribute("aria-label", pending ? LABELS.stop : LABELS.send);
     sendButton.setAttribute("title", pending ? LABELS.stop : LABELS.send);
     toggleButton.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  }
+
+  /**
+   * Fit the field to its text, from one line up to its maximum height, past
+   * which it scrolls.
+   * @returns {void}
+   */
+  function fitInput() {
+    input.style.setProperty("height", "auto");
+    var height = Number(input.scrollHeight) || 0;
+    if (!height) {
+      input.style.removeProperty("height");
+      return;
+    }
+    // Two pixels for the border, since scrollHeight leaves it out.
+    input.style.setProperty("height", Math.min(height + 2, 120) + "px");
+    input.style.setProperty("overflow-y", height + 2 > 120 ? "auto" : "hidden");
   }
 
   /** Keep the newest message in view while the user has not scrolled up. */
@@ -1173,6 +1190,7 @@
     }
     addUserMessage(prompt);
     input.value = "";
+    fitInput();
     // Shown until the main process answers with its own state.
     pending = true;
     render();
@@ -1314,6 +1332,7 @@
   newChatButton.addEventListener("click", newChat);
   closeButton.addEventListener("click", close);
   sendButton.addEventListener("click", submit);
+  input.addEventListener("input", fitInput);
   toggleButton.addEventListener("click", toggle);
   menuNext.addEventListener("click", function () {
     var id = menuFor && menuFor.id;

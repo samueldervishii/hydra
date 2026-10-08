@@ -533,7 +533,7 @@ export interface VibeStrings {
 // is picked up through getLocalizedString() with no other change.
 const VIBE_TEXT: Record<Exclude<keyof VibeStrings, 'errors' | 'explicit'>, Record<string, string>> = {
   vibe: { en: 'Vibe' },
-  placeholder: { en: 'Ask for music: a mood, a moment, an artist' },
+  placeholder: { en: 'Ask for a mood or an artist' },
   send: { en: 'Send' },
   stop: { en: 'Stop' },
   newChat: { en: 'New chat' },

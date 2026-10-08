@@ -266,6 +266,23 @@ describe('vibe.js panel', () => {
     expect(h.send).toHaveBeenLastCalledWith('vibe:cancel', undefined);
   });
 
+  it('grows the field with its text up to 120px, then scrolls, and shrinks it once sent', () => {
+    const h = createHarness();
+    const input = h.input() as StubElement & { scrollHeight: number };
+    input.scrollHeight = 58;
+    input.dispatch('input');
+    expect(input.styles.get('height')).toBe('60px');
+    expect(input.styles.get('overflow-y')).toBe('hidden');
+    input.scrollHeight = 300;
+    input.dispatch('input');
+    expect(input.styles.get('height')).toBe('120px');
+    expect(input.styles.get('overflow-y')).toBe('auto');
+    input.value = 'go';
+    input.scrollHeight = 34;
+    h.sendButton().dispatch('click');
+    expect(input.styles.get('height')).toBe('36px');
+  });
+
   it('sends nothing for an empty message', () => {
     const h = createHarness();
     h.input().value = '   ';

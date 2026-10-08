@@ -436,6 +436,7 @@ describe("Vibe messages", () => {
       ]);
       expect(vi.mocked(log.info).mock.calls.length).toBeGreaterThan(0);
       expect(logged).toContain("songs=1");
+      expect(logged).toMatch(/cost=\$\d+\.\d{4} /);
       expect(logged).not.toMatch(/SENTINEL/);
       expect(logged).not.toContain(KEY);
       expect(logged).not.toContain("sk-ant-");

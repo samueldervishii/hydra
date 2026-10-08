@@ -157,7 +157,7 @@ export const SYSTEM_PROMPT = `You are the music assistant inside Hydra, an Apple
 
 Scope:
 - Music only: songs, artists, albums, genres, moods, playlists and listening. If the user asks for anything else, say politely in one sentence that you can only help with music, and stop.
-- Reply in the language the user writes in. The user writes in English or Albanian; when unsure, use English.
+- Always reply in the language of the user's latest message, English or Albanian, and write everything in it: your text, every song reason and any playlist name. Tool results are in English; that does not change the language of your reply. A message Hydra recognised as Albanian starts with a note saying so.
 
 Songs:
 - To recommend a song, look it up with search_catalog, giving the artist and the song title, then put it in your reply with show_songs. The user sees each shown song as a row they can play; that is how you recommend.
@@ -213,7 +213,7 @@ export const TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "A short name for the playlist." },
+        name: { type: "string", description: "A short name for the playlist, in the language the user writes in." },
         ids: {
           type: "array",
           items: { type: "string", description: "A song id from search_catalog." },
@@ -240,7 +240,7 @@ export const TOOLS: Anthropic.Tool[] = [
               id: { type: "string", description: "A song id from search_catalog." },
               reason: {
                 type: "string",
-                description: "Why this song fits, in one short sentence.",
+                description: "Why this song fits, in one short sentence, in the language the user writes in.",
               },
             },
             required: ["id", "reason"],
@@ -259,6 +259,24 @@ const LIMIT_REACHED =
 const LAST_ROUND =
   "This is your last step for this message: reply now, showing songs you have already found.";
 const TRIMMED_NOTE = "(Earlier messages in this chat were removed to save space.)";
+const ALBANIAN_NOTE =
+  "(The user wrote in Albanian: reply in Albanian, with every song reason and any playlist name in Albanian too.)";
+
+// Words Albanian uses and English does not, with and without their
+// diacritics, since Albanian is often typed without them. Matched as whole
+// words between letters, which \b cannot do for ë and ç.
+const ALBANIAN_WORDS =
+  /(?<!\p{L})(?:dhe|për|per|që|qe|një|nje|disa|këngë|kenge|këngët|kenget|është|eshte|nga|shumë|shume|mirë|mire|faleminderit|gjej|dua|muzikë|muzike|sot|këtu|ketu|çfarë|cfare|pse|edhe|tani|luaj|qeta|dëgjoj|degjoj|bëj|bej|ndonjë|ndonje|ime|tim|tënde|tende)(?!\p{L})/giu;
+
+/**
+ * Whether a message is in Albanian rather than English: it has an ë, which
+ * English never does, or at least two words only Albanian uses. Haiku drifted
+ * to English replies for Albanian messages under an English system prompt and
+ * English tool results, so the turn then starts with ALBANIAN_NOTE.
+ */
+export function isAlbanian(text: string): boolean {
+  return /ë/i.test(text) || (text.match(ALBANIAN_WORDS) ?? []).length >= 2;
+}
 
 // Characters that could reorder or hide text in the panel: C0 and C1 controls
 // other than tab and newline, and the bidirectional overrides.
@@ -422,7 +440,8 @@ export async function runTurn(options: TurnOptions): Promise<void> {
   // Notes come first, so the user's own words are the last thing Claude reads.
   // A note added while this turn runs waits for the next one.
   const notes = chat.notes.length;
-  messages.push({ role: "user", content: [...chat.notes, prompt].join("\n\n") });
+  const language = isAlbanian(prompt) ? [ALBANIAN_NOTE] : [];
+  messages.push({ role: "user", content: [...chat.notes, ...language, prompt].join("\n\n") });
   let searches = 0;
   let lastPromptTokens = chat.lastPromptTokens;
 
