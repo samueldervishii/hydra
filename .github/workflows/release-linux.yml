@@ -243,7 +243,10 @@ jobs:
   # the workflow's token starts no other workflow, so `on: release` in
   # apt-r2.yml would never fire; it is called here instead. Its job runs in
   # the Release environment and takes the R2 credentials and the signing key
-  # from there, so nothing is passed down from this workflow.
+  # from there, but a called workflow sees no secret its caller did not pass:
+  # without `secrets: inherit` every one of them read as empty (2.7.1's apt
+  # job), while the same workflow run by hand had them. The repository holds
+  # no secrets of its own, so inherit hands on nothing but the environment's.
   apt:
     name: Publish to apt.six9.uk
     needs: [check, publish]
@@ -251,5 +254,6 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/apt-r2.yml
+    secrets: inherit
     with:
       tag: ${{ needs.check.outputs.version }}

@@ -85,7 +85,10 @@ describe("apt repository workflow", () => {
     expect(at("build")).toBeLessThan(at("upload"));
   });
 
-  it("is called by the release workflow once the release is published, passing no secrets", () => {
+  // A called workflow sees no secret its caller did not pass, not even its own
+  // environment's: without inherit, 2.7.1's apt job read all three R2 secrets
+  // as empty. No secret is named here, so none is handed on beyond inherit.
+  it("is called by the release workflow once the release is published, inheriting secrets", () => {
     const start = releaseWorkflow.indexOf("\n  apt:\n");
     expect(start).toBeGreaterThan(-1);
     const job = releaseWorkflow.slice(start);
@@ -93,7 +96,9 @@ describe("apt repository workflow", () => {
     expect(job).toContain("    uses: ./.github/workflows/apt-r2.yml\n");
     expect(job).toContain("      tag: ${{ needs.check.outputs.version }}\n");
     expect(job).toMatch(/^    permissions:\n      contents: read$/m);
-    expect(job).not.toMatch(/secrets/);
+    expect(job).toContain("    secrets: inherit\n");
+    expect(job).not.toMatch(/secrets\./);
+    expect(job.match(/secrets/g)).toHaveLength(1);
   });
 });
 
