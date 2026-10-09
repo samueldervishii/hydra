@@ -100,6 +100,12 @@ import {
   reset as resetWedgeDetector,
 } from "./wedgeDetector";
 import { contentReadyProbeScript } from "./contentReady";
+import {
+  parseRefreshOutcome,
+  RENDERER_SCRIPTS,
+  rendererRefreshScript,
+  type RendererScript,
+} from "./rendererRefresh";
 import { errorMessage, liveWebContents, runSteps } from "./utils";
 import { openExternalUrl } from "./utils/openExternal";
 
@@ -799,74 +805,135 @@ function setupVibeIPC(win: BrowserWindow): void {
   });
 }
 
+interface RendererScriptStep {
+  /** The name failures are logged under. */
+  label: string;
+  /** The debug line logged once it is injected. */
+  injected: string;
+  source: () => string;
+}
+
+// Built at each injection, so each source reads the generation, today's
+// spend and the stored sorts at the moment it is sent.
+function rendererScriptSteps(assets: Assets): Record<RendererScript, RendererScriptStep> {
+  return {
+    hook: {
+      label: "hookScript",
+      injected: "MusicKit hook injected",
+      source: () =>
+        assets.hookScript.replace("__HYDRA_DOCUMENT_GENERATION__", () =>
+          String(rendererDocumentGeneration),
+        ),
+    },
+    navBar: {
+      label: "navBarScript",
+      injected: "Navigation bar injected",
+      source: () => assets.navBarScript,
+    },
+    songSearch: {
+      label: "songSearchScript",
+      injected: "Song search injected",
+      source: () => assets.songSearchScript,
+    },
+    vibe: {
+      label: "vibeScript",
+      injected: "Vibe panel injected",
+      source: () =>
+        assets.vibeScript.replace(VIBE_SPEND_TOKEN, () =>
+          JSON.stringify(vibeSpendUpdate()),
+        ),
+    },
+    playlistSort: {
+      label: "playlistSortScript",
+      injected: "Playlist sort injected",
+      source: () =>
+        assets.playlistSortScript.replace(PLAYLIST_SORTS_TOKEN, () =>
+          JSON.stringify(getPlaylistSorts()),
+        ),
+    },
+    topBar: {
+      label: "topBarScript",
+      injected: "Top bar injected",
+      source: () => assets.topBarScript,
+    },
+  };
+}
+
+// An in-page navigation keeps the document, and every script already in it
+// keeps itself current through the method its repeat run calls. One small
+// script makes those calls and reports which scripts are not in the page yet;
+// only those are sent whole. Resending all of them made the page parse about
+// 200 KB on every navigation. An answer that is not the expected shape, or a
+// failed call, sends every script whole, as before.
+async function refreshRendererScripts(
+  win: BrowserWindow,
+  scripts: RendererScript[],
+  context: string,
+): Promise<RendererScript[]> {
+  try {
+    const answer: unknown = await win.webContents.executeJavaScript(
+      rendererRefreshScript(scripts, {
+        spend: vibeSpendUpdate(),
+        sorts: getPlaylistSorts(),
+      }),
+    );
+    const outcome = parseRefreshOutcome(answer, scripts);
+    if (!outcome) {
+      mainLog.warn(`unexpected renderer refresh result ${context}`);
+      return scripts;
+    }
+    for (const name of outcome.failed)
+      mainLog.warn(`failed to refresh ${name} ${context}`);
+    mainLog.debug(
+      `renderer scripts refreshed: in_place=${scripts.length - outcome.missing.length - outcome.failed.length} missing=${outcome.missing.length} failed=${outcome.failed.length}`,
+    );
+    return outcome.missing;
+  } catch (e: unknown) {
+    mainLog.warn(`failed to refresh renderer scripts ${context}:`, e);
+    return scripts;
+  }
+}
+
 // Contain injection failures in both full-load and in-page navigation handlers.
 // The URL read can throw after WebContents destruction, so it stays inside the catch.
 // Separate catches let navigation controls load even when the MusicKit hook fails.
 // The song search panel, the Vibe panel and the top bar go last, on allowed
 // hosts only, like the hook the panels play through; each has its own catch.
+// A full load sends every script; an in-page navigation refreshes those
+// already in the page and sends only the rest.
 async function injectRendererScripts(
   win: BrowserWindow,
   assets: Assets,
   context: string,
+  inPage: boolean,
 ): Promise<void> {
   let allowed = false;
   try {
     const currentUrl = win.webContents.getURL();
     allowed = isAllowedNavigationUrl(currentUrl);
-    if (allowed) {
-      await win.webContents.executeJavaScript(
-        assets.hookScript.replace("__HYDRA_DOCUMENT_GENERATION__", () =>
-          String(rendererDocumentGeneration),
-        ),
-      );
-      mainLog.debug("MusicKit hook injected");
-    } else {
+    if (!allowed)
       mainLog.warn(
         "skipped hookScript injection on disallowed host:",
         currentUrl,
       );
-    }
   } catch (e: unknown) {
     mainLog.warn(`failed to inject hookScript ${context}:`, e);
   }
-  try {
-    await win.webContents.executeJavaScript(assets.navBarScript);
-    mainLog.debug("Navigation bar injected");
-  } catch (e: unknown) {
-    mainLog.warn(`failed to inject navBarScript ${context}:`, e);
-  }
-  if (!allowed) return;
-  try {
-    await win.webContents.executeJavaScript(assets.songSearchScript);
-    mainLog.debug("Song search injected");
-  } catch (e: unknown) {
-    mainLog.warn(`failed to inject songSearchScript ${context}:`, e);
-  }
-  try {
-    await win.webContents.executeJavaScript(
-      assets.vibeScript.replace(VIBE_SPEND_TOKEN, () =>
-        JSON.stringify(vibeSpendUpdate()),
-      ),
-    );
-    mainLog.debug("Vibe panel injected");
-  } catch (e: unknown) {
-    mainLog.warn(`failed to inject vibeScript ${context}:`, e);
-  }
-  try {
-    await win.webContents.executeJavaScript(
-      assets.playlistSortScript.replace(PLAYLIST_SORTS_TOKEN, () =>
-        JSON.stringify(getPlaylistSorts()),
-      ),
-    );
-    mainLog.debug("Playlist sort injected");
-  } catch (e: unknown) {
-    mainLog.warn(`failed to inject playlistSortScript ${context}:`, e);
-  }
-  try {
-    await win.webContents.executeJavaScript(assets.topBarScript);
-    mainLog.debug("Top bar injected");
-  } catch (e: unknown) {
-    mainLog.warn(`failed to inject topBarScript ${context}:`, e);
+  // Off the allowed hosts only the navigation bar goes in.
+  const wanted: RendererScript[] = allowed ? [...RENDERER_SCRIPTS] : ["navBar"];
+  const send = new Set(
+    inPage ? await refreshRendererScripts(win, wanted, context) : wanted,
+  );
+  const steps = rendererScriptSteps(assets);
+  for (const name of wanted) {
+    if (!send.has(name)) continue;
+    const step = steps[name];
+    try {
+      await win.webContents.executeJavaScript(step.source());
+      mainLog.debug(step.injected);
+    } catch (e: unknown) {
+      mainLog.warn(`failed to inject ${step.label} ${context}:`, e);
+    }
   }
 }
 
@@ -1033,7 +1100,7 @@ function setupContentHandlers(
     await applyNavigation(win.webContents);
     await vibePageLoaded(win.webContents);
     await injectThemeCss(win.webContents);
-    await injectRendererScripts(win, assets, "on load");
+    await injectRendererScripts(win, assets, "on load", false);
   }
 
   let initialized = false;
@@ -1047,7 +1114,7 @@ function setupContentHandlers(
     handleStorefrontNavigation(url);
     handleLastPageNavigation(url);
     if (integrationsReady)
-      await injectRendererScripts(win, assets, "on SPA navigation");
+      await injectRendererScripts(win, assets, "on SPA navigation", true);
   });
   win.webContents.on("did-finish-load", async () => {
     // Claim initialisation before injectContent() yields. Two did-finish-load

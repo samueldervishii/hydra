@@ -20,7 +20,7 @@ const bootstrap = vi.hoisted(() => {
     once: vi.fn((event: string, listener: Listener) => {
       mainWebOnceListeners.set(event, listener);
     }),
-    executeJavaScript: vi.fn(() => Promise.resolve(true)),
+    executeJavaScript: vi.fn((_script?: string): Promise<unknown> => Promise.resolve(true)),
     insertCSS: vi.fn(() => Promise.resolve("css-key")),
     setZoomFactor: vi.fn(),
     setWindowOpenHandler: vi.fn(),
@@ -908,8 +908,11 @@ describe("main bootstrap", () => {
       );
     }
 
+    // Every script is already in the page, so the navigation refreshes them
+    // in one call and sends none of them again.
+    bootstrap.webContents.executeJavaScript.mockResolvedValueOnce({ missing: [], failed: [] });
     await navigate?.({}, "https://music.apple.com/gb/new", true);
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(12);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(7);
     for (const initialise of Object.values(bootstrap.integrations))
       expect(initialise).toHaveBeenCalledOnce();
   });
@@ -927,13 +930,20 @@ describe("main bootstrap", () => {
     const { isAllowedNavigationUrl } = await import("../src/musicService");
     bootstrap.webContents.executeJavaScript.mockClear();
     vi.mocked(isAllowedNavigationUrl).mockReturnValueOnce(false);
+    bootstrap.webContents.executeJavaScript.mockResolvedValueOnce({ missing: ["navBar"], failed: [] });
     await bootstrap.mainWebListeners.get("did-navigate-in-page")?.(
       {},
       "https://music.apple.com/gb/new",
       true,
     );
-    // Only the navigation bar.
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledOnce();
+    // The refresh asks after the navigation bar alone, which then goes in.
+    const scripts = bootstrap.webContents.executeJavaScript.mock.calls.map((call) =>
+      String((call as unknown[])[0]),
+    );
+    expect(scripts).toHaveLength(2);
+    expect(scripts[0]).toContain('"navBar"');
+    expect(scripts[0]).not.toContain('"vibe"');
+    expect(bootstrap.log.debug).toHaveBeenLastCalledWith("Navigation bar injected");
   });
 
   it("logs a failed top bar injection without failing the load", async () => {
@@ -1039,9 +1049,81 @@ describe("main bootstrap", () => {
     );
     expect(bootstrap.integrations.trayState).toHaveBeenCalledOnce();
     expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(6);
+    // The hook never ran, so the next navigation sends it whole.
+    bootstrap.webContents.executeJavaScript.mockResolvedValueOnce({ missing: ["hook"], failed: [] });
     await navigate?.({}, "https://music.apple.com/gb/new", true);
-    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(12);
+    expect(bootstrap.webContents.executeJavaScript).toHaveBeenCalledTimes(8);
+    expect(bootstrap.log.debug).toHaveBeenLastCalledWith("MusicKit hook injected");
     expect(bootstrap.integrations.dock).toHaveBeenCalledOnce();
+  });
+
+  describe("in-page navigation", () => {
+    const navigate = async (answer: () => Promise<unknown>) => {
+      await startMain();
+      await bootstrap.mainWebListeners.get("did-finish-load")?.();
+      bootstrap.webContents.executeJavaScript.mockClear();
+      bootstrap.log.debug.mockClear();
+      bootstrap.webContents.executeJavaScript.mockImplementationOnce(answer);
+      await bootstrap.mainWebListeners.get("did-navigate-in-page")?.(
+        {},
+        "https://music.apple.com/gb/new",
+        true,
+      );
+      return bootstrap.webContents.executeJavaScript.mock.calls.map((call) =>
+        String((call as unknown[])[0]),
+      );
+    };
+
+    it("refreshes every script in one call, with the current spend and sorts", async () => {
+      bootstrap.getPlaylistSorts.mockReturnValue({ "p.One": { by: "title", dir: "desc" } });
+      try {
+        const scripts = await navigate(() => Promise.resolve({ missing: [], failed: [] }));
+        expect(scripts).toHaveLength(1);
+        for (const name of ["hook", "navBar", "songSearch", "vibe", "playlistSort", "topBar"])
+          expect(scripts[0]).toContain(JSON.stringify(name));
+        expect(scripts[0]).toContain('"sorts":{"p.One":{"by":"title","dir":"desc"}}');
+        expect(scripts[0]).toContain('"spend":{"status":"spend","spent":"$0.00","budget":"$2.00"}');
+        expect(bootstrap.log.debug).toHaveBeenCalledWith(
+          "renderer scripts refreshed: in_place=6 missing=0 failed=0",
+        );
+      } finally {
+        bootstrap.getPlaylistSorts.mockReturnValue({});
+      }
+    });
+
+    it("sends only the scripts the page lacks, in their usual order", async () => {
+      const scripts = await navigate(() =>
+        Promise.resolve({ missing: ["topBar", "songSearch"], failed: [] }),
+      );
+      expect(scripts).toHaveLength(3);
+      const injected = bootstrap.log.debug.mock.calls
+        .map(([message]: unknown[]) => message)
+        .filter((message: unknown) => String(message).endsWith(" injected"));
+      expect(injected).toEqual(["Song search injected", "Top bar injected"]);
+    });
+
+    it("logs a refresh that threw and does not send that script again", async () => {
+      const scripts = await navigate(() => Promise.resolve({ missing: [], failed: ["vibe"] }));
+      expect(scripts).toHaveLength(1);
+      expect(bootstrap.log.warn).toHaveBeenCalledWith("failed to refresh vibe on SPA navigation");
+    });
+
+    it("sends every script whole when the page answers anything else", async () => {
+      const scripts = await navigate(() => Promise.resolve({ missing: ["nope"], failed: [] }));
+      expect(scripts).toHaveLength(7);
+      expect(bootstrap.log.warn).toHaveBeenCalledWith(
+        "unexpected renderer refresh result on SPA navigation",
+      );
+    });
+
+    it("sends every script whole when the refresh itself fails", async () => {
+      const scripts = await navigate(() => Promise.reject(new Error("refresh failed")));
+      expect(scripts).toHaveLength(7);
+      expect(bootstrap.log.warn).toHaveBeenCalledWith(
+        "failed to refresh renderer scripts on SPA navigation:",
+        expect.any(Error),
+      );
+    });
   });
 
   // The bare timeout can fire after startup destruction, when reading win.webContents throws before a promise exists.

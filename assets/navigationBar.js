@@ -4,8 +4,9 @@
 // Music logo: Back, Forward, Reload and Settings. They are what Apple's sidebar
 // shows on Classical, with the Navigation setting on Apple sidebar, and while
 // signed out; Hydra's top bar (assets/topBar.js) replaces the sidebar
-// otherwise. src/main.ts runs this script on every load and every in-page
-// navigation; a repeat run finds the row and stops.
+// otherwise. src/main.ts runs this script on every load, and on an in-page
+// navigation again only when src/rendererRefresh.ts finds no row; a repeat run
+// finds the row and stops.
 (function () {
   // loadAssets() in src/main.ts replaces NAV_LABELS_TOKEN from src/i18n.ts with JSON.
   // executeJavaScript() cannot supply loadFile() query parameters, so the raw asset requires substitution.

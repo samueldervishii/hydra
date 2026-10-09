@@ -23,8 +23,9 @@
 // Apple Music only: Classical keeps Apple's sidebar.
 (function () {
   if (window.location.hostname !== "music.apple.com") return;
-  // src/main.ts runs this on every load and in-page navigation, and again
-  // through update() when the setting changes. A repeat run re-evaluates.
+  // src/main.ts runs this on every load, calls update() through
+  // src/rendererRefresh.ts on every in-page navigation, and again when the
+  // setting changes. A repeat run re-evaluates.
   if (window.__hydraTopBar) {
     window.__hydraTopBar.update();
     return;
@@ -1073,7 +1074,7 @@
     if (active) {
       refresh();
       loadAvatar();
-      // main.ts re-runs the script after every in-page navigation.
+      // main.ts calls update() after every in-page navigation.
       scheduleStrip();
     }
   }

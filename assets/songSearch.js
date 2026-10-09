@@ -15,8 +15,10 @@
 // alone.
 (function () {
   if (window.location.hostname !== "music.apple.com") return;
-  // src/main.ts runs this on every load and every in-page navigation. A repeat
-  // run means the page navigated, so it closes the panel and adds nothing.
+  // src/main.ts runs this on every load. A repeat run means the page
+  // navigated, so it closes the panel and adds nothing; on an in-page
+  // navigation src/rendererRefresh.ts makes the same call instead of running
+  // the script again, so keep the two in step.
   if (window.__hydraSongSearch) {
     window.__hydraSongSearch.close();
     return;

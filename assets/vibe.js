@@ -30,9 +30,11 @@
   /** @type {{ status: string, spent: string, budget: string }} */
   var SPEND = __HYDRA_VIBE_SPEND__;
 
-  // src/main.ts runs this on every load and every in-page navigation. A repeat
-  // run means an in-page navigation: the panel stays as it is, Apple's player
-  // bar may have been drawn again, and the spend is current.
+  // src/main.ts runs this on every load. A repeat run means an in-page
+  // navigation: the panel stays as it is, Apple's player bar may have been
+  // drawn again, and the spend is current. On an in-page navigation
+  // src/rendererRefresh.ts makes the same calls instead of running the script
+  // again, so keep the two in step.
   if (window.__hydraVibe) {
     window.__hydraVibe.update(SPEND);
     window.__hydraVibe.refresh();

@@ -31,7 +31,9 @@
   // src/main.ts fills this in at every injection with the stored sorts.
   /** @type {unknown} */
   var STORED = __HYDRA_PLAYLIST_SORTS__;
-  // A repeat run means an in-page navigation: follow the new page.
+  // A repeat run means an in-page navigation: follow the new page. On an
+  // in-page navigation src/rendererRefresh.ts makes the same call instead of
+  // running the script again, so keep the two in step.
   if (window.__hydraPlaylistSort) {
     window.__hydraPlaylistSort.refresh(STORED);
     return;
@@ -1034,7 +1036,7 @@
   /**
    * Follow the page: a new playlist starts afresh with its stored sort; the
    * same one keeps its tracks and puts back anything Apple re-rendered away.
-   * @param {unknown} [stored] - The stored sorts, from a repeat injection
+   * @param {unknown} [stored] - The stored sorts, from a repeat injection or the in-page refresh
    * @returns {void}
    */
   function refresh(stored) {
