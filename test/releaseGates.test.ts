@@ -26,12 +26,7 @@ type BuildHook = (context: HookContext) => Promise<void>;
 
 const afterPack = require("../build/afterPack.cjs").default as BuildHook;
 const afterSign = require("../build/afterSign.cjs").default as BuildHook;
-const releaseWorkflow = readFileSync(
-  ".github/workflows/release-linux.yml",
-  "utf8",
-);
 const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
-  version: string;
   build: {
     afterPack?: string;
     afterSign?: string;
@@ -208,111 +203,6 @@ describe("release build scripts", () => {
     },
   );
 
-});
-
-it("releases the fork from main with the apt signing key as its only secret", () => {
-  expect(releaseWorkflow).toMatch(
-    /on:\n  push:\n    branches: \[main\]\n    paths: \["package.json"\]\n\n/,
-  );
-  expect(releaseWorkflow).toContain("run: just build");
-  expect(releaseWorkflow).toContain("run: just lint");
-  expect(releaseWorkflow.match(/secrets\.[A-Z_]+/g)).toEqual(["secrets.HYDRA_GPG_PRIVATE_KEY"]);
-  expect(releaseWorkflow).not.toMatch(/SIDRA_LASTFM|EVS_|GITHUB_REF_TYPE/);
-});
-
-// apt reads the repository from releases/latest/download/, so every release
-// must carry it and be Latest; a pre-release would leave apt on the old one.
-// Only a push to main may release: no manual or pull-request trigger, and
-// every job checks the ref as well.
-it("runs only for pushes to main", () => {
-  expect(releaseWorkflow).not.toMatch(/workflow_dispatch|pull_request|workflow_run|repository_dispatch|schedule:/);
-  const jobs = releaseWorkflow.slice(releaseWorkflow.indexOf("\njobs:"));
-  const jobCount = (jobs.match(/^  [a-z-]+:\n/gm) ?? []).length;
-  const refChecks = (jobs.match(/^    if: github\.ref == 'refs\/heads\/main'/gm) ?? []).length;
-  expect(jobCount).toBeGreaterThan(0);
-  expect(refChecks).toBe(jobCount);
-});
-
-it("publishes a signed apt repository on a Latest release", () => {
-  const step = releaseWorkflow.slice(
-    releaseWorkflow.indexOf("- name: Build and sign the apt repository"),
-    releaseWorkflow.indexOf("- name: Tag the commit and publish the release"),
-  );
-  expect(step).toContain("HYDRA_GPG_PRIVATE_KEY: ${{ secrets.HYDRA_GPG_PRIVATE_KEY }}");
-  expect(step).toContain("scripts/build-apt-repo.sh release \"$key\" packaging/hydra.gpg");
-  const publish = releaseWorkflow.slice(
-    releaseWorkflow.indexOf("gh release create"),
-  );
-  for (const asset of [
-    "release/*.deb",
-    "release/SHA256SUMS",
-    "release/Packages",
-    "release/Packages.gz",
-    "release/Release",
-    "release/Release.gpg",
-    "release/InRelease",
-    "packaging/hydra.gpg",
-  ]) {
-    expect(publish, asset).toContain(asset);
-  }
-  expect(publish).toContain("--latest");
-  expect(releaseWorkflow).not.toContain("--prerelease");
-  // The secret reaches the signing step only.
-  expect(releaseWorkflow.indexOf("secrets.HYDRA_GPG_PRIVATE_KEY")).toBeGreaterThan(
-    releaseWorkflow.indexOf("- name: Build and sign the apt repository"),
-  );
-});
-
-// npm ci runs every dependency's install scripts, and a process they start
-// can outlive its step within the job, so the job that installs and builds
-// holds no secret, and the job with the signing key runs no third-party code.
-it("keeps the build away from the signing key", () => {
-  const job = (name: string) => {
-    const start = releaseWorkflow.indexOf(`\n  ${name}:\n`);
-    const next = releaseWorkflow.slice(start + 1).search(/\n  [a-z-]+:\n/);
-    return next === -1 ? releaseWorkflow.slice(start) : releaseWorkflow.slice(start, start + 1 + next);
-  };
-  const build = job("build");
-  const publish = job("publish");
-  expect(build).toContain("run: npm ci");
-  expect(build).not.toMatch(/secrets\.|environment:/);
-  expect(publish).toContain("    environment: Release\n");
-  expect(publish).toContain("secrets.HYDRA_GPG_PRIVATE_KEY");
-  expect(publish).not.toMatch(/npm |npx |just |setup-node/);
-  expect(job("check")).not.toMatch(/secrets\.|environment:/);
-});
-
-it("grants contents: write to the publish job only", () => {
-  const top = releaseWorkflow.slice(0, releaseWorkflow.indexOf("\njobs:"));
-  expect(top).toMatch(/^permissions:\n  contents: read\n/m);
-  // The only write grant in the file, on the publish job.
-  expect(releaseWorkflow.match(/^ +[a-z-]+: write$/gm)).toEqual(["      contents: write"]);
-  expect(releaseWorkflow).not.toContain("write-all");
-  for (const name of ["check", "build", "publish"]) {
-    const start = releaseWorkflow.indexOf(`\n  ${name}:\n`);
-    const header = releaseWorkflow.slice(start, releaseWorkflow.indexOf("    steps:", start));
-    const want = name === "publish" ? "write" : "read";
-    expect(header, name).toMatch(new RegExp(`^    permissions:\\n      contents: ${want}$`, "m"));
-  }
-});
-
-it("keeps Filename in Packages relative and checks the signatures", () => {
-  const script = readFileSync("scripts/build-apt-repo.sh", "utf8");
-  expect(script).toContain("apt-ftparchive packages . > Packages");
-  expect(script).toContain('gpgv --keyring "$keyring" InRelease');
-  expect(script).toContain('gpgv --keyring "$keyring" Release.gpg Release');
-});
-
-// From 2.0.0 versions are plain MAJOR.MINOR.PATCH, so a pre-release suffix
-// such as the old -hydra.N must stop the release rather than tag it.
-it("releases plain MAJOR.MINOR.PATCH versions only", () => {
-  expect(releaseWorkflow).toContain(
-    'if [[ ! "$VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then',
-  );
-});
-
-it("carries a plain version the workflow will release", () => {
-  expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+$/);
 });
 
 it("pins castlabs-evs to an exact release", () => {

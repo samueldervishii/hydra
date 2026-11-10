@@ -62,7 +62,6 @@
               with pkgs;
               [
                 # Development tools
-                actionlint
                 gh
                 just
                 librsvg # rsvg-convert for tray menu icon generation

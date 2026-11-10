@@ -4,52 +4,7 @@
 
 An Apple Music desktop client for Linux, a fork of [Sidra](https://github.com/wimpysworld/sidra).
 
-## Install via apt
-
-Add the signing key and the repository once, then install. Updates arrive through `apt upgrade` and the Software Updater like any other package:
-
-```bash
-sudo install -d -m 0755 /etc/apt/keyrings
-curl -fsSL https://apt.six9.uk/hydra.gpg | sudo tee /etc/apt/keyrings/hydra.gpg >/dev/null
-gpg --show-keys /etc/apt/keyrings/hydra.gpg   # fingerprint 3620 EBD1 BECC 5DA8 21BE  A555 085D 4BC4 8EFD 3C56
-echo "deb [signed-by=/etc/apt/keyrings/hydra.gpg] https://apt.six9.uk stable main" \
-  | sudo tee /etc/apt/sources.list.d/hydra.list
-sudo apt update && sudo apt install hydra-music
-```
-
-The package is `hydra-music`: `hydra` is THC-Hydra, a network security tool Ubuntu and Debian already ship. If you have Hydra 2.0.0 or 2.0.1 installed, finish with `sudo apt install hydra-music hydra-` instead, so apt removes the old `hydra` package rather than replacing it with THC-Hydra.
-
-The repository keeps the last five versions, so `sudo apt install hydra-music=<version>` can go back one if a release misbehaves.
-
-### Switching from the GitHub repository
-
-Before 2.7.0 the instructions pointed apt at `https://github.com/samueldervishii/hydra/releases/latest/download/`. That still works, but `apt.six9.uk` is the repository to use from now on. It is signed with the same key, so switching is the commands above, which replace `/etc/apt/sources.list.d/hydra.list`; then remove the old copy of the key with `sudo rm /usr/share/keyrings/hydra.gpg`.
-
-## Install the .deb by hand
-
-Download the `.deb` and `SHA256SUMS` from the [releases page](https://github.com/samueldervishii/hydra/releases), then check and install it from the folder you saved them in:
-
-```bash
-sha256sum -c SHA256SUMS
-sudo apt install ./<file>.deb
-```
-
-Only Linux amd64 is built.
-
-### Upgrading from 2.0.0 or 2.0.1
-
-Those releases were packaged as `hydra`, a name Ubuntu and Debian already use for THC-Hydra, a network security tool, so the Software Updater offers that tool as an "upgrade". From 2.0.2 the package is `hydra-music` and the command `hydra-music`. Install it with `hydra-` at the end, which removes the old package in the same step; without it apt would replace the old package with THC-Hydra instead:
-
-```bash
-sudo apt-mark unhold hydra   # only if you held it
-sudo apt install ./Hydra-2.0.2-linux-amd64.deb hydra-
-```
-
-Your settings and sign-in stay, because the app still uses `~/.config/Hydra`.
-
-### Upgrading from 1.x
-
-Up to 1.1.2-hydra.10 the package was called `sidra`. From 2.0.2 it is `hydra-music`, and installing it removes the `sidra` package for you. Hydra now keeps its data in `~/.config/Hydra`: on the first start it copies your settings across from `~/.config/Sidra`, but not the sign-in, so sign in to Apple Music once more. `~/.config/Sidra` is left as it was; delete it when you no longer need it. Re-pin Hydra in your dock if you had pinned the old entry.
+Hydra is source code only. There are no releases, downloads or package repositories, so you build it yourself.
 
 ## Build from source
 
@@ -72,6 +27,14 @@ just run
 ```
 
 `just run` uses the same settings folder as an installed copy, so quit the installed app first or the new one exits straight away.
+
+To install it system-wide on Linux amd64, build a `.deb` and install that:
+
+```bash
+just build
+npx electron-builder --linux deb --x64 --publish never
+sudo apt install ./release/Hydra-*-linux-amd64.deb
+```
 
 ## What this fork adds
 

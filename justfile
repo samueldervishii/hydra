@@ -97,9 +97,8 @@ run-cdp-fast PORT="9222":
 watch:
     npx tsc --watch
 
-# Run static checks; the workflow check is skipped, with a warning, where actionlint is not installed
+# Run static checks
 lint:
-    @if command -v actionlint >/dev/null 2>&1; then actionlint; else echo "warning: actionlint not found, skipping the workflow check" >&2; fi
     npx tsc --noEmit
     npx tsc -p tsconfig.test.json --noEmit
 
@@ -171,8 +170,6 @@ clear:
     rm -rf ~/.cache/hydra
     @echo "Hydra data cleared"
 
-# This recipe makes a fast local package, not a release build. Releases come from
-# .github/workflows/release-linux.yml when main changes the version in package.json.
 # Build a local development package for Linux or macOS
 package: build
     #!/usr/bin/env bash
